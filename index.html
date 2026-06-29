@@ -1,10 +1,10 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Sheet Pile Installation Planner</title>
-  <link rel="stylesheet" href="styles.css?v=6" />
+  <link rel="stylesheet" href="styles.css?v=7" />
   <!--
     SheetJS (xlsx) is vendored locally in ./vendor so the app works fully offline.
     If you prefer the CDN, replace the src below with:
@@ -24,8 +24,8 @@
     </div>
     <div class="app-header__actions">
       <div class="view-toggle" id="viewToggle" hidden>
-        <button type="button" class="view-toggle__btn is-active" data-view="gantt">Gantt</button>
-        <button type="button" class="view-toggle__btn" data-view="table">Table</button>
+        <button type="button" class="view-toggle__btn" data-view="gantt">Gantt</button>
+        <button type="button" class="view-toggle__btn is-active" data-view="table">Table</button>
         <button type="button" class="view-toggle__btn" data-view="map">Map</button>
       </div>
       <button type="button" id="generateBtn" class="btn btn--primary" disabled>Generate Plan</button>
@@ -98,7 +98,7 @@
       <section class="card" id="paramsCard" aria-disabled="true">
         <div class="card__head">
           <h2 class="card__title">2 &middot; Plan Parameters</h2>
-          <span class="badge badge--muted">Onsite Avg defaults</span>
+          <span class="badge badge--muted">Onsite Last 7 Day Avg defaults</span>
         </div>
         <div class="card__body" id="paramsBody">
           <p class="placeholder" id="paramsPlaceholder">Load the three data files to compute defaults.</p>
@@ -314,10 +314,11 @@
   <!-- Scripts (load order matters: util -> data -> engine -> ui).
        The ?v= query string is a cache-buster: bump it whenever js/ changes so
        browsers don't run a stale copy. -->
-  <script src="js/chainage_data.js?v=6"></script>
-  <script src="js/util.js?v=6"></script>
-  <script src="js/data.js?v=6"></script>
-  <script src="js/engine.js?v=6"></script>
-  <script src="js/ui.js?v=6"></script>
+  <script src="js/chainage_data.js?v=7"></script>
+  <script src="js/util.js?v=7"></script>
+  <script src="js/data.js?v=7"></script>
+  <script src="js/engine.js?v=7"></script>
+  <script src="js/ui.js?v=7"></script>
 </body>
 </html>
+

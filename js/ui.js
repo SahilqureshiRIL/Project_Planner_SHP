@@ -13,7 +13,7 @@
   const state = {
     parsed: { chainage: null, manpower: null, material: null, progress: null },
     store: null, defaults: null, result: null,
-    view: "gantt", ganttColor: "profile", mapZoom: 1, mapSelected: null, mapFilter: null
+    view: "table", ganttColor: "profile", mapZoom: 1, mapSelected: null, mapFilter: null
   };
 
   document.addEventListener("DOMContentLoaded", init);
@@ -733,12 +733,12 @@
 
   /* ============================ MAP VIEW (Change 8) ============================ */
   const MAP_STATUS = {
-    complete:   { c: "#1f8f5f", label: "Complete" },
-    inprogress: { c: "#0f6e78", label: "Planned Chainages" },
-    planned:    { c: "#b6791f", label: "Priority Scope" },
-    blocked:    { c: "#c2412f", label: "Blocked (no material)" }
+    complete:   { c: "#2bb673", label: "Complete" },
+    inprogress: { c: "#19b8c9", label: "Planned Chainages" },
+    planned:    { c: "#e3a82b", label: "Priority Scope" },
+    blocked:    { c: "#e0563c", label: "Blocked (no material)" }
   };
-  const MAP_CONTEXT = "#ccd4de";
+  const MAP_CONTEXT = "#8593a3";   // boundary / other-priority lines (visible on dark map)
   let mapTipEl = null, mapGL = null, _ptTex = null;
 
   function mapTipText(f, st, info) {
@@ -812,7 +812,7 @@
     const W = Math.max(320, host.clientWidth || 880);
     const Hh = Math.max(380, Math.round(window.innerHeight * 0.58));
 
-    const scene = new THREE.Scene(); scene.background = new THREE.Color(0xfbfcff);
+    const scene = new THREE.Scene(); scene.background = new THREE.Color(0x1b2735);
     const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, -10, 10); cam.position.z = 1;
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
@@ -821,14 +821,19 @@
     const tex = roundPointTexture();
     const hex = (c) => parseInt(c.slice(1), 16);
 
-    // group geometry by category
-    const segByCat = { context: [], inprogress: [], planned: [], complete: [], blocked: [] };
+    // Full site boundary = EVERY chainage segment, drawn once in grey and kept
+    // always-visible so the outline shows no matter which legend filter is active.
+    const boundaryPos = [];
+    const segByCat = { inprogress: [], planned: [], complete: [], blocked: [] };
     const mkByCat = { inprogress: [], planned: [], complete: [], blocked: [] };
     const pickables = [];
     geoFeats.forEach((f) => {
-      const cat = catOf(f), a = f.seg[0], b = f.seg[1];
+      const a = f.seg[0], b = f.seg[1];
+      boundaryPos.push(PX(a[0]), PY(a[1]), 0, PX(b[0]), PY(b[1]), 0);
+      const cat = catOf(f);
+      if (cat === "context") return;                  // other priorities live only in the boundary
       segByCat[cat].push(PX(a[0]), PY(a[1]), 0, PX(b[0]), PY(b[1]), 0);
-      if (cat !== "context" && f.mid) {
+      if (f.mid) {
         const mx = PX(f.mid[0]), my = PY(f.mid[1]);
         mkByCat[cat].push(mx, my, 0);
         pickables.push({ id: f.id, wx: mx, wy: my, cat: cat, feature: f, info: infoById[f.id] });
@@ -836,11 +841,16 @@
     });
     const objs = {};
     const add = (cat, o) => { (objs[cat] = objs[cat] || []).push(o); scene.add(o); };
+    {
+      const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(boundaryPos, 3));
+      const o = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: hex(MAP_CONTEXT) }));
+      o.renderOrder = 0; add("boundary", o);
+    }
     Object.keys(segByCat).forEach((cat) => {
       if (!segByCat[cat].length) return;
       const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(segByCat[cat], 3));
-      const o = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: cat === "context" ? 0xccd4de : hex(MAP_STATUS[cat].c) }));
-      o.renderOrder = cat === "context" ? 0 : 1; add(cat, o);
+      const o = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: hex(MAP_STATUS[cat].c) }));
+      o.renderOrder = 1; add(cat, o);
     });
     Object.keys(mkByCat).forEach((cat) => {
       if (!mkByCat[cat].length) return;
@@ -848,9 +858,9 @@
       const o = new THREE.Points(g, new THREE.PointsMaterial({ size: 9, sizeAttenuation: false, map: tex, transparent: true, depthTest: false, color: hex(MAP_STATUS[cat].c) }));
       o.renderOrder = 3; add(cat, o);
     });
-    // selection halo
+    // selection halo (white, so it reads on the dark map)
     const selGeom = new THREE.BufferGeometry(); selGeom.setAttribute("position", new THREE.Float32BufferAttribute([0, 0, 0], 3));
-    const selObj = new THREE.Points(selGeom, new THREE.PointsMaterial({ size: 17, sizeAttenuation: false, map: tex, transparent: true, depthTest: false, color: 0x1c2733 }));
+    const selObj = new THREE.Points(selGeom, new THREE.PointsMaterial({ size: 18, sizeAttenuation: false, map: tex, transparent: true, depthTest: false, color: 0xffffff }));
     selObj.renderOrder = 2; selObj.visible = false; scene.add(selObj);
 
     // camera fit + pan/zoom
@@ -920,7 +930,10 @@
     cv.addEventListener("pointerleave", hideTip);
 
     function applyFilter(f) {
-      Object.keys(objs).forEach((cat) => { const vis = !f || f === cat; objs[cat].forEach((o) => (o.visible = vis)); });
+      Object.keys(objs).forEach((cat) => {
+        const vis = cat === "boundary" ? true : (!f || f === cat);   // boundary is always shown
+        objs[cat].forEach((o) => (o.visible = vis));
+      });
       if (state.mapSelected) { const ps = pickables.find((p) => p.id === state.mapSelected); selObj.visible = !!ps && (!f || f === ps.cat); }
       draw();
     }
@@ -955,8 +968,9 @@
     const W = dataW * S + 2 * pad, H = dataH * S + 2 * pad;
     const X = (lng) => pad + (lng - minLng) * kx * S, Y = (lat) => pad + (maxLat - lat) * S;
     let s = '<svg width="' + W.toFixed(0) + '" height="' + H.toFixed(0) + '" font-family="inherit" font-size="10">';
-    if (!flt || flt === "context") geoFeats.forEach((f) => {
-      if (inPriority[f.id]) return; const a = f.seg[0], b = f.seg[1];
+    // full site boundary (every chainage) — always drawn so the outline stays visible under any filter
+    geoFeats.forEach((f) => {
+      const a = f.seg[0], b = f.seg[1];
       s += '<line x1="' + X(a[0]).toFixed(1) + '" y1="' + Y(a[1]).toFixed(1) + '" x2="' + X(b[0]).toFixed(1) + '" y2="' + Y(b[1]).toFixed(1) + '" stroke="' + MAP_CONTEXT + '" stroke-width="1.5" stroke-linecap="round"/>';
     });
     geoFeats.forEach((f) => {
@@ -969,7 +983,7 @@
       const col = (MAP_STATUS[st] || {}).c;
       s += '<circle class="map-marker" data-id="' + U.esc(f.id) + '" data-tip="' + mapTipText(f, st, infoById[f.id]) + '" cx="' + X(f.mid[0]).toFixed(1) + '" cy="' + Y(f.mid[1]).toFixed(1) + '" r="' + (state.mapSelected === f.id ? 5.5 : 3.5) + '" fill="' + col + '" stroke="#fff" stroke-width="1"/>';
     });
-    s += '<g transform="translate(' + (W - 32) + ',30)"><line x1="0" y1="16" x2="0" y2="-4" stroke="#5b6877" stroke-width="1.5"/><polygon points="-4,-1 4,-1 0,-9" fill="#5b6877"/><text x="0" y="28" text-anchor="middle" fill="#8a96a5">N</text></g>';
+    s += '<g transform="translate(' + (W - 32) + ',30)"><line x1="0" y1="16" x2="0" y2="-4" stroke="#aeb8c4" stroke-width="1.5"/><polygon points="-4,-1 4,-1 0,-9" fill="#aeb8c4"/><text x="0" y="28" text-anchor="middle" fill="#cdd5df">N</text></g>';
     s += mapScaleBar(S, pad, H);
     s += "</svg>";
     host.innerHTML = s;
@@ -991,11 +1005,11 @@
     const nice = (f < 1.5 ? 1 : f < 3.5 ? 2 : f < 7.5 ? 5 : 10) * pow;
     const px = nice / mPerPx, y = H - 16, x0 = pad;
     const label = nice >= 1000 ? (nice / 1000) + " km" : Math.round(nice) + " m";
-    return '<g stroke="#5b6877" stroke-width="2">' +
+    return '<g stroke="#aeb8c4" stroke-width="2">' +
       '<line x1="' + x0 + '" y1="' + y + '" x2="' + (x0 + px) + '" y2="' + y + '"/>' +
       '<line x1="' + x0 + '" y1="' + (y - 4) + '" x2="' + x0 + '" y2="' + (y + 4) + '"/>' +
       '<line x1="' + (x0 + px) + '" y1="' + (y - 4) + '" x2="' + (x0 + px) + '" y2="' + (y + 4) + '"/></g>' +
-      '<text x="' + (x0 + px / 2) + '" y="' + (y - 6) + '" text-anchor="middle" fill="#5b6877" font-size="10">' + label + '</text>';
+      '<text x="' + (x0 + px / 2) + '" y="' + (y - 6) + '" text-anchor="middle" fill="#cdd5df" font-size="10">' + label + '</text>';
   }
 
   function showMapInfo(f, st, info) {
