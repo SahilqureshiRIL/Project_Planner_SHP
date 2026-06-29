@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Sheet Pile Installation Planner</title>
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="styles.css?v=2" />
   <!--
     SheetJS (xlsx) is vendored locally in ./vendor so the app works fully offline.
     If you prefer the CDN, replace the src below with:
@@ -35,22 +35,32 @@
     <!-- ============================ SIDEBAR (INPUTS) ============================ -->
     <aside class="sidebar">
 
+      <!-- ---- Chainage data (FROZEN / read-only) ----  -->
+      <section class="card" id="chainageCard">
+        <div class="card__head">
+          <h2 class="card__title">Chainage Data</h2>
+          <span class="badge badge--muted">Frozen &middot; read-only</span>
+        </div>
+        <div class="card__body">
+          <p class="hint" id="chainageSummary">Loading frozen chainage data&hellip;</p>
+          <details class="advanced" id="chainageDetails">
+            <summary>View chainages (read-only)</summary>
+            <div class="advanced__body">
+               <p class="field__hint">Hardcoded values &mdash; not editable here. Overrides are made by the team directly in <code>js/chainage_data.js</code>.</p> 
+              <div class="table-scroll" id="chainageTableScroll" style="max-height:260px"></div>
+            </div>
+          </details>
+        </div>
+      </section> 
+
       <!-- ---- Data files ---- -->
       <section class="card" id="dataCard">
         <div class="card__head">
           <h2 class="card__title">1 &middot; Data Files</h2>
-          <span class="badge" id="dataStatusBadge">0 / 4 loaded</span>
+          <span class="badge" id="dataStatusBadge">0 / 3 loaded</span>
         </div>
         <div class="card__body">
-          <p class="hint">Upload the four source files. Each is parsed in your browser; nothing is uploaded to a server.</p>
-
-          <div class="filerow" data-file="chainage">
-            <div class="filerow__main">
-              <label class="filelabel">Chainage data <span class="filelabel__ext">.json / .geojson</span></label>
-              <div class="filerow__status" data-role="status">Waiting&hellip;</div>
-            </div>
-            <input type="file" accept=".json,.geojson,application/json" data-input="chainage" />
-          </div>
+          <p class="hint">Upload the three source files. Each is parsed in your browser; nothing is uploaded to a server.</p>
 
           <div class="filerow" data-file="manpower">
             <div class="filerow__main">
@@ -87,10 +97,10 @@
       <section class="card" id="paramsCard" aria-disabled="true">
         <div class="card__head">
           <h2 class="card__title">2 &middot; Plan Parameters</h2>
-          <span class="badge badge--muted">auto-filled from data</span>
+          <span class="badge badge--muted">Onsite Avg defaults</span>
         </div>
         <div class="card__body" id="paramsBody">
-          <p class="placeholder" id="paramsPlaceholder">Load the four data files to compute defaults.</p>
+          <p class="placeholder" id="paramsPlaceholder">Load the three data files to compute defaults.</p>
 
           <div id="paramsForm" hidden>
             <!-- Priority -->
@@ -123,13 +133,13 @@
               <div class="field">
                 <label class="field__label" for="pMachines">Machines Deployable</label>
                 <input type="number" id="pMachines" class="input" min="0" step="1" />
-                <p class="field__hint" id="pMachinesHint">auto from last 7 days</p>
+                <p class="field__hint" id="pMachinesHint">Onsite Avg (last 7 days)</p>
               </div>
               <!-- Manpower -->
               <div class="field">
                 <label class="field__label" for="pManpower">Manpower</label>
                 <input type="number" id="pManpower" class="input" min="0" step="1" />
-                <p class="field__hint" id="pManpowerHint">auto from last 7 days</p>
+                <p class="field__hint" id="pManpowerHint">Onsite Avg (last 7 days)</p>
               </div>
               <!-- Work days/week -->
               <div class="field">
@@ -144,7 +154,7 @@
               <div class="field">
                 <label class="field__label" for="pWorkhours">Workhours / day</label>
                 <input type="number" id="pWorkhours" class="input" min="1" step="1" />
-                <p class="field__hint" id="pWorkhoursHint">auto from last 7 days</p>
+                <p class="field__hint" id="pWorkhoursHint">Onsite Avg (last 7 days)</p>
               </div>
             </div>
 
@@ -158,7 +168,7 @@
                 <span class="info" id="prodInfo" tabindex="0">&#9432;<span class="info__pop" id="prodInfoPop"></span></span>
               </label>
               <input type="number" id="pProductivity" class="input" min="0.001" step="0.001" />
-              <p class="field__hint" id="pProductivityHint">auto from last 7 days</p>
+              <p class="field__hint" id="pProductivityHint">Onsite Avg (last 7 days)</p>
             </div>
 
             <!-- Hindrances -->
@@ -170,7 +180,7 @@
 
             <!-- Ramp-up (collapsible) -->
             <details class="advanced" id="rampAdvanced">
-              <summary>Ramp-up settings <span class="field__tag">assumed &middot; editable</span></summary>
+              <summary>Ramp-up settings <span class="field__tag">editable</span></summary>
               <div class="advanced__body">
                 <div class="field-grid">
                   <div class="field">
@@ -187,6 +197,10 @@
                   <label class="field__label" for="pRampProfile">Ramp profile (day 0&hellip;n multipliers)</label>
                   <input type="text" id="pRampProfile" class="input input--mono" value="0.45, 0.58, 0.70, 0.80, 0.88, 0.94, 0.98, 1.00" />
                   <p class="field__hint">Comma-separated per-day multipliers applied to a newly introduced machine.</p>
+                </div>
+                <div class="field">
+                  <label class="field__label">Ramp-up curve <span class="field__tag">live preview</span></label>
+                  <div class="ramp-chart" id="rampChart"></div>
                 </div>
                 <button type="button" id="resetHistoryBtn" class="btn btn--ghost btn--sm">Reset stored machine history</button>
                 <span class="hint hint--inline" id="storedHistoryHint"></span>
@@ -258,10 +272,13 @@
   <!-- Toast -->
   <div class="toast" id="toast" hidden></div>
 
-  <!-- Scripts (load order matters: util -> data -> engine -> ui) -->
-  <script src="js/util.js"></script>
-  <script src="js/data.js"></script>
-  <script src="js/engine.js"></script>
-  <script src="js/ui.js"></script>
+  <!-- Scripts (load order matters: util -> data -> engine -> ui).
+       The ?v= query string is a cache-buster: bump it whenever js/ changes so
+       browsers don't run a stale copy. -->
+  <script src="js/chainage_data.js?v=2"></script>
+  <script src="js/util.js?v=2"></script>
+  <script src="js/data.js?v=2"></script>
+  <script src="js/engine.js?v=2"></script>
+  <script src="js/ui.js?v=2"></script>
 </body>
 </html>

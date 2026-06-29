@@ -8,7 +8,8 @@
       "PowerShell($dir = \"c:\\\\Users\\\\Sahil2.Qureshi\\\\Documents\\\\Project_Planner_SHP\\\\vendor\"; New-Item -ItemType Directory -Force $dir | Out-Null; try { Invoke-WebRequest -Uri \"https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js\" -OutFile \"$dir\\\\xlsx.full.min.js\" -UseBasicParsing -TimeoutSec 30 -ErrorAction Stop; $f = Get-Item \"$dir\\\\xlsx.full.min.js\"; \"Downloaded OK: $\\($f.Length\\) bytes\" } catch { \"DOWNLOAD FAILED: $\\($_.Exception.Message\\)\" })",
       "PowerShell($head = \\(Get-Content \"c:\\\\Users\\\\Sahil2.Qureshi\\\\Documents\\\\Project_Planner_SHP\\\\vendor\\\\xlsx.full.min.js\" -TotalCount 1\\); $head.Substring\\(0, [Math]::Min\\(160, $head.Length\\)\\))",
       "PowerShell(\\(Get-Command node\\).Source; node --version)",
-      "PowerShell(python -m http.server 8000 --bind 127.0.0.1)"
+      "PowerShell(python -m http.server 8000 --bind 127.0.0.1)",
+      "PowerShell(python \"C:\\\\Users\\\\SAHIL2~1.QUR\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-Sahil2-Qureshi-Documents-Project-Planner-SHP\\\\ccc0afd5-80e3-49f9-a92c-5b5d4f330208\\\\scratchpad\\\\gen_chainage.py\")"
     ]
   }
 }

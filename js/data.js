@@ -34,18 +34,12 @@
   /* =====================================================================
      3.1  Chainage GeoJSON
      ===================================================================== */
-  D.parseChainage = function (text) {
-    let gj;
-    try { gj = JSON.parse(text); } catch (e) { throw new Error("Not valid JSON."); }
-    if (!gj || gj.type !== "FeatureCollection" || !Array.isArray(gj.features))
-      throw new Error("Expected a GeoJSON FeatureCollection with a 'features' array.");
-
+  // Build the chainage model from an array of raw property objects (original field names).
+  D.buildChainageModel = function (propsList) {
     const reqProps = ["Chainage_Id", "Priority", "Profile Name", "No of Profiles", "New SAP Code"];
     const features = [];
-    let badProps = 0;
-    gj.features.forEach((f) => {
-      const p = f && f.properties;
-      if (!p) { badProps++; return; }
+    propsList.forEach((p) => {
+      if (!p) return;
       const id = p["Chainage_Id"];
       if (id == null || id === "") return;
       const mto = parseInt(U.toNum(p["No of Profiles"]), 10);
@@ -59,7 +53,7 @@
         sortKey: U.chainageSortKey(id)
       });
     });
-    if (!features.length) throw new Error("No usable features (need " + reqProps.join(", ") + ").");
+    if (!features.length) throw new Error("No usable chainages (need " + reqProps.join(", ") + ").");
 
     const priorities = Array.from(new Set(features.map((f) => f.priority).filter(Boolean)))
       .sort((a, b) => U.priorityOrder(a) - U.priorityOrder(b) || a.localeCompare(b));
@@ -68,6 +62,29 @@
     const profiles = Array.from(new Set(features.map((f) => f.profile).filter(Boolean)));
 
     return { features, priorities, priorityCounts, profiles };
+  };
+
+  // GeoJSON upload path — kept so the frozen dataset can be regenerated if needed.
+  D.parseChainage = function (text) {
+    let gj;
+    try { gj = JSON.parse(text); } catch (e) { throw new Error("Not valid JSON."); }
+    if (!gj || gj.type !== "FeatureCollection" || !Array.isArray(gj.features))
+      throw new Error("Expected a GeoJSON FeatureCollection with a 'features' array.");
+    return D.buildChainageModel(gj.features.map((f) => f && f.properties));
+  };
+
+  // FROZEN dataset loader — expands the compact rows hardcoded in chainage_data.js.
+  // This is the only chainage source the app uses at runtime (no upload, read-only).
+  D.loadHardcodedChainage = function () {
+    const raw = window.SPP_CHAINAGE_DATA;
+    if (!raw || !raw.fields || !raw.rows) throw new Error("Frozen chainage data (js/chainage_data.js) not found.");
+    const fields = raw.fields;
+    const props = raw.rows.map((row) => {
+      const o = {};
+      for (let i = 0; i < fields.length; i++) o[fields[i]] = row[i];
+      return o;
+    });
+    return D.buildChainageModel(props);
   };
 
   /* =====================================================================

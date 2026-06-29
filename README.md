@@ -20,22 +20,29 @@ python -m http.server 8000
 # then open http://localhost:8000
 ```
 
-## The four inputs
+## Inputs
+
+**Chainage data is frozen** — it is hardcoded in `js/chainage_data.js` and shown
+read-only in the *Chainage Data* card. There is no upload or in-app edit; the team
+overrides values directly in that file (regenerate it from a GeoJSON via
+`D.parseChainage` if needed).
+
+Three files are uploaded by the planner:
 
 | File | What it provides |
 |---|---|
-| `chainage_data.json` | GeoJSON of chainages — `Chainage_Id`, `Priority`, `Profile Name`, `No of Profiles` (MTO), `New SAP Code`. |
 | `manpower_resources.xlsx` | Sheets `Machine Status`, `Manpower Status`, `Shifthour Status` (one row per shift-date). |
 | `material_logistics.xlsx` | Sheet `Material Logistics` — on-site stock + dated inbound deliveries per `Item Code`. |
 | `progress_history.xlsx` | Sheet `Progress history` — used for the productivity baseline (`Sub Activity = "Sheet Pile Installed"`). |
 
-Sample copies are in `./data/`.
+Sample copies of all four source files are in `./data/`.
 
 ## Files
 
 ```
 index.html        markup + structure
 styles.css        all design tokens live in :root (swap for a real design system)
+js/chainage_data.js  FROZEN read-only chainage dataset (hardcoded, no upload)
 js/util.js        dates, number/text formatting, small DOM helpers
 js/data.js        file parsing, normalization, defaults computation
 js/engine.js      the deterministic planning engine (simulation + cost-optimizer)
@@ -77,8 +84,15 @@ and change:
 - **Ramp clock** — every machine is treated as deployed from the first working day;
   a "new" machine (index beyond *Machines from previous plan*) ramps by its
   working-day index using the editable ramp profile.
-- **Hindrances** — plan-wide; day-type removes the earliest working days, hour-type
-  trims hours from the earliest working day(s). Deterministic Phase-1 placement.
+- **Hindrances** — plan-wide, but each one now records the **specific day(s)** it
+  affects (a Mon-aligned mini calendar over the plan window; non-contiguous days
+  allowed). A *days* hindrance fully loses each selected working day; an *hours*
+  hindrance trims its amount from each selected day. If no day is selected it falls
+  back to the earliest working day(s) (legacy behavior). See the `// TODO: confirm`
+  notes in `engine.js`/`ui.js` for the assumptions made.
+- **Ramp-up curve** — the *Ramp-up settings* section shows a live inline SVG chart of
+  productivity rate (piles/machine/hour = base × ramp multiplier) vs. days from start,
+  with the steady-state line and the `n` marker; it re-renders as settings change.
 - **Cost-optimization** — the engine simulates every machine count from 1 to the
   manpower cap and deploys the **fewest** machines that still install the maximum
   the window can absorb (material/work limited), and stores that count in

@@ -23,6 +23,10 @@
     if (typeof XLSX === "undefined") {
       U.toast("SheetJS failed to load — .xlsx parsing is unavailable. Check vendor/xlsx.full.min.js.", "bad");
     }
+    // Chainage data is FROZEN: loaded from the hardcoded js/chainage_data.js (no upload).
+    try { state.parsed.chainage = SPP.data.loadHardcodedChainage(); renderChainageReadonly(); }
+    catch (e) { U.toast("Chainage data error: " + e.message, "bad"); }
+
     U.$$('input[type="file"]').forEach((inp) => {
       inp.addEventListener("change", (e) => { if (e.target.files[0]) handleFile(inp.dataset.input, e.target.files[0]); });
     });
@@ -32,8 +36,16 @@
     $("#addHindranceBtn").addEventListener("click", () => addHindranceRow());
     $("#resetHistoryBtn").addEventListener("click", resetHistory);
     $("#pStart").addEventListener("change", enforceMonday);
+    $("#pStart").addEventListener("change", refreshHindranceCalendars);
     $("#pMachines").addEventListener("input", refreshCapNotice);
     $("#pManpower").addEventListener("input", refreshCapNotice);
+    U.$$('input[name="period"]').forEach((r) => r.addEventListener("change", refreshHindranceCalendars));
+    $("#pWorkDays").addEventListener("change", refreshHindranceCalendars);
+
+    // Ramp-up curve live preview (Change 5)
+    ["#pRampProfile", "#pRampN", "#pProductivity", "#pWorkhours"].forEach((sel) => {
+      const n = $(sel); if (n) n.addEventListener("input", renderRampChart);
+    });
 
     U.$$("#viewToggle .view-toggle__btn").forEach((b) =>
       b.addEventListener("click", () => setView(b.dataset.view)));
@@ -42,6 +54,35 @@
     $("#tableGroup").addEventListener("change", () => { if (state.result) renderTable(); });
 
     updateStoredHistoryHint();
+    refresh();
+  }
+
+  /* ============================ CHAINAGE (frozen, read-only) ============================ */
+  function renderChainageReadonly() {
+    const ch = state.parsed.chainage;
+    if (!ch) return;
+    const counts = ch.priorities.map((p) => p + " " + U.fmtInt(ch.priorityCounts[p])).join(" · ");
+    $("#chainageSummary").innerHTML = "<strong>" + U.fmtInt(ch.features.length) + "</strong> chainages · " +
+      ch.profiles.length + " profiles · " + counts;
+    // Build the read-only table lazily the first time the section is opened.
+    const det = $("#chainageDetails");
+    let built = false;
+    det.addEventListener("toggle", function () {
+      if (!det.open || built) return;
+      built = true;
+      const rows = ch.features.slice().sort((a, b) => a.sortKey - b.sortKey);
+      const t = el("table", { class: "data" });
+      t.innerHTML = "<thead><tr><th>Chainage_Id</th><th>Priority</th><th>Profile</th><th class='num'>No. of Profiles</th><th>SAP Code</th></tr></thead>";
+      const tb = el("tbody");
+      rows.forEach((f) => {
+        const tr = el("tr");
+        tr.innerHTML = "<td>" + U.esc(f.id) + "</td><td>" + U.esc(f.priority) + "</td><td>" + U.esc(f.profile) +
+          "</td><td class='num'>" + U.fmtInt(f.mto) + "</td><td>" + U.esc(f.code || "—") + "</td>";
+        tb.appendChild(tr);
+      });
+      t.appendChild(tb);
+      const scroll = $("#chainageTableScroll"); U.clear(scroll); scroll.appendChild(t);
+    });
   }
 
   /* ============================ FILE LOADING ============================ */
@@ -86,9 +127,9 @@
   function allLoaded() { return state.parsed.chainage && state.parsed.manpower && state.parsed.material && state.parsed.progress; }
 
   function refresh() {
-    const n = ["chainage", "manpower", "material", "progress"].filter((k) => state.parsed[k]).length;
-    $("#dataStatusBadge").textContent = n + " / 4 loaded";
-    $("#dataStatusBadge").className = "badge" + (n === 4 ? " badge--ok" : "");
+    const n = ["manpower", "material", "progress"].filter((k) => state.parsed[k]).length;
+    $("#dataStatusBadge").textContent = n + " / 3 loaded";
+    $("#dataStatusBadge").className = "badge" + (n === 3 ? " badge--ok" : "");
     if (allLoaded()) {
       try {
         state.store = { chainage: state.parsed.chainage, manpower: state.parsed.manpower, material: state.parsed.material, progress: state.parsed.progress };
@@ -108,22 +149,21 @@
   // Attempt to fetch bundled ./data files (only succeeds over http, not file://).
   function tryBundled() {
     const map = {
-      chainage: "data/chainage_data.json",
       manpower: "data/manpower_resources.xlsx",
       material: "data/material_logistics.xlsx",
       progress: "data/progress_history.xlsx"
     };
+    const kinds = Object.keys(map);
     let ok = 0, done = 0;
-    Object.keys(map).forEach((kind) => {
+    kinds.forEach((kind) => {
       setStatus(kind, "Fetching…");
-      fetch(map[kind]).then((r) => { if (!r.ok) throw new Error("HTTP " + r.status); return kind === "chainage" ? r.text() : r.arrayBuffer(); })
+      fetch(map[kind]).then((r) => { if (!r.ok) throw new Error("HTTP " + r.status); return r.arrayBuffer(); })
         .then((data) => {
-          if (kind === "chainage") state.parsed.chainage = SPP.data.parseChainage(data);
-          else state.parsed[kind] = SPP.data.parseWorkbookFile(data, kind);
+          state.parsed[kind] = SPP.data.parseWorkbookFile(data, kind);
           setStatus(kind, summarize(kind, state.parsed[kind]), "is-ok"); ok++;
         })
         .catch((err) => setStatus(kind, "✗ " + err.message + " (use upload instead)", "is-bad"))
-        .finally(() => { if (++done === 4) { refresh(); if (!ok) U.toast("Bundled fetch blocked (likely file://). Use the upload inputs.", "bad"); } });
+        .finally(() => { if (++done === kinds.length) { refresh(); if (!ok) U.toast("Bundled fetch blocked (likely file://). Use the upload inputs.", "bad"); } });
     });
   }
 
@@ -144,10 +184,10 @@
     setVal("#pWorkhours", d.workhours);
     setVal("#pProductivity", U.fmtNum(d.productivity, 3));
 
-    $("#pMachinesHint").textContent = "auto: " + U.fmtNum(d.sumMachine / 7, 2) + "/day → " + d.machines;
-    $("#pManpowerHint").textContent = "auto: " + U.fmtNum(d.sumMan / 7, 2) + "/day → " + d.manpower;
-    $("#pWorkhoursHint").textContent = "auto: " + U.fmtNum(d.sumHour / 7, 2) + "/day → " + d.workhours;
-    $("#pProductivityHint").textContent = "auto from last 7 days (12–18 Jun window)";
+    $("#pMachinesHint").textContent = "Onsite Avg: " + U.fmtNum(d.sumMachine / 7, 2) + "/day → " + d.machines;
+    $("#pManpowerHint").textContent = "Onsite Avg: " + U.fmtNum(d.sumMan / 7, 2) + "/day → " + d.manpower;
+    $("#pWorkhoursHint").textContent = "Onsite Avg: " + U.fmtNum(d.sumHour / 7, 2) + "/day → " + d.workhours;
+    $("#pProductivityHint").textContent = "Onsite Avg (12–18 Jun window)";
     $("#prodInfoPop").textContent = d.prodDerivation;
 
     // Machines from previous plan: stored value, else equal to machines (no ramp on first plan).
@@ -158,6 +198,8 @@
     $("#paramsPlaceholder").hidden = true;
     $("#paramsForm").hidden = false;
     refreshCapNotice();
+    renderRampChart();
+    refreshHindranceCalendars();
   }
   function setVal(sel, v) { const n = $(sel); if (n) n.value = v; }
 
@@ -185,23 +227,121 @@
   }
 
   function addHindranceRow(data) {
+    data = data || {};
     const list = $("#hindranceList");
     const row = el("div", { class: "hindrance" });
-    const type = el("select", { class: "input input--sm" });
-    ["Political", "Weather", "Other"].forEach((t) => type.appendChild(el("option", { value: t, text: t, selected: data && data.type === t ? "" : null })));
-    const amt = el("input", { class: "input input--sm", type: "number", min: "0", step: "0.5", value: data ? data.amount : "1" });
-    const unit = el("select", { class: "input input--sm" });
-    ["days", "hours"].forEach((u) => unit.appendChild(el("option", { value: u, text: u, selected: data && data.unit === u ? "" : null })));
+
+    const top = el("div", { class: "hindrance__top" });
+    const type = el("select", { class: "input input--sm hindrance__type" });
+    ["Political", "Weather", "Other"].forEach((t) => type.appendChild(el("option", { value: t, text: t, selected: data.type === t ? "" : null })));
+    const amt = el("input", { class: "input input--sm hindrance__amt", type: "number", min: "0", step: "0.5", value: data.amount != null ? data.amount : "1", title: "days unit: # of earliest days (used only if no day is selected) · hours unit: hours lost per selected day" });
+    const unit = el("select", { class: "input input--sm hindrance__unit" });
+    ["days", "hours"].forEach((u) => unit.appendChild(el("option", { value: u, text: u, selected: data.unit === u ? "" : null })));
     const del = el("button", { class: "hindrance__del", title: "Remove", html: "&times;", onclick: () => row.remove() });
-    [type, amt, unit, del].forEach((n) => row.appendChild(n));
+    [type, amt, unit, del].forEach((n) => top.appendChild(n));
+    row.appendChild(top);
+
+    const daysWrap = el("div", { class: "hindrance__days" });
+    daysWrap.appendChild(el("div", { class: "hindrance__days-label", text: "Affected day(s) — click to toggle (non-contiguous OK):" }));
+    const cal = el("div", { class: "hcal" });
+    daysWrap.appendChild(cal);
+    row.appendChild(daysWrap);
+
+    row.appendChild(el("div", { class: "hindrance__hint", html: "<strong>days</strong>: each selected day is fully lost · <strong>hours</strong>: the amount is trimmed from each selected day. With no day selected, impact falls on the earliest day(s)." }));
+
+    cal.addEventListener("click", (e) => { const c = e.target.closest(".hcal__day"); if (c) c.classList.toggle("is-sel"); });
     list.appendChild(row);
+    buildHindranceCalendar(cal, data.days || []);
   }
 
+  // TODO: confirm persistence — selected hindrance day(s) are kept in-session (in the
+  // form) and carried into scheduling, but are not written to localStorage across reloads.
   function readHindrances() {
-    return U.$$("#hindranceList .hindrance").map((row) => {
-      const sels = row.querySelectorAll("select");
-      return { type: sels[0].value, amount: U.toNum(row.querySelector("input").value) || 0, unit: sels[1].value };
-    }).filter((h) => h.amount > 0);
+    return U.$$("#hindranceList .hindrance").map((row) => ({
+      type: row.querySelector(".hindrance__type").value,
+      amount: U.toNum(row.querySelector(".hindrance__amt").value) || 0,
+      unit: row.querySelector(".hindrance__unit").value,
+      days: U.$$(".hcal__day.is-sel", row).map((c) => c.dataset.iso)
+    })).filter((h) => h.days.length > 0 || h.amount > 0);
+  }
+
+  // Render the affected-day picker for the current plan window (Mon-aligned weeks).
+  function buildHindranceCalendar(cal, selectedISO) {
+    U.clear(cal);
+    const planStart = U.parseISODate($("#pStart").value) || (state.defaults && state.defaults.planStartDefault);
+    if (!planStart) { cal.appendChild(el("div", { class: "field__hint", text: "Set a plan start date first." })); return; }
+    const weeks = parseInt((document.querySelector('input[name="period"]:checked') || {}).value || "2", 10);
+    const workDays = parseInt($("#pWorkDays").value, 10) || 6;
+    const sel = new Set(selectedISO || []);
+    ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].forEach((w) => cal.appendChild(el("div", { class: "hcal__hd", text: w })));
+    for (let i = 0; i < weeks * 7; i++) {
+      const d = U.addDays(planStart, i);
+      const iso = U.fmtISO(d);
+      const weekoff = U.isoDow(d) > workDays;
+      cal.appendChild(el("div", {
+        class: "hcal__day" + (weekoff ? " is-weekoff" : "") + (sel.has(iso) ? " is-sel" : ""),
+        title: U.fmtFriendly(d) + (weekoff ? " (weekly off)" : ""),
+        dataset: { iso: iso }, text: String(d.getDate())
+      }));
+    }
+  }
+
+  // Rebuild every hindrance calendar after the window changes, keeping in-window picks.
+  function refreshHindranceCalendars() {
+    U.$$("#hindranceList .hindrance").forEach((row) => {
+      const cal = row.querySelector(".hcal");
+      const keep = U.$$(".hcal__day.is-sel", cal).map((c) => c.dataset.iso);
+      buildHindranceCalendar(cal, keep);
+    });
+  }
+
+  /* ============================ RAMP-UP CURVE (Change 5) ============================ */
+  // TODO: confirm Y-axis meaning — assumed "productivity rate" = piles/machine/hour
+  // (base productivity × ramp multiplier), not piles/day.
+  function renderRampChart() {
+    const host = $("#rampChart");
+    if (!host) return;
+    const prod = U.toNum($("#pProductivity").value);
+    const ramp = $("#pRampProfile").value.split(",").map((s) => U.toNum(s)).filter((n) => isFinite(n) && n >= 0);
+    const nDays = parseInt($("#pRampN").value, 10);
+    if (!(prod > 0) || !ramp.length) { host.innerHTML = '<div class="field__hint">Enter productivity and a ramp profile to preview the curve.</div>'; return; }
+
+    const last = ramp[ramp.length - 1];
+    const maxDay = ramp.length - 1 + 2;                 // show 2 steady days past the profile
+    const pts = [];
+    for (let k = 0; k <= maxDay; k++) { const m = k < ramp.length ? ramp[k] : last; pts.push({ day: k, rate: prod * m, mult: m }); }
+    const yMax = Math.max.apply(null, pts.map((p) => p.rate)) * 1.12 || 1;
+
+    const W = 320, H = 124, ml = 40, mr = 12, mt = 12, mb = 24, plotW = W - ml - mr, plotH = H - mt - mb;
+    const X = (k) => ml + (maxDay ? (k / maxDay) * plotW : 0);
+    const Y = (r) => mt + plotH - (r / yMax) * plotH;
+    let s = '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" height="' + H + '" font-size="9" font-family="inherit">';
+    // axes
+    s += '<line x1="' + ml + '" y1="' + mt + '" x2="' + ml + '" y2="' + (mt + plotH) + '" stroke="#c3ccda"/>';
+    s += '<line x1="' + ml + '" y1="' + (mt + plotH) + '" x2="' + (ml + plotW) + '" y2="' + (mt + plotH) + '" stroke="#c3ccda"/>';
+    // steady-state line
+    const ys = Y(prod * last);
+    s += '<line x1="' + ml + '" y1="' + ys + '" x2="' + (ml + plotW) + '" y2="' + ys + '" stroke="#1f8f5f" stroke-dasharray="3 3"/>';
+    s += '<text x="' + (ml + plotW) + '" y="' + (ys - 3) + '" text-anchor="end" fill="#1f8f5f">steady ' + U.fmtNum(prod * last, 2) + '</text>';
+    // n marker
+    if (isFinite(nDays) && nDays >= 0 && nDays <= maxDay) {
+      const xn = X(nDays);
+      s += '<line x1="' + xn + '" y1="' + mt + '" x2="' + xn + '" y2="' + (mt + plotH) + '" stroke="#b6791f" stroke-dasharray="2 2"/>';
+      s += '<text x="' + (xn + 3) + '" y="' + (mt + 9) + '" fill="#b6791f">n=' + nDays + '</text>';
+    }
+    // y ticks
+    s += '<text x="' + (ml - 5) + '" y="' + (mt + plotH + 3) + '" text-anchor="end" fill="#8a96a5">0</text>';
+    s += '<text x="' + (ml - 5) + '" y="' + (mt + 8) + '" text-anchor="end" fill="#8a96a5">' + U.fmtNum(yMax, 2) + '</text>';
+    // x ticks
+    s += '<text x="' + ml + '" y="' + (H - 7) + '" text-anchor="middle" fill="#8a96a5">0</text>';
+    s += '<text x="' + (ml + plotW) + '" y="' + (H - 7) + '" text-anchor="middle" fill="#8a96a5">' + maxDay + '</text>';
+    s += '<text x="' + (ml + plotW / 2) + '" y="' + (H - 7) + '" text-anchor="middle" fill="#8a96a5">days from start</text>';
+    s += '<text transform="translate(10,' + (mt + plotH / 2) + ') rotate(-90)" text-anchor="middle" fill="#8a96a5">piles / mc / hr</text>';
+    // curve
+    s += '<polyline points="' + pts.map((p) => X(p.day) + ',' + Y(p.rate)).join(" ") + '" fill="none" stroke="#0f6e78" stroke-width="2"/>';
+    pts.forEach((p) => { s += '<circle cx="' + X(p.day) + '" cy="' + Y(p.rate) + '" r="2.5" fill="#0f6e78"><title>Day ' + p.day + ': ' + U.fmtNum(p.rate, 3) + ' piles/mc/hr (×' + U.fmtNum(p.mult, 2) + ')</title></circle>'; });
+    s += '</svg>';
+    host.innerHTML = s;
   }
 
   /* ============================ STORAGE ============================ */
@@ -224,7 +364,7 @@
 
   /* ============================ GENERATE ============================ */
   function onGenerate() {
-    if (!allLoaded()) { U.toast("Load all four data files first.", "bad"); return; }
+    if (!allLoaded()) { U.toast("Load the manpower, material and progress files first.", "bad"); return; }
     const p = gatherParams();
     if (!p) return;
     try {
@@ -500,7 +640,7 @@
     ]));
     feas.appendChild(el("div", { class: "kv", html: "Completion of selected priority scope:" }));
     feas.appendChild(bigBar(r.pctComplete));
-    if (r.hindDays || r.hindHours) feas.appendChild(el("div", { class: "kv", html: "Hindrance impact: <strong>" + r.hindDays + "</strong> day(s) removed, <strong>" + U.fmtNum(r.hindHours, 1) + "</strong> hour(s) trimmed (applied to earliest days)." }));
+    if (r.hindDays || r.hindHours) feas.appendChild(el("div", { class: "kv", html: "Hindrance impact: <strong>" + r.hindDays + "</strong> day(s) removed, <strong>" + U.fmtNum(r.hindHours, 1) + "</strong> hour(s) trimmed (applied to the selected day(s))." }));
     body.appendChild(feas);
 
     /* ---- Resources ---- */

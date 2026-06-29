@@ -97,32 +97,45 @@
         hours: p.workhours, nonWorkReason: U.isoDow(d) <= p.workDaysPerWeek ? null : "Weekly off"
       });
     }
-    // Day-type hindrances: remove N earliest working days.
-    let hindDays = 0, hindHours = 0;
+    // Each hindrance now carries the specific day(s) it affects (non-contiguous OK).
+    // Impact lands ONLY on those selected days; if a hindrance has no selected day,
+    // we fall back to the earliest working day(s) (preserves the previous behavior).
+    // TODO: confirm semantics — assumed: (days unit) every selected working day is
+    // fully lost and `amount` is ignored when days are picked; (hours unit) `amount`
+    // hours are trimmed from EACH selected day (not split across them).
+    const lostDays = [], trimmedDays = [];
+    let hindHours = 0;
+    function markLost(c) {
+      c.isWorking = false; c.hours = 0; c.nonWorkReason = "Hindrance — day lost"; c.hindrance = true;
+      lostDays.push(c.date);
+    }
+    function trimHours(c, hrs) {
+      const take = Math.min(c.hours, hrs);
+      if (take <= 0) return 0;
+      c.hours -= take; c.hindHours = (c.hindHours || 0) + take; hindHours += take;
+      if (c.hours <= EPS) { c.isWorking = false; c.hours = 0; c.nonWorkReason = "Hindrance — hours lost"; c.hindrance = true; }
+      else { c.partialHindrance = true; }
+      if (trimmedDays.indexOf(c.date) < 0) trimmedDays.push(c.date);
+      return take;
+    }
     p.hindrances.forEach((h) => {
-      if (h.unit === "days") hindDays += h.amount; else hindHours += h.amount;
-    });
-    let daysToRemove = Math.round(hindDays);
-    const lostDays = [];
-    for (let i = 0; i < cal.length && daysToRemove > 0; i++) {
-      if (cal[i].isWorking) {
-        cal[i].isWorking = false; cal[i].hours = 0;
-        cal[i].nonWorkReason = "Hindrance — day lost"; cal[i].hindrance = true;
-        lostDays.push(cal[i].date); daysToRemove--;
+      const sel = (h.days && h.days.length) ? new Set(h.days) : null;
+      if (h.unit === "days") {
+        if (sel) {                                  // lose exactly the selected working days
+          cal.forEach((c) => { if (c.isWorking && sel.has(U.fmtISO(c.date))) markLost(c); });
+        } else {                                    // fallback: lose the earliest N working days
+          let n = Math.round(h.amount);
+          for (let i = 0; i < cal.length && n > 0; i++) if (cal[i].isWorking) { markLost(cal[i]); n--; }
+        }
+      } else {                                      // hours
+        if (sel) {                                  // trim `amount` hours from each selected working day
+          cal.forEach((c) => { if (c.isWorking && sel.has(U.fmtISO(c.date))) trimHours(c, h.amount); });
+        } else {                                    // fallback: trim `amount` hours from earliest working days
+          let toTrim = h.amount;
+          for (let i = 0; i < cal.length && toTrim > EPS; i++) if (cal[i].isWorking) toTrim -= trimHours(cal[i], toTrim);
+        }
       }
-    }
-    // Hour-type hindrances: trim from earliest working days.
-    let hoursToTrim = hindHours;
-    const trimmedDays = [];
-    for (let i = 0; i < cal.length && hoursToTrim > EPS; i++) {
-      if (!cal[i].isWorking) continue;
-      const take = Math.min(cal[i].hours, hoursToTrim);
-      cal[i].hours -= take; hoursToTrim -= take;
-      cal[i].hindHours = (cal[i].hindHours || 0) + take;
-      if (cal[i].hours <= EPS) { cal[i].isWorking = false; cal[i].hours = 0; cal[i].nonWorkReason = "Hindrance — hours lost"; cal[i].hindrance = true; }
-      else { cal[i].partialHindrance = true; }
-      trimmedDays.push(cal[i].date);
-    }
+    });
     const workingDayCount = cal.filter((c) => c.isWorking).length;
 
     /* ---- 6. the daily simulation (§5.4) ------------------------------------ */
@@ -227,8 +240,8 @@
     if (blocked.length) warnings.push({ level: "bad", text: blocked.length + " chainage(s) blocked — profile has no material on-site or inbound (" + U.fmtInt(blockedMTO) + " piles of scope)." });
     const shortfalls = profileRows.filter((r) => r.startedCount > 0 && r.shortfall > 0);
     if (shortfalls.length) warnings.push({ level: "warn", text: shortfalls.length + " profile(s) cannot fully cover their in-progress chainages from window material (shortfall total " + U.fmtInt(shortfalls.reduce((s, r) => s + r.shortfall, 0)) + " piles)." });
-    if (lostDays.length) warnings.push({ level: "warn", text: lostDays.length + " working day(s) removed by hindrances (shifted to earliest days)." });
-    if (hindHours > EPS) warnings.push({ level: "warn", text: U.fmtNum(hindHours, 1) + " work-hour(s) trimmed by hindrances from the earliest day(s)." });
+    if (lostDays.length) warnings.push({ level: "warn", text: lostDays.length + " working day(s) removed by hindrances (" + lostDays.map((d) => U.fmtShort(d)).join(", ") + "); installation shifts past them." });
+    if (hindHours > EPS) warnings.push({ level: "warn", text: U.fmtNum(hindHours, 1) + " work-hour(s) trimmed by hindrances on " + trimmedDays.map((d) => U.fmtShort(d)).join(", ") + "." });
     if (idleMachines > 0) warnings.push({ level: "info", text: "Cost-optimized: " + deployed + " machine(s) install as much as " + maxMachines + " would in this window (material/work limited). Recommend deploying " + deployed + " — " + idleMachines + " would sit idle." });
     if (plan.idleMachineDays > 0 && idleMachines === 0) warnings.push({ level: "info", text: plan.idleMachineDays + " machine-day(s) idle within the window (ran out of queued work)." });
     if (carryOver > 0) warnings.push({ level: "info", text: U.fmtInt(carryOver) + " piles of " + p.priority + " scope carry over beyond this window (" + U.fmtNum(pctComplete, 1) + "% completed)." });

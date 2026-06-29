@@ -217,12 +217,31 @@ select.input { cursor: pointer; }
 /* Hindrances */
 .hindrance-list { display: flex; flex-direction: column; gap: var(--s-2); margin-bottom: var(--s-2); }
 .hindrance {
-  display: grid; grid-template-columns: 1.1fr .8fr .9fr auto; gap: 6px; align-items: center;
-  background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 6px;
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 8px;
 }
-.hindrance .input--sm { width: 100%; }
+.hindrance__top { display: grid; grid-template-columns: 1.1fr .7fr .8fr auto; gap: 6px; align-items: center; }
+.hindrance__top .input--sm { width: 100%; }
 .hindrance__del { border: none; background: transparent; color: var(--danger); cursor: pointer; font-size: 16px; line-height: 1; padding: 2px 6px; border-radius: var(--r-sm); }
 .hindrance__del:hover { background: var(--danger-bg); }
+.hindrance__days { margin-top: 8px; }
+.hindrance__days-label { font-size: 11px; color: var(--text-muted); margin-bottom: 5px; }
+.hindrance__hint { font-size: 10.5px; color: var(--text-faint); margin-top: 6px; line-height: 1.4; }
+
+/* affected-day picker */
+.hcal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+.hcal__hd { font-size: 9.5px; color: var(--text-faint); text-align: center; padding: 1px 0; font-weight: 600; }
+.hcal__day {
+  font-size: 11px; text-align: center; padding: 5px 0; border: 1px solid var(--border);
+  border-radius: 4px; background: var(--surface); cursor: pointer; user-select: none;
+  font-variant-numeric: tabular-nums; transition: background .1s, border-color .1s;
+}
+.hcal__day:hover { border-color: var(--accent); }
+.hcal__day.is-weekoff { background: var(--surface-3); color: var(--text-faint); }
+.hcal__day.is-sel { background: var(--warning); color: #fff; border-color: var(--warning); font-weight: 700; }
+
+/* ramp-up curve mini-graph */
+.ramp-chart { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 6px; }
+.ramp-chart svg { display: block; }
 
 /* Advanced */
 .advanced { border: 1px solid var(--border); border-radius: var(--r-md); margin-bottom: var(--s-4); background: var(--surface-2); }
