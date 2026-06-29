@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Sheet Pile Installation Planner</title>
-  <link rel="stylesheet" href="styles.css?v=4" />
+  <link rel="stylesheet" href="styles.css?v=5" />
   <!--
     SheetJS (xlsx) is vendored locally in ./vendor so the app works fully offline.
     If you prefer the CDN, replace the src below with:
@@ -26,6 +26,7 @@
       <div class="view-toggle" id="viewToggle" hidden>
         <button type="button" class="view-toggle__btn is-active" data-view="gantt">Gantt</button>
         <button type="button" class="view-toggle__btn" data-view="table">Table</button>
+        <button type="button" class="view-toggle__btn" data-view="map">Map</button>
       </div>
       <button type="button" id="generateBtn" class="btn btn--primary" disabled>Generate Plan</button>
     </div>
@@ -255,6 +256,21 @@
             </div>
             <div class="table-scroll" id="tableScroll"></div>
           </div>
+
+          <!-- Map (plan view of the sheetpile boundary) -->
+          <div class="view view--map" id="mapView" hidden>
+            <div class="map-controls">
+              <div class="seg" id="mapZoom">
+                <span class="seg__label">Zoom:</span>
+                <button type="button" class="seg__btn" id="mapZoomOut" title="Zoom out">&minus;</button>
+                <button type="button" class="seg__btn" id="mapZoomFit" title="Fit to view">Fit</button>
+                <button type="button" class="seg__btn" id="mapZoomIn" title="Zoom in">+</button>
+              </div>
+              <div class="map-legend" id="mapLegend"></div>
+            </div>
+            <div class="map-scroll" id="mapScroll"></div>
+            <div class="map-info" id="mapInfo">Hover a chainage segment for details; click to pin it here.</div>
+          </div>
         </div>
       </section>
 
@@ -296,12 +312,13 @@
   <!-- Scripts (load order matters: util -> data -> engine -> ui).
        The ?v= query string is a cache-buster: bump it whenever js/ changes so
        browsers don't run a stale copy. -->
-  <script src="js/chainage_data.js?v=4"></script>
-  <script src="js/util.js?v=4"></script>
-  <script src="js/data.js?v=4"></script>
-  <script src="js/engine.js?v=4"></script>
-  <script src="js/ui.js?v=4"></script>
+  <script src="js/chainage_data.js?v=5"></script>
+  <script src="js/util.js?v=5"></script>
+  <script src="js/data.js?v=5"></script>
+  <script src="js/engine.js?v=5"></script>
+  <script src="js/ui.js?v=5"></script>
 </body>
 </html>
+
 
 

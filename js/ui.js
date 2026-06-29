@@ -13,7 +13,7 @@
   const state = {
     parsed: { chainage: null, manpower: null, material: null, progress: null },
     store: null, defaults: null, result: null,
-    view: "gantt", ganttColor: "profile"
+    view: "gantt", ganttColor: "profile", mapZoom: 1, mapSelected: null
   };
 
   document.addEventListener("DOMContentLoaded", init);
@@ -53,8 +53,22 @@
       b.addEventListener("click", () => { state.ganttColor = b.dataset.mode; U.$$("#ganttColorMode .seg__btn").forEach((x) => x.classList.toggle("is-active", x === b)); if (state.result) renderGantt(); }));
     $("#tableGroup").addEventListener("change", () => { if (state.result) renderTable(); });
 
+    // Map zoom controls (Change 8)
+    $("#mapZoomIn").addEventListener("click", () => setMapZoom(state.mapZoom * 1.4));
+    $("#mapZoomOut").addEventListener("click", () => setMapZoom(state.mapZoom / 1.4));
+    $("#mapZoomFit").addEventListener("click", () => setMapZoom(1));
+    $("#mapScroll").addEventListener("wheel", (e) => {
+      if (!state.result) return;
+      e.preventDefault();
+      setMapZoom(state.mapZoom * (e.deltaY < 0 ? 1.15 : 1 / 1.15));
+    }, { passive: false });
+
     updateStoredHistoryHint();
     refresh();
+  }
+  function setMapZoom(z) {
+    state.mapZoom = U.clamp(z, 0.5, 10);
+    if (state.result) renderMap();
   }
 
   /* ============================ CHAINAGE (frozen, read-only) ============================ */
@@ -512,6 +526,7 @@
 
     renderGantt();
     renderTable();
+    renderMap();
     renderValidation();
     setView(state.view);
   }
@@ -520,6 +535,7 @@
     state.view = v;
     $("#ganttView").hidden = v !== "gantt";
     $("#tableView").hidden = v !== "table";
+    $("#mapView").hidden = v !== "map";
     U.$$("#viewToggle .view-toggle__btn").forEach((b) => b.classList.toggle("is-active", b.dataset.view === v));
   }
 
@@ -710,6 +726,132 @@
       else ganttTip.style.display = "none";
     });
     host.addEventListener("mouseleave", () => { if (ganttTip) ganttTip.style.display = "none"; });
+  }
+
+  /* ============================ MAP VIEW (Change 8) ============================ */
+  const MAP_STATUS = {
+    complete:   { c: "#1f8f5f", label: "Complete" },
+    inprogress: { c: "#0f6e78", label: "In progress" },
+    planned:    { c: "#b6791f", label: "Planned" },
+    blocked:    { c: "#c2412f", label: "Blocked (no material)" }
+  };
+  const MAP_CONTEXT = "#ccd4de";
+  let mapTipEl = null;
+
+  function mapTipText(f, st, info) {
+    const lbl = (MAP_STATUS[st] || {}).label || st || "—";
+    let t = f.id + " · " + f.profile + "\nStatus: " + lbl + "\nMTO: " + U.fmtInt(f.mto) + " piles";
+    if (info) t += "\nMachine " + info.machine + " · " + U.fmtShort(info.startDate) + "–" + U.fmtShort(info.lastDate) +
+      "\n" + Math.round(info.done) + " / " + U.fmtInt(info.mto) + " (" + U.fmtNum(info.done / info.mto * 100, 1) + "%)";
+    return U.esc(t);
+  }
+
+  function renderMap() {
+    const host = $("#mapScroll"), r = state.result;
+    const feats = state.parsed.chainage ? state.parsed.chainage.features : [];
+    const geoFeats = feats.filter((f) => f.seg);
+    if (!r || !geoFeats.length) { U.clear(host); host.appendChild(el("div", { class: "emptystate", html: "<p>No geo-coordinates available to map.</p>" })); return; }
+
+    // status + worked-info per chainage (selected priority)
+    const statusById = {}, infoById = {}, inPriority = {};
+    r.candidates.forEach((c) => { statusById[c.id] = "planned"; inPriority[c.id] = true; });
+    r.blocked.forEach((b) => { statusById[b.id] = "blocked"; });
+    r.worked.forEach((w) => { statusById[w.id] = w.completed ? "complete" : "inprogress"; infoById[w.id] = w; });
+
+    // bounds + equirectangular projection (north up)
+    let minLng = Infinity, maxLng = -Infinity, minLat = Infinity, maxLat = -Infinity;
+    geoFeats.forEach((f) => f.seg.forEach((p) => {
+      if (p[0] < minLng) minLng = p[0]; if (p[0] > maxLng) maxLng = p[0];
+      if (p[1] < minLat) minLat = p[1]; if (p[1] > maxLat) maxLat = p[1];
+    }));
+    const lat0 = (minLat + maxLat) / 2, kx = Math.cos(lat0 * Math.PI / 180);
+    const dataW = (maxLng - minLng) * kx || 1e-6, dataH = (maxLat - minLat) || 1e-6;
+    const pad = 26, targetW = 880;
+    const S = ((targetW - 2 * pad) / dataW) * state.mapZoom;
+    const W = dataW * S + 2 * pad, H = dataH * S + 2 * pad;
+    const X = (lng) => pad + (lng - minLng) * kx * S;
+    const Y = (lat) => pad + (maxLat - lat) * S;
+
+    let s = '<svg width="' + W.toFixed(0) + '" height="' + H.toFixed(0) + '" font-family="inherit" font-size="10">';
+    // context segments (other priorities)
+    geoFeats.forEach((f) => {
+      if (inPriority[f.id]) return;
+      const a = f.seg[0], b = f.seg[1];
+      s += '<line x1="' + X(a[0]).toFixed(1) + '" y1="' + Y(a[1]).toFixed(1) + '" x2="' + X(b[0]).toFixed(1) + '" y2="' + Y(b[1]).toFixed(1) + '" stroke="' + MAP_CONTEXT + '" stroke-width="1.5" stroke-linecap="round"/>';
+    });
+    // selected-priority segments (coloured by status)
+    geoFeats.forEach((f) => {
+      if (!inPriority[f.id]) return;
+      const st = statusById[f.id] || "planned", col = (MAP_STATUS[st] || {}).c || MAP_CONTEXT;
+      const a = f.seg[0], b = f.seg[1], sel = state.mapSelected === f.id ? " is-sel" : "";
+      s += '<line class="map-seg' + sel + '" data-id="' + U.esc(f.id) + '" data-tip="' + mapTipText(f, st, infoById[f.id]) + '" x1="' + X(a[0]).toFixed(1) + '" y1="' + Y(a[1]).toFixed(1) + '" x2="' + X(b[0]).toFixed(1) + '" y2="' + Y(b[1]).toFixed(1) + '" stroke="' + col + '" stroke-width="' + (sel ? 6 : 3.5) + '" stroke-linecap="round"/>';
+    });
+    // markers at segment midpoints (selected priority)
+    geoFeats.forEach((f) => {
+      if (!inPriority[f.id] || !f.mid) return;
+      const st = statusById[f.id] || "planned", col = (MAP_STATUS[st] || {}).c || MAP_CONTEXT;
+      s += '<circle class="map-marker" data-id="' + U.esc(f.id) + '" data-tip="' + mapTipText(f, st, infoById[f.id]) + '" cx="' + X(f.mid[0]).toFixed(1) + '" cy="' + Y(f.mid[1]).toFixed(1) + '" r="' + (state.mapSelected === f.id ? 5.5 : 3.5) + '" fill="' + col + '" stroke="#fff" stroke-width="1"/>';
+    });
+    // north arrow + scale bar
+    s += '<g transform="translate(' + (W - 32) + ',30)"><line x1="0" y1="16" x2="0" y2="-4" stroke="#5b6877" stroke-width="1.5"/><polygon points="-4,-1 4,-1 0,-9" fill="#5b6877"/><text x="0" y="28" text-anchor="middle" fill="#8a96a5">N</text></g>';
+    s += mapScaleBar(S, pad, H);
+    s += "</svg>";
+    host.innerHTML = s;
+
+    attachMapInteractions(host, infoById, statusById, geoFeats);
+    renderMapLegend(statusById, geoFeats, inPriority);
+  }
+
+  function mapScaleBar(S, pad, H) {
+    const mPerPx = 111320 / S;                 // metres per screen pixel (lng, at this scale)
+    const raw = mPerPx * 120, pow = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / pow;
+    const nice = (f < 1.5 ? 1 : f < 3.5 ? 2 : f < 7.5 ? 5 : 10) * pow;
+    const px = nice / mPerPx, y = H - 16, x0 = pad;
+    const label = nice >= 1000 ? (nice / 1000) + " km" : Math.round(nice) + " m";
+    return '<g stroke="#5b6877" stroke-width="2">' +
+      '<line x1="' + x0 + '" y1="' + y + '" x2="' + (x0 + px) + '" y2="' + y + '"/>' +
+      '<line x1="' + x0 + '" y1="' + (y - 4) + '" x2="' + x0 + '" y2="' + (y + 4) + '"/>' +
+      '<line x1="' + (x0 + px) + '" y1="' + (y - 4) + '" x2="' + (x0 + px) + '" y2="' + (y + 4) + '"/></g>' +
+      '<text x="' + (x0 + px / 2) + '" y="' + (y - 6) + '" text-anchor="middle" fill="#5b6877" font-size="10">' + label + '</text>';
+  }
+
+  function attachMapInteractions(host, infoById, statusById, geoFeats) {
+    if (!mapTipEl) { mapTipEl = el("div", { class: "map-tip" }); document.body.appendChild(mapTipEl); }
+    host.onmousemove = (ev) => {
+      const t = ev.target.getAttribute && ev.target.getAttribute("data-tip");
+      if (t) { mapTipEl.style.display = "block"; mapTipEl.style.left = (ev.clientX + 14) + "px"; mapTipEl.style.top = (ev.clientY + 14) + "px"; mapTipEl.innerHTML = t.replace(/\n/g, "<br>"); }
+      else mapTipEl.style.display = "none";
+    };
+    host.onmouseleave = () => { if (mapTipEl) mapTipEl.style.display = "none"; };
+    host.onclick = (ev) => {
+      const id = ev.target.getAttribute && ev.target.getAttribute("data-id");
+      if (!id) return;
+      state.mapSelected = state.mapSelected === id ? null : id;
+      const f = geoFeats.find((x) => x.id === id);
+      showMapInfo(state.mapSelected ? f : null, statusById[id], infoById[id]);
+      renderMap();
+    };
+  }
+
+  function showMapInfo(f, st, info) {
+    const box = $("#mapInfo");
+    if (!f) { box.textContent = "Hover a chainage segment for details; click to pin it here."; return; }
+    const lbl = (MAP_STATUS[st] || {}).label || st || "—";
+    let html = "<strong>" + U.esc(f.id) + "</strong> · " + U.esc(f.profile) + " · <strong>" + lbl + "</strong> · MTO " + U.fmtInt(f.mto);
+    if (info) html += " · Machine " + info.machine + " · " + U.fmtFriendly(info.startDate) + " → " + U.fmtShort(info.lastDate) +
+      " · " + Math.round(info.done) + "/" + U.fmtInt(info.mto) + " piles (" + U.fmtNum(info.done / info.mto * 100, 1) + "%)";
+    box.innerHTML = html;
+  }
+
+  function renderMapLegend(statusById, geoFeats, inPriority) {
+    const host = $("#mapLegend"); U.clear(host);
+    const counts = { inprogress: 0, planned: 0, complete: 0, blocked: 0 };
+    geoFeats.forEach((f) => { if (inPriority[f.id]) { const st = statusById[f.id] || "planned"; if (counts[st] != null) counts[st]++; } });
+    ["inprogress", "planned", "complete", "blocked"].forEach((k) => {
+      if (!counts[k]) return;
+      host.appendChild(el("span", { class: "legend-item" }, [el("span", { class: "legend-swatch", style: "background:" + MAP_STATUS[k].c }), document.createTextNode(MAP_STATUS[k].label + " (" + counts[k] + ")")]));
+    });
+    host.appendChild(el("span", { class: "legend-item" }, [el("span", { class: "legend-swatch", style: "background:" + MAP_CONTEXT }), document.createTextNode("Other priorities")]));
   }
 
   /* ============================ VALIDATION (§6.3) ============================ */

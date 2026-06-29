@@ -102,6 +102,17 @@ and change:
   Every warning and its decision (accepted / adjusted + detail) is stored on the plan,
   shown in the *Warning decisions* panel, and the compact form is saved to localStorage.
   See the `// TODO: confirm` note in `ui.js` for the assumed adjustment per warning.
+- **Map view** — a third output view (Gantt / Table / **Map**) plots the sheetpile
+  boundary from the real geo-coordinates. Each chainage is drawn as its boundary
+  segment with a midpoint marker at its true location; the selected priority is
+  coloured by status (in-progress / planned / complete / blocked) and other priorities
+  show as grey context. Hover for a tooltip and click to pin chainage value, profile,
+  status, scheduled dates and progress. It's a self-contained SVG plan view
+  (equirectangular projection, zoom + scroll-pan, north arrow, scale bar) — **no map
+  library or tile server**, so it works offline. The compact per-chainage segment
+  `geo: [lngA,latA,lngB,latB]` lives in `js/chainage_data.js` (the two most-distant
+  footprint vertices); full polygon geometry is intentionally not shipped. A tiled
+  basemap (e.g. Leaflet) could be layered in later if online tiles are acceptable.
 - **Cost-optimization** — the engine simulates every machine count from 1 to the
   manpower cap and deploys the **fewest** machines that still install the maximum
   the window can absorb (material/work limited), and stores that count in

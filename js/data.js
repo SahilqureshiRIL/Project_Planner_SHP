@@ -50,6 +50,8 @@
         code: String(p["New SAP Code"] == null ? "" : p["New SAP Code"]).trim(),
         mto: isFinite(mto) ? mto : 0,
         name: p["name"] || null,
+        seg: p["__seg"] || null,   // [[lngA,latA],[lngB,latB]] boundary segment (Map view)
+        mid: p["__mid"] || null,   // [lng,lat] segment midpoint (marker)
         sortKey: U.chainageSortKey(id)
       });
     });
@@ -64,24 +66,50 @@
     return { features, priorities, priorityCounts, profiles };
   };
 
+  // Two most-distant vertices of a footprint ring ≈ its boundary-segment end-points.
+  function segFromGeometry(geom) {
+    if (!geom || !geom.coordinates) return null;
+    let ring = null;
+    if (geom.type === "Polygon") ring = geom.coordinates[0];
+    else if (geom.type === "MultiPolygon") ring = geom.coordinates[0] && geom.coordinates[0][0];
+    else if (geom.type === "LineString") ring = geom.coordinates;
+    if (!ring || ring.length < 2) return null;
+    const pts = ring.length > 200 ? ring.slice(0, 200) : ring;
+    let best = -1, a = pts[0], b = pts[pts.length - 1];
+    for (let i = 0; i < pts.length; i++) for (let j = i + 1; j < pts.length; j++) {
+      const dx = pts[i][0] - pts[j][0], dy = pts[i][1] - pts[j][1], d = dx * dx + dy * dy;
+      if (d > best) { best = d; a = pts[i]; b = pts[j]; }
+    }
+    return [[a[0], a[1]], [b[0], b[1]]];
+  }
+  function attachSeg(p, seg) {
+    if (seg) { p.__seg = seg; p.__mid = [(seg[0][0] + seg[1][0]) / 2, (seg[0][1] + seg[1][1]) / 2]; }
+    return p;
+  }
+
   // GeoJSON upload path — kept so the frozen dataset can be regenerated if needed.
   D.parseChainage = function (text) {
     let gj;
     try { gj = JSON.parse(text); } catch (e) { throw new Error("Not valid JSON."); }
     if (!gj || gj.type !== "FeatureCollection" || !Array.isArray(gj.features))
       throw new Error("Expected a GeoJSON FeatureCollection with a 'features' array.");
-    return D.buildChainageModel(gj.features.map((f) => f && f.properties));
+    return D.buildChainageModel(gj.features.map((f) => {
+      if (!f || !f.properties) return null;
+      return attachSeg(f.properties, f.geometry ? segFromGeometry(f.geometry) : null);
+    }));
   };
 
-  // FROZEN dataset loader — expands the compact rows hardcoded in chainage_data.js.
+  // FROZEN dataset loader — expands the compact rows + geo hardcoded in chainage_data.js.
   // This is the only chainage source the app uses at runtime (no upload, read-only).
   D.loadHardcodedChainage = function () {
     const raw = window.SPP_CHAINAGE_DATA;
     if (!raw || !raw.fields || !raw.rows) throw new Error("Frozen chainage data (js/chainage_data.js) not found.");
-    const fields = raw.fields;
-    const props = raw.rows.map((row) => {
+    const fields = raw.fields, geo = raw.geo || [];
+    const props = raw.rows.map((row, idx) => {
       const o = {};
       for (let i = 0; i < fields.length; i++) o[fields[i]] = row[i];
+      const g = geo[idx];
+      if (g && g.length === 4) attachSeg(o, [[g[0], g[1]], [g[2], g[3]]]);
       return o;
     });
     return D.buildChainageModel(props);

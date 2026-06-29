@@ -368,6 +368,17 @@ table.data tr.row-completed td { color: var(--success); }
 .toast.is-bad { background: var(--danger); }
 .toast.is-ok  { background: var(--success); }
 
+/* ============================ MAP VIEW (Change 8) ============================ */
+.map-controls { display: flex; align-items: center; gap: var(--s-4); flex-wrap: wrap; margin-bottom: var(--s-3); }
+.map-legend { display: flex; gap: var(--s-3); flex-wrap: wrap; font-size: 11.5px; color: var(--text-muted); }
+.map-scroll { overflow: auto; max-height: 62vh; border: 1px solid var(--border); border-radius: var(--r-md); background: #fbfcff; }
+.map-scroll svg { display: block; }
+.map-seg, .map-marker { cursor: pointer; }
+.map-seg.is-sel, .map-marker.is-sel { stroke: #1c2733; }
+.map-info { margin-top: var(--s-3); font-size: 12.5px; color: var(--text-muted); background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-sm); padding: var(--s-2) var(--s-3); min-height: 18px; }
+.map-info strong { color: var(--text); font-variant-numeric: tabular-nums; }
+.map-tip { position: fixed; z-index: 60; pointer-events: none; display: none; background: #1c2733; color: #eef2f7; font-size: 11.5px; padding: 7px 10px; border-radius: var(--r-sm); box-shadow: var(--shadow-pop); max-width: 280px; line-height: 1.5; }
+
 /* ============================ WARNING MODAL (Change 6) ============================ */
 .modal-overlay {
   position: fixed; inset: 0; z-index: 90;
