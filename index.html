@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sheet Pile Installation Planner</title>
+  <link rel="stylesheet" href="styles.css" />
+  <!--
+    SheetJS (xlsx) is vendored locally in ./vendor so the app works fully offline.
+    If you prefer the CDN, replace the src below with:
+    https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js
+  -->
+  <script src="vendor/xlsx.full.min.js"></script>
+</head>
+<body>
+  <!-- ============================ HEADER ============================ -->
+  <header class="app-header">
+    <div class="app-header__title">
+      <div class="app-header__mark">SP</div>
+      <div>
+        <h1>Sheet Pile Installation Planner</h1>
+        <p class="app-header__sub">Chainage-wise day-by-day planning &middot; Phase&nbsp;1 prototype</p>
+      </div>
+    </div>
+    <div class="app-header__actions">
+      <div class="view-toggle" id="viewToggle" hidden>
+        <button type="button" class="view-toggle__btn is-active" data-view="gantt">Gantt</button>
+        <button type="button" class="view-toggle__btn" data-view="table">Table</button>
+      </div>
+      <button type="button" id="generateBtn" class="btn btn--primary" disabled>Generate Plan</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <!-- ============================ SIDEBAR (INPUTS) ============================ -->
+    <aside class="sidebar">
+
+      <!-- ---- Data files ---- -->
+      <section class="card" id="dataCard">
+        <div class="card__head">
+          <h2 class="card__title">1 &middot; Data Files</h2>
+          <span class="badge" id="dataStatusBadge">0 / 4 loaded</span>
+        </div>
+        <div class="card__body">
+          <p class="hint">Upload the four source files. Each is parsed in your browser; nothing is uploaded to a server.</p>
+
+          <div class="filerow" data-file="chainage">
+            <div class="filerow__main">
+              <label class="filelabel">Chainage data <span class="filelabel__ext">.json / .geojson</span></label>
+              <div class="filerow__status" data-role="status">Waiting&hellip;</div>
+            </div>
+            <input type="file" accept=".json,.geojson,application/json" data-input="chainage" />
+          </div>
+
+          <div class="filerow" data-file="manpower">
+            <div class="filerow__main">
+              <label class="filelabel">Manpower &amp; machines <span class="filelabel__ext">.xlsx</span></label>
+              <div class="filerow__status" data-role="status">Waiting&hellip;</div>
+            </div>
+            <input type="file" accept=".xlsx" data-input="manpower" />
+          </div>
+
+          <div class="filerow" data-file="material">
+            <div class="filerow__main">
+              <label class="filelabel">Material logistics <span class="filelabel__ext">.xlsx</span></label>
+              <div class="filerow__status" data-role="status">Waiting&hellip;</div>
+            </div>
+            <input type="file" accept=".xlsx" data-input="material" />
+          </div>
+
+          <div class="filerow" data-file="progress">
+            <div class="filerow__main">
+              <label class="filelabel">Progress history <span class="filelabel__ext">.xlsx</span></label>
+              <div class="filerow__status" data-role="status">Waiting&hellip;</div>
+            </div>
+            <input type="file" accept=".xlsx" data-input="progress" />
+          </div>
+
+          <div class="filerow__try">
+            <button type="button" id="tryBundledBtn" class="btn btn--ghost btn--sm">Try loading bundled ./data files</button>
+            <span class="hint hint--inline">(works only when served over http; otherwise upload above)</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- ---- Parameters ---- -->
+      <section class="card" id="paramsCard" aria-disabled="true">
+        <div class="card__head">
+          <h2 class="card__title">2 &middot; Plan Parameters</h2>
+          <span class="badge badge--muted">auto-filled from data</span>
+        </div>
+        <div class="card__body" id="paramsBody">
+          <p class="placeholder" id="paramsPlaceholder">Load the four data files to compute defaults.</p>
+
+          <div id="paramsForm" hidden>
+            <!-- Priority -->
+            <div class="field">
+              <label class="field__label" for="pPriority">Chainage Priority</label>
+              <select id="pPriority" class="input">
+                <option value="" selected disabled>Select priority&hellip;</option>
+              </select>
+              <p class="field__hint">Phase 1 plans a single priority.</p>
+            </div>
+
+            <!-- Plan period -->
+            <div class="field">
+              <span class="field__label">Plan Period</span>
+              <div class="radiorow" id="pPeriod">
+                <label class="radio"><input type="radio" name="period" value="2" checked /> 2 weeks</label>
+                <label class="radio"><input type="radio" name="period" value="3" /> 3 weeks</label>
+              </div>
+            </div>
+
+            <!-- Plan start (Mondays only) -->
+            <div class="field">
+              <label class="field__label" for="pStart">Plan Start Date <span class="field__tag">Mondays only</span></label>
+              <input type="date" id="pStart" class="input" />
+              <p class="field__hint" id="pStartHint">Default = first Monday after the latest dated record.</p>
+            </div>
+
+            <div class="field-grid">
+              <!-- Machines -->
+              <div class="field">
+                <label class="field__label" for="pMachines">Machines Deployable</label>
+                <input type="number" id="pMachines" class="input" min="0" step="1" />
+                <p class="field__hint" id="pMachinesHint">auto from last 7 days</p>
+              </div>
+              <!-- Manpower -->
+              <div class="field">
+                <label class="field__label" for="pManpower">Manpower</label>
+                <input type="number" id="pManpower" class="input" min="0" step="1" />
+                <p class="field__hint" id="pManpowerHint">auto from last 7 days</p>
+              </div>
+              <!-- Work days/week -->
+              <div class="field">
+                <label class="field__label" for="pWorkDays">Work Days / week</label>
+                <select id="pWorkDays" class="input">
+                  <option value="5">5 (Mon&ndash;Fri)</option>
+                  <option value="6" selected>6 (Mon&ndash;Sat)</option>
+                  <option value="7">7 (all days)</option>
+                </select>
+              </div>
+              <!-- Workhours -->
+              <div class="field">
+                <label class="field__label" for="pWorkhours">Workhours / day</label>
+                <input type="number" id="pWorkhours" class="input" min="1" step="1" />
+                <p class="field__hint" id="pWorkhoursHint">auto from last 7 days</p>
+              </div>
+            </div>
+
+            <!-- Cap notice -->
+            <div class="notice notice--warn" id="capNotice" hidden></div>
+
+            <!-- Productivity -->
+            <div class="field">
+              <label class="field__label" for="pProductivity">
+                Productivity <span class="field__tag">piles / machine / hour</span>
+                <span class="info" id="prodInfo" tabindex="0">&#9432;<span class="info__pop" id="prodInfoPop"></span></span>
+              </label>
+              <input type="number" id="pProductivity" class="input" min="0.001" step="0.001" />
+              <p class="field__hint" id="pProductivityHint">auto from last 7 days</p>
+            </div>
+
+            <!-- Hindrances -->
+            <div class="field">
+              <span class="field__label">Hindrances <span class="field__tag">plan-wide</span></span>
+              <div id="hindranceList" class="hindrance-list"></div>
+              <button type="button" id="addHindranceBtn" class="btn btn--ghost btn--sm">+ Add hindrance</button>
+            </div>
+
+            <!-- Ramp-up (collapsible) -->
+            <details class="advanced" id="rampAdvanced">
+              <summary>Ramp-up settings <span class="field__tag">assumed &middot; editable</span></summary>
+              <div class="advanced__body">
+                <div class="field-grid">
+                  <div class="field">
+                    <label class="field__label" for="pRampN">Days to steady-state (n)</label>
+                    <input type="number" id="pRampN" class="input" min="0" step="1" value="7" />
+                  </div>
+                  <div class="field">
+                    <label class="field__label" for="pPrevMachines">Machines from previous plan</label>
+                    <input type="number" id="pPrevMachines" class="input" min="0" step="1" />
+                    <p class="field__hint" id="pPrevHint">from localStorage / first run = machines</p>
+                  </div>
+                </div>
+                <div class="field">
+                  <label class="field__label" for="pRampProfile">Ramp profile (day 0&hellip;n multipliers)</label>
+                  <input type="text" id="pRampProfile" class="input input--mono" value="0.45, 0.58, 0.70, 0.80, 0.88, 0.94, 0.98, 1.00" />
+                  <p class="field__hint">Comma-separated per-day multipliers applied to a newly introduced machine.</p>
+                </div>
+                <button type="button" id="resetHistoryBtn" class="btn btn--ghost btn--sm">Reset stored machine history</button>
+                <span class="hint hint--inline" id="storedHistoryHint"></span>
+              </div>
+            </details>
+
+            <div class="field">
+              <button type="button" id="generateBtn2" class="btn btn--primary btn--block">Generate Plan</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </aside>
+
+    <!-- ============================ MAIN (RESULTS) ============================ -->
+    <div class="main">
+      <section class="card" id="resultsCard">
+        <div class="card__head">
+          <h2 class="card__title">Plan</h2>
+          <div class="card__head-meta" id="planMeta"></div>
+        </div>
+        <div class="card__body">
+          <div class="emptystate" id="resultsEmpty">
+            <div class="emptystate__icon">&#128221;</div>
+            <p>Load data, choose a priority, then <strong>Generate Plan</strong>.</p>
+          </div>
+
+          <!-- Gantt -->
+          <div class="view view--gantt" id="ganttView" hidden>
+            <div class="gantt-controls">
+              <div class="seg" id="ganttColorMode">
+                <span class="seg__label">Color by:</span>
+                <button type="button" class="seg__btn is-active" data-mode="profile">Profile</button>
+                <button type="button" class="seg__btn" data-mode="machine">Machine</button>
+              </div>
+              <div class="gantt-legend" id="ganttLegend"></div>
+            </div>
+            <div class="gantt-scroll" id="ganttScroll"></div>
+          </div>
+
+          <!-- Table -->
+          <div class="view view--table" id="tableView" hidden>
+            <div class="table-controls">
+              <label class="inline-field">Group by
+                <select id="tableGroup" class="input input--sm">
+                  <option value="date" selected>Date</option>
+                  <option value="chainage">Chainage</option>
+                  <option value="machine">Machine</option>
+                </select>
+              </label>
+              <span class="hint hint--inline" id="tableSummary"></span>
+            </div>
+            <div class="table-scroll" id="tableScroll"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Validation -->
+      <section class="card" id="validationCard" hidden>
+        <div class="card__head">
+          <h2 class="card__title">Validation</h2>
+          <span class="badge" id="feasibilityBadge"></span>
+        </div>
+        <div class="card__body" id="validationBody"></div>
+      </section>
+    </div>
+  </main>
+
+  <!-- Toast -->
+  <div class="toast" id="toast" hidden></div>
+
+  <!-- Scripts (load order matters: util -> data -> engine -> ui) -->
+  <script src="js/util.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/engine.js"></script>
+  <script src="js/ui.js"></script>
+</body>
+</html>

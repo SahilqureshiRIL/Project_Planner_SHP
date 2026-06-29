@@ -1,0 +1,85 @@
+# Sheet Pile Installation Planner — Phase 1
+
+A single, self-contained local web app that turns four source files into a
+day-by-day sheet-pile installation plan, shown as a **Gantt chart** and a
+**table** (toggle between them) with a **validation panel**.
+
+Plain HTML + CSS + vanilla JS. No build step, no backend, no framework.
+
+## Running it
+
+**Option A — just open it.** Double-click `index.html` (or open it in a browser).
+Then upload the four files using the inputs in the *Data Files* card.
+
+**Option B — serve it** (lets the "Try loading bundled ./data files" button work,
+since browsers block `fetch()` of local files over `file://`):
+
+```powershell
+# from this folder, with Python installed:
+python -m http.server 8000
+# then open http://localhost:8000
+```
+
+## The four inputs
+
+| File | What it provides |
+|---|---|
+| `chainage_data.json` | GeoJSON of chainages — `Chainage_Id`, `Priority`, `Profile Name`, `No of Profiles` (MTO), `New SAP Code`. |
+| `manpower_resources.xlsx` | Sheets `Machine Status`, `Manpower Status`, `Shifthour Status` (one row per shift-date). |
+| `material_logistics.xlsx` | Sheet `Material Logistics` — on-site stock + dated inbound deliveries per `Item Code`. |
+| `progress_history.xlsx` | Sheet `Progress history` — used for the productivity baseline (`Sub Activity = "Sheet Pile Installed"`). |
+
+Sample copies are in `./data/`.
+
+## Files
+
+```
+index.html        markup + structure
+styles.css        all design tokens live in :root (swap for a real design system)
+js/util.js        dates, number/text formatting, small DOM helpers
+js/data.js        file parsing, normalization, defaults computation
+js/engine.js      the deterministic planning engine (simulation + cost-optimizer)
+js/ui.js          wiring, defaults → form, Table / Gantt / Validation renderers
+vendor/           SheetJS (xlsx) vendored locally so .xlsx parsing works offline
+```
+
+## Defaults (auto-computed, then editable)
+
+With the bundled sample files and no priority chosen yet, the input screen shows:
+**Machines 4 · Manpower 24 · Workhours 9 · Productivity 0.465 · Work Days/week 6 ·
+Plan Start Mon 2026-06-29 · ramp n = 7** — all editable.
+
+All defaults use the **last-7-days window** anchored on the latest shift date
+(after the date fix, 12–18 Jun 2026); averages divide by 7.
+
+## Modeling decisions / assumptions (Phase 1)
+
+These are the places where the spec left room for judgement — all are easy to find
+and change:
+
+- **Date typo fix (`data.js → fixDuplicateShiftDate`)** — the source has two rows
+  for the same shift-date; the *first* occurrence is shifted back one day so there
+  is one row per day. It's a clearly-commented, self-disabling step (no-op once the
+  upstream data is corrected). Verified against the sample: the duplicate `15-Jun`
+  becomes `14-Jun`.
+- **Plan-start default** — *first Monday after the latest **actual** dated record*
+  (manpower shift dates, progress dates, material **receipt** dates). Future inbound
+  **Expected Arrival** forecasts are intentionally excluded, which is what yields
+  `2026-06-29` for the sample.
+- **Profile work order** — profiles are ranked by **material available on-site at
+  plan start** (on-site receipts + inbound already arrived), descending; within a
+  profile, chainages ascend by `Chainage_Id`.
+- **Install model** — capacity is `productivity × workhours` piles/machine/day, so
+  daily installs are fractional internally. The table shows whole piles via
+  cumulative rounding (daily = Δ of the rounded running total) so columns still add
+  up. Material consumption, MTO and capacity all use the same unit, so installs
+  never exceed available material, daily capacity, or remaining MTO (verified).
+- **Ramp clock** — every machine is treated as deployed from the first working day;
+  a "new" machine (index beyond *Machines from previous plan*) ramps by its
+  working-day index using the editable ramp profile.
+- **Hindrances** — plan-wide; day-type removes the earliest working days, hour-type
+  trims hours from the earliest working day(s). Deterministic Phase-1 placement.
+- **Cost-optimization** — the engine simulates every machine count from 1 to the
+  manpower cap and deploys the **fewest** machines that still install the maximum
+  the window can absorb (material/work limited), and stores that count in
+  `localStorage` for the next run's ramp baseline.

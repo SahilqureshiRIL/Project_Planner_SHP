@@ -1,0 +1,248 @@
+/* =============================================================================
+   engine.js — the deterministic planning engine (§5).
+
+   SPP.engine.generate(store, params) returns a full plan result:
+     calendar, deployed/cap/idle machines, day-by-day schedule, per-profile
+     material accounting, feasibility figures and a warnings list.
+
+   The daily simulation is run once per candidate machine count (1..max) so the
+   cost-optimizer can pick the fewest machines that still install the maximum
+   the window can absorb (§5.4).
+   ============================================================================= */
+(function () {
+  "use strict";
+  const SPP = window.SPP;
+  const U = SPP.util;
+  const E = (SPP.engine = {});
+  const EPS = 1e-6;
+
+  E.generate = function (store, p) {
+    const chainage = store.chainage, material = store.material;
+    const planStart = p.planStart;
+    const totalDays = p.periodWeeks * 7;
+    const planEnd = U.addDays(planStart, totalDays - 1);
+
+    /* ---- 1. manpower cap (§4 validation: 6 people per machine) ------------- */
+    const cap = Math.floor(p.manpower / 6);
+    const maxMachines = Math.max(0, Math.min(p.machinesInput, cap));
+    const capApplied = p.machinesInput > cap;
+
+    /* ---- 2. candidate chainages + blocked detection (§5.2 / §5.3) ---------- */
+    const candidates = chainage.features.filter((f) => f.priority === p.priority);
+    const totalMTO = candidates.reduce((s, f) => s + f.mto, 0);
+
+    function codeMaterial(code) { return material.byCode[code] || null; }
+    function totalMaterialQty(code) {
+      const m = codeMaterial(code);
+      if (!m) return 0;
+      return m.onsite + m.inbound.reduce((s, i) => s + i.qty, 0);
+    }
+    const workable = [], blocked = [];
+    candidates.forEach((f) => {
+      if (!f.code || totalMaterialQty(f.code) <= 0) blocked.push(f);
+      else workable.push(f);
+    });
+    const blockedMTO = blocked.reduce((s, f) => s + f.mto, 0);
+
+    /* ---- 3. per-code material state at plan start (§5.3) -------------------- */
+    // startingStock = on-site + inbound already usable by plan start.
+    // replenishments = inbound usable strictly after plan start (dated events).
+    const startStock = {};
+    const replen = [];                       // {usable, code, qty}
+    const usedCodes = Array.from(new Set(workable.map((f) => f.code)));
+    usedCodes.forEach((code) => {
+      const m = codeMaterial(code);
+      let start = m.onsite;
+      m.inbound.forEach((inb) => {
+        if (U.cmpDate(inb.usable, planStart) <= 0) start += inb.qty;
+        else replen.push({ usable: inb.usable, code: code, qty: inb.qty });
+      });
+      startStock[code] = start;
+    });
+    replen.sort((a, b) => U.cmpDate(a.usable, b.usable));
+
+    // Inbound arrivals that land within the plan window (markers / timeline).
+    const windowArrivals = replen
+      .filter((ev) => U.cmpDate(ev.usable, planEnd) <= 0)
+      .map((ev) => ({ date: ev.usable, code: ev.code, qty: ev.qty,
+                      profile: profileForCode(ev.code) }))
+      .sort((a, b) => U.cmpDate(a.date, b.date));
+
+    function profileForCode(code) {
+      const f = workable.find((w) => w.code === code) || candidates.find((c) => c.code === code);
+      return f ? f.profile : code;
+    }
+
+    /* ---- 4. ordered work queue (§5.2) -------------------------------------- */
+    // Profiles ranked by starting on-site stock available at plan start (desc);
+    // within a profile, chainages ascend by Chainage_Id.
+    const byCode = {};
+    workable.forEach((f) => { (byCode[f.code] || (byCode[f.code] = [])).push(f); });
+    const orderedCodes = Object.keys(byCode).sort((a, b) =>
+      (startStock[b] - startStock[a]) || profileForCode(a).localeCompare(profileForCode(b)));
+    const queue = [];
+    orderedCodes.forEach((code) => {
+      byCode[code].sort((x, y) => x.sortKey - y.sortKey).forEach((f) => queue.push(f));
+    });
+    const chById = {};
+    workable.forEach((f) => { chById[f.id] = f; });
+
+    /* ---- 5. working calendar + hindrances (§5.1 / §5.5) -------------------- */
+    const cal = [];
+    for (let i = 0; i < totalDays; i++) {
+      const d = U.addDays(planStart, i);
+      cal.push({
+        date: d, dayNum: i + 1,
+        isWorking: U.isoDow(d) <= p.workDaysPerWeek,
+        hours: p.workhours, nonWorkReason: U.isoDow(d) <= p.workDaysPerWeek ? null : "Weekly off"
+      });
+    }
+    // Day-type hindrances: remove N earliest working days.
+    let hindDays = 0, hindHours = 0;
+    p.hindrances.forEach((h) => {
+      if (h.unit === "days") hindDays += h.amount; else hindHours += h.amount;
+    });
+    let daysToRemove = Math.round(hindDays);
+    const lostDays = [];
+    for (let i = 0; i < cal.length && daysToRemove > 0; i++) {
+      if (cal[i].isWorking) {
+        cal[i].isWorking = false; cal[i].hours = 0;
+        cal[i].nonWorkReason = "Hindrance — day lost"; cal[i].hindrance = true;
+        lostDays.push(cal[i].date); daysToRemove--;
+      }
+    }
+    // Hour-type hindrances: trim from earliest working days.
+    let hoursToTrim = hindHours;
+    const trimmedDays = [];
+    for (let i = 0; i < cal.length && hoursToTrim > EPS; i++) {
+      if (!cal[i].isWorking) continue;
+      const take = Math.min(cal[i].hours, hoursToTrim);
+      cal[i].hours -= take; hoursToTrim -= take;
+      cal[i].hindHours = (cal[i].hindHours || 0) + take;
+      if (cal[i].hours <= EPS) { cal[i].isWorking = false; cal[i].hours = 0; cal[i].nonWorkReason = "Hindrance — hours lost"; cal[i].hindrance = true; }
+      else { cal[i].partialHindrance = true; }
+      trimmedDays.push(cal[i].date);
+    }
+    const workingDayCount = cal.filter((c) => c.isWorking).length;
+
+    /* ---- 6. the daily simulation (§5.4) ------------------------------------ */
+    const rampProfile = (p.rampProfile && p.rampProfile.length) ? p.rampProfile : [1];
+    function rampFactor(k) { return rampProfile[Math.min(k, rampProfile.length - 1)]; }
+
+    function simulate(M) {
+      const stock = Object.assign({}, startStock);
+      const repl = replen.map((r) => ({ usable: r.usable, code: r.code, qty: r.qty }));
+      const st = {};
+      workable.forEach((f) => { st[f.id] = { done: 0, started: false, startDate: null, lastDate: null, completed: false, completedDate: null, machine: null }; });
+      const assign = new Array(M).fill(null);
+      let qptr = 0, totalInstalled = 0, idleMachineDays = 0, workingOrdinal = -1;
+      const schedule = [];
+      const consumedByCode = {};
+
+      cal.forEach((day) => {
+        // material arrives on its calendar date regardless of working status
+        for (let r = 0; r < repl.length; r++) {
+          if (repl[r].qty > 0 && U.sameDay(repl[r].usable, day.date)) { stock[repl[r].code] += repl[r].qty; repl[r].qty = 0; }
+        }
+        if (!day.isWorking) return;
+        workingOrdinal++;
+        for (let i = 0; i < M; i++) if (assign[i] == null && qptr < queue.length) assign[i] = queue[qptr++].id;
+
+        for (let i = 0; i < M; i++) {
+          const id = assign[i];
+          if (id == null) { idleMachineDays++; continue; }
+          const ch = chById[id], s = st[id];
+          if (!s.started) { s.started = true; s.startDate = day.date; s.machine = i + 1; }
+          const isNew = i >= p.prevMachines;
+          const factor = isNew ? rampFactor(workingOrdinal) : 1.0;
+          const capacity = p.productivity * factor * day.hours;
+          const avail = stock[ch.code] || 0;
+          const remaining = ch.mto - s.done;
+          let install = Math.min(capacity, remaining, avail);
+          if (install < 0) install = 0;
+          s.done += install; stock[ch.code] = avail - install; s.lastDate = day.date;
+          totalInstalled += install;
+          consumedByCode[ch.code] = (consumedByCode[ch.code] || 0) + install;
+          schedule.push({
+            date: day.date, dayNum: day.dayNum, machine: i + 1, chId: id,
+            profile: ch.profile, code: ch.code, install: install, cum: s.done, mto: ch.mto,
+            stockEnd: stock[ch.code], capacity: capacity,
+            waiting: install <= EPS && capacity > EPS    // assigned but starved of material
+          });
+          if (s.done >= ch.mto - EPS) { s.completed = true; s.completedDate = day.date; assign[i] = null; }
+        }
+      });
+      return { totalInstalled, schedule, state: st, stockEnd: stock, consumedByCode, idleMachineDays };
+    }
+
+    /* ---- 7. cost-optimization: fewest machines for max installs ------------ */
+    const perM = {};
+    const plans = {};
+    let maxInstalled = 0;
+    for (let M = 1; M <= maxMachines; M++) { const r = simulate(M); plans[M] = r; perM[M] = r.totalInstalled; if (r.totalInstalled > maxInstalled) maxInstalled = r.totalInstalled; }
+    let deployed = maxMachines;
+    for (let M = 1; M <= maxMachines; M++) { if (perM[M] >= maxInstalled - EPS) { deployed = M; break; } }
+    const plan = maxMachines > 0 ? plans[deployed] : { totalInstalled: 0, schedule: [], state: {}, stockEnd: Object.assign({}, startStock), consumedByCode: {}, idleMachineDays: 0 };
+
+    /* ---- 8. chainages worked (for gantt / table) --------------------------- */
+    const worked = workable
+      .filter((f) => plan.state[f.id] && plan.state[f.id].started)
+      .map((f) => {
+        const s = plan.state[f.id];
+        return { id: f.id, profile: f.profile, code: f.code, mto: f.mto,
+                 done: s.done, machine: s.machine, startDate: s.startDate,
+                 lastDate: s.lastDate, completed: s.completed, completedDate: s.completedDate };
+      })
+      .sort((a, b) => a.machine - b.machine || a.startDate - b.startDate || U.chainageSortKey(a.id) - U.chainageSortKey(b.id));
+
+    /* ---- 9. per-profile material accounting (§6.3) ------------------------- */
+    const profileRows = orderedCodes.map((code) => {
+      const m = codeMaterial(code);
+      const cands = byCode[code];
+      const inboundWindow = m.inbound.filter((i) => U.cmpDate(i.usable, planStart) > 0 && U.cmpDate(i.usable, planEnd) <= 0)
+        .reduce((s, i) => s + i.qty, 0);
+      const available = startStock[code] + inboundWindow;
+      const consumed = plan.consumedByCode[code] || 0;
+      const startedHere = worked.filter((w) => w.code === code);
+      const requiredStarted = startedHere.reduce((s, w) => s + w.mto, 0);
+      return {
+        code, profile: profileForCode(code),
+        onsite: m.onsite, starting: startStock[code], inboundWindow, available,
+        consumed, endStock: plan.stockEnd[code] != null ? plan.stockEnd[code] : startStock[code],
+        candidateCount: cands.length, startedCount: startedHere.length,
+        requiredStarted, shortfall: Math.max(0, requiredStarted - available)
+      };
+    });
+
+    /* ---- 10. feasibility + warnings (§6.3) --------------------------------- */
+    const installable = plan.totalInstalled;
+    const pctComplete = totalMTO > 0 ? (installable / totalMTO) * 100 : 0;
+    const carryOver = Math.max(0, totalMTO - installable);
+    const idleMachines = maxMachines - deployed;
+    const steadyDaily = p.productivity * p.workhours;
+
+    const warnings = [];
+    if (cap === 0) warnings.push({ level: "bad", text: "Manpower (" + p.manpower + ") supports 0 machines (6 per machine). No installation is possible — increase manpower." });
+    else if (capApplied) warnings.push({ level: "warn", text: "Machine cap applied: input " + p.machinesInput + " capped to " + cap + " (manpower " + p.manpower + " ÷ 6 = " + cap + " × 6 = " + (cap * 6) + " people)." });
+    if (blocked.length) warnings.push({ level: "bad", text: blocked.length + " chainage(s) blocked — profile has no material on-site or inbound (" + U.fmtInt(blockedMTO) + " piles of scope)." });
+    const shortfalls = profileRows.filter((r) => r.startedCount > 0 && r.shortfall > 0);
+    if (shortfalls.length) warnings.push({ level: "warn", text: shortfalls.length + " profile(s) cannot fully cover their in-progress chainages from window material (shortfall total " + U.fmtInt(shortfalls.reduce((s, r) => s + r.shortfall, 0)) + " piles)." });
+    if (lostDays.length) warnings.push({ level: "warn", text: lostDays.length + " working day(s) removed by hindrances (shifted to earliest days)." });
+    if (hindHours > EPS) warnings.push({ level: "warn", text: U.fmtNum(hindHours, 1) + " work-hour(s) trimmed by hindrances from the earliest day(s)." });
+    if (idleMachines > 0) warnings.push({ level: "info", text: "Cost-optimized: " + deployed + " machine(s) install as much as " + maxMachines + " would in this window (material/work limited). Recommend deploying " + deployed + " — " + idleMachines + " would sit idle." });
+    if (plan.idleMachineDays > 0 && idleMachines === 0) warnings.push({ level: "info", text: plan.idleMachineDays + " machine-day(s) idle within the window (ran out of queued work)." });
+    if (carryOver > 0) warnings.push({ level: "info", text: U.fmtInt(carryOver) + " piles of " + p.priority + " scope carry over beyond this window (" + U.fmtNum(pctComplete, 1) + "% completed)." });
+    if (!warnings.length) warnings.push({ level: "ok", text: "No blocking issues detected for this plan." });
+
+    return {
+      params: p, planStart, planEnd, totalDays, cap, maxMachines, deployed, idleMachines, capApplied,
+      manpowerCapped: maxMachines, calendar: cal, workingDayCount,
+      queue, worked, blocked, candidates, totalMTO, blockedMTO,
+      startStock, windowArrivals, profileRows,
+      perM, schedule: plan.schedule, totalInstalled: installable, idleMachineDays: plan.idleMachineDays,
+      steadyDaily, effectiveDailyCapacity: steadyDaily * deployed,
+      pctComplete, carryOver, hindDays: lostDays.length, hindHours, lostDays, trimmedDays,
+      rampProfile, warnings
+    };
+  };
+})();
