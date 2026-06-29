@@ -183,12 +183,14 @@
     setVal("#pManpower", d.manpower);
     setVal("#pWorkhours", d.workhours);
     setVal("#pProductivity", U.fmtNum(d.productivity, 3));
+    setVal("#pRampN", d.rampN != null ? d.rampN : 7);
+    setVal("#pRampProfile", (d.rampProfile || [1]).join(", "));
 
     $("#pMachinesHint").textContent = "Onsite Avg: " + U.fmtNum(d.sumMachine / 7, 2) + "/day → " + d.machines;
     $("#pManpowerHint").textContent = "Onsite Avg: " + U.fmtNum(d.sumMan / 7, 2) + "/day → " + d.manpower;
     $("#pWorkhoursHint").textContent = "Onsite Avg: " + U.fmtNum(d.sumHour / 7, 2) + "/day → " + d.workhours;
-    $("#pProductivityHint").textContent = "Onsite Avg (12–18 Jun window)";
-    $("#prodInfoPop").textContent = d.prodDerivation;
+    $("#pProductivityHint").textContent = "Adaptive from the last 7-day actual window";
+    $("#prodInfoPop").textContent = d.prodDerivation + " · " + (d.rampExplanation || "");
 
     // Machines from previous plan: stored value, else equal to machines (no ramp on first plan).
     const stored = readStored();

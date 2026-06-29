@@ -244,6 +244,54 @@
     return { installedByDate, maxDate, installedRowCount };
   }
 
+  function deriveAdaptiveRamp(windowDays, mp, pr) {
+    const fallbackProfile = [0.45, 0.58, 0.70, 0.80, 0.88, 0.94, 0.98, 1.00];
+    const daily = [];
+    windowDays.forEach((d) => {
+      const iso = U.fmtISO(d);
+      const machines = mp.machineMap[iso] || 0;
+      const hours = mp.hourMap[iso] || 0;
+      const machineHours = machines * hours;
+      const piles = pr.installedByDate[iso] || 0;
+      if (machineHours > 0) daily.push({ date: d, productivity: piles / machineHours, piles, machineHours });
+    });
+
+    if (!daily.length) {
+      return { profile: fallbackProfile.slice(), rampN: 7, source: "fallback", explanation: "No positive machine-hours in the recent window; using the standard default ramp." };
+    }
+
+    const sorted = daily.map((x) => x.productivity).sort((a, b) => a - b);
+    const median = sorted.length % 2
+      ? sorted[(sorted.length - 1) / 2]
+      : (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2;
+    const first3 = daily.slice(0, Math.min(3, daily.length)).map((x) => x.productivity);
+    const last3 = daily.slice(-Math.min(3, daily.length)).map((x) => x.productivity);
+    const avgFirst3 = first3.length ? first3.reduce((s, x) => s + x, 0) / first3.length : median;
+    const avgLast3 = last3.length ? last3.reduce((s, x) => s + x, 0) / last3.length : median;
+    const trend = avgFirst3 > 0 ? (avgLast3 - avgFirst3) / avgFirst3 : 0;
+
+    const target = Math.max(median, Math.min(avgLast3, median * 1.25));
+    const initialFactor = U.clamp(avgFirst3 / Math.max(target, 1e-6), 0.35, 0.7);
+    const hasClearRamp = daily.length >= 4 && trend > 0.1;
+    const rampDays = hasClearRamp ? Math.min(7, Math.max(4, 4 + Math.round(Math.min(2, trend * 10)))) : 4;
+
+    const profile = [];
+    for (let i = 0; i < rampDays; i++) {
+      const t = rampDays <= 1 ? 1 : i / (rampDays - 1);
+      profile.push(U.round(initialFactor + (1 - initialFactor) * t, 2));
+    }
+    if (profile.length && profile[profile.length - 1] < 1) profile[profile.length - 1] = 1.0;
+    if (profile.length > 1) profile[0] = Math.max(0.35, Math.min(profile[0], 0.7));
+    for (let i = 1; i < profile.length; i++) profile[i] = Math.max(profile[i], profile[i - 1]);
+
+    return {
+      profile,
+      rampN: Math.max(0, profile.length - 1),
+      source: "adaptive",
+      explanation: "Derived from the recent 7-day productivity window using a conservative median-based peak and a mild trend check."
+    };
+  }
+
   /* =====================================================================
      4.  Defaults (the "last 7 days" methodology)
      ===================================================================== */
@@ -274,6 +322,7 @@
     const manpower = Math.round(sumMan / 7);
     const workhours = Math.round(sumHour / 7);
     const productivity = machineHours > 0 ? U.round(pilesWindow / machineHours, 3) : 0;
+    const ramp = deriveAdaptiveRamp(windowDays, mp, pr);
 
     // Latest *actual* dated record across inputs (EXCLUDES future inbound forecasts).
     const candidates = [anchor];
@@ -287,6 +336,10 @@
       machines, manpower, workhours, productivity,
       sumMachine, sumMan, sumHour, machineHours, pilesWindow,
       latestDataDate, planStartDefault,
+      rampProfile: ramp.profile,
+      rampN: ramp.rampN,
+      rampSource: ramp.source,
+      rampExplanation: ramp.explanation,
       prodDerivation:
         pilesWindow + " piles ÷ (" + sumMachine + " machine-days × " + (workhours) +
         " h) = " + pilesWindow + " ÷ " + machineHours + " machine-hours = " + U.fmtNum(productivity, 3)
