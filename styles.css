@@ -60,6 +60,9 @@
 
 /* ---- Reset-ish ---- */
 * { box-sizing: border-box; }
+/* The HTML `hidden` attribute must always win, even when an element also has an
+   author `display` rule (e.g. .modal-overlay/.view-toggle use display:flex). */
+[hidden] { display: none !important; }
 html, body { margin: 0; padding: 0; }
 body {
   font-family: var(--font);
@@ -364,3 +367,38 @@ table.data tr.row-completed td { color: var(--success); }
 }
 .toast.is-bad { background: var(--danger); }
 .toast.is-ok  { background: var(--success); }
+
+/* ============================ WARNING MODAL (Change 6) ============================ */
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 90;
+  background: rgba(20, 30, 42, 0.45);
+  display: flex; align-items: center; justify-content: center; padding: var(--s-4);
+}
+.modal {
+  background: var(--surface); border-radius: var(--r-lg); box-shadow: var(--shadow-pop);
+  width: 100%; max-width: 460px; overflow: hidden; border: 1px solid var(--border);
+}
+.modal__head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: var(--s-3) var(--s-4); background: var(--surface-2); border-bottom: 1px solid var(--border);
+  font-weight: 650; font-size: 13px;
+}
+.warn-badge { font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: 999px; text-transform: uppercase; letter-spacing: .04em; }
+.warn-badge.w-bad  { background: var(--danger-bg);  color: var(--danger); }
+.warn-badge.w-warn { background: var(--warning-bg); color: var(--warning); }
+.warn-badge.w-info { background: var(--info-bg);    color: var(--info); }
+.modal__body { padding: var(--s-4); }
+.modal__text { font-size: 14px; line-height: 1.5; margin-bottom: var(--s-3); }
+.modal__hint { font-size: 12px; color: var(--text-muted); background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-sm); padding: var(--s-2) var(--s-3); margin-bottom: var(--s-3); }
+.modal__q { font-size: 13px; font-weight: 650; }
+.modal__actions { display: flex; align-items: center; gap: var(--s-2); padding: var(--s-3) var(--s-4); border-top: 1px solid var(--border); background: var(--surface-2); }
+.modal__spacer { flex: 1; }
+
+/* decisions list in the validation panel */
+.decisionlist { list-style: none; padding: 0; margin: var(--s-2) 0 0; display: flex; flex-direction: column; gap: var(--s-2); }
+.decision { display: flex; gap: var(--s-3); align-items: flex-start; padding: 8px 10px; border-radius: var(--r-sm); border: 1px solid var(--border); background: var(--surface-2); }
+.decision__tag { flex: none; font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 999px; text-transform: uppercase; letter-spacing: .03em; }
+.decision--ok .decision__tag  { background: var(--success-bg); color: var(--success); }
+.decision--adj .decision__tag { background: var(--info-bg);    color: var(--info); }
+.decision__warn { font-size: 12.5px; color: var(--text); }
+.decision__detail { font-size: 11.5px; color: var(--text-muted); margin-top: 2px; }

@@ -93,6 +93,15 @@ and change:
 - **Ramp-up curve** — the *Ramp-up settings* section shows a live inline SVG chart of
   productivity rate (piles/machine/hour = base × ramp multiplier) vs. days from start,
   with the steady-state line and the `n` marker; it re-renders as settings change.
+- **Per-warning confirmation** — Generate first computes the plan's warnings and
+  surfaces them one at a time in a modal ("Proceed with this warning? Yes / No").
+  *Yes* keeps the warning and proceeds; *No* applies a defined adjustment that clears it
+  (e.g. cap → reduce machines; blocked → exclude no-material chainages; shortfall → cap
+  started chainages to material; hindrance → remove hindrances; idle → deploy the
+  cost-optimized count; carry-over / idle-days → acknowledge), re-runs, and continues.
+  Every warning and its decision (accepted / adjusted + detail) is stored on the plan,
+  shown in the *Warning decisions* panel, and the compact form is saved to localStorage.
+  See the `// TODO: confirm` note in `ui.js` for the assumed adjustment per warning.
 - **Cost-optimization** — the engine simulates every machine count from 1 to the
   manpower cap and deploys the **fewest** machines that still install the maximum
   the window can absorb (material/work limited), and stores that count in

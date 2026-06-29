@@ -29,7 +29,6 @@
 
     /* ---- 2. candidate chainages + blocked detection (§5.2 / §5.3) ---------- */
     const candidates = chainage.features.filter((f) => f.priority === p.priority);
-    const totalMTO = candidates.reduce((s, f) => s + f.mto, 0);
 
     function codeMaterial(code) { return material.byCode[code] || null; }
     function totalMaterialQty(code) {
@@ -43,6 +42,9 @@
       else workable.push(f);
     });
     const blockedMTO = blocked.reduce((s, f) => s + f.mto, 0);
+    // Plan scope MTO: drops blocked chainages when the planner chose to exclude them
+    // (the "blocked" warning's decline-adjustment sets p.excludeBlocked).
+    const totalMTO = (p.excludeBlocked ? workable : candidates).reduce((s, f) => s + f.mto, 0);
 
     /* ---- 3. per-code material state at plan start (§5.3) -------------------- */
     // startingStock = on-site + inbound already usable by plan start.
@@ -80,9 +82,23 @@
     workable.forEach((f) => { (byCode[f.code] || (byCode[f.code] = [])).push(f); });
     const orderedCodes = Object.keys(byCode).sort((a, b) =>
       (startStock[b] - startStock[a]) || profileForCode(a).localeCompare(profileForCode(b)));
+    // Material available within the window per code (for the capToMaterial adjustment).
+    function availWindow(code) {
+      const m = codeMaterial(code);
+      const inW = m.inbound.filter((i) => U.cmpDate(i.usable, planStart) > 0 && U.cmpDate(i.usable, planEnd) <= 0).reduce((s, i) => s + i.qty, 0);
+      return startStock[code] + inW;
+    }
     const queue = [];
     orderedCodes.forEach((code) => {
-      byCode[code].sort((x, y) => x.sortKey - y.sortKey).forEach((f) => queue.push(f));
+      const sorted = byCode[code].slice().sort((x, y) => x.sortKey - y.sortKey);
+      if (p.capToMaterial) {
+        // Only queue chainages whose cumulative MTO fits the window material for this
+        // profile, so no profile is started beyond what it can cover (clears shortfall).
+        let cum = 0; const avail = availWindow(code);
+        sorted.forEach((f) => { if (cum + f.mto <= avail + EPS) { queue.push(f); cum += f.mto; } });
+      } else {
+        sorted.forEach((f) => queue.push(f));
+      }
     });
     const chById = {};
     workable.forEach((f) => { chById[f.id] = f; });
@@ -234,23 +250,30 @@
     const idleMachines = maxMachines - deployed;
     const steadyDaily = p.productivity * p.workhours;
 
+    // Each warning carries a `code` so the per-warning confirmation flow knows how a
+    // "decline" should adjust the plan to clear it (see ui.js applyAdjustment).
     const warnings = [];
-    if (cap === 0) warnings.push({ level: "bad", text: "Manpower (" + p.manpower + ") supports 0 machines (6 per machine). No installation is possible — increase manpower." });
-    else if (capApplied) warnings.push({ level: "warn", text: "Machine cap applied: input " + p.machinesInput + " capped to " + cap + " (manpower " + p.manpower + " ÷ 6 = " + cap + " × 6 = " + (cap * 6) + " people)." });
-    if (blocked.length) warnings.push({ level: "bad", text: blocked.length + " chainage(s) blocked — profile has no material on-site or inbound (" + U.fmtInt(blockedMTO) + " piles of scope)." });
+    if (cap === 0) warnings.push({ code: "noManpower", level: "bad", text: "Manpower (" + p.manpower + ") supports 0 machines (6 per machine). No installation is possible — increase manpower." });
+    else if (capApplied) warnings.push({ code: "cap", level: "warn", text: "Machine cap applied: input " + p.machinesInput + " capped to " + cap + " (manpower " + p.manpower + " ÷ 6 = " + cap + " × 6 = " + (cap * 6) + " people)." });
+    if (blocked.length && !p.excludeBlocked) warnings.push({ code: "blocked", level: "bad", text: blocked.length + " chainage(s) blocked — profile has no material on-site or inbound (" + U.fmtInt(blockedMTO) + " piles of scope)." });
     const shortfalls = profileRows.filter((r) => r.startedCount > 0 && r.shortfall > 0);
-    if (shortfalls.length) warnings.push({ level: "warn", text: shortfalls.length + " profile(s) cannot fully cover their in-progress chainages from window material (shortfall total " + U.fmtInt(shortfalls.reduce((s, r) => s + r.shortfall, 0)) + " piles)." });
-    if (lostDays.length) warnings.push({ level: "warn", text: lostDays.length + " working day(s) removed by hindrances (" + lostDays.map((d) => U.fmtShort(d)).join(", ") + "); installation shifts past them." });
-    if (hindHours > EPS) warnings.push({ level: "warn", text: U.fmtNum(hindHours, 1) + " work-hour(s) trimmed by hindrances on " + trimmedDays.map((d) => U.fmtShort(d)).join(", ") + "." });
-    if (idleMachines > 0) warnings.push({ level: "info", text: "Cost-optimized: " + deployed + " machine(s) install as much as " + maxMachines + " would in this window (material/work limited). Recommend deploying " + deployed + " — " + idleMachines + " would sit idle." });
-    if (plan.idleMachineDays > 0 && idleMachines === 0) warnings.push({ level: "info", text: plan.idleMachineDays + " machine-day(s) idle within the window (ran out of queued work)." });
-    if (carryOver > 0) warnings.push({ level: "info", text: U.fmtInt(carryOver) + " piles of " + p.priority + " scope carry over beyond this window (" + U.fmtNum(pctComplete, 1) + "% completed)." });
-    if (!warnings.length) warnings.push({ level: "ok", text: "No blocking issues detected for this plan." });
+    if (shortfalls.length) warnings.push({ code: "shortfall", level: "warn", text: shortfalls.length + " profile(s) cannot fully cover their in-progress chainages from window material (shortfall total " + U.fmtInt(shortfalls.reduce((s, r) => s + r.shortfall, 0)) + " piles)." });
+    if (lostDays.length) warnings.push({ code: "hindranceDays", level: "warn", text: lostDays.length + " working day(s) removed by hindrances (" + lostDays.map((d) => U.fmtShort(d)).join(", ") + "); installation shifts past them." });
+    if (hindHours > EPS) warnings.push({ code: "hindranceHours", level: "warn", text: U.fmtNum(hindHours, 1) + " work-hour(s) trimmed by hindrances on " + trimmedDays.map((d) => U.fmtShort(d)).join(", ") + "." });
+    if (idleMachines > 0) warnings.push({ code: "idle", level: "info", text: "Cost-optimized: " + deployed + " machine(s) install as much as " + maxMachines + " would in this window (material/work limited). Recommend deploying " + deployed + " — " + idleMachines + " would sit idle." });
+    if (plan.idleMachineDays > 0 && idleMachines === 0) warnings.push({ code: "idleDays", level: "info", text: plan.idleMachineDays + " machine-day(s) idle within the window (ran out of queued work)." });
+    if (carryOver > 0) warnings.push({ code: "carryOver", level: "info", text: U.fmtInt(carryOver) + " piles of " + p.priority + " scope carry over beyond this window (" + U.fmtNum(pctComplete, 1) + "% completed)." });
+    // Warnings the planner declined-but-acknowledged (no structural fix available, e.g.
+    // carry-over / idle days) are suppressed so they clear from the list.
+    if (p.suppressCodes && p.suppressCodes.length) {
+      for (let i = warnings.length - 1; i >= 0; i--) if (p.suppressCodes.indexOf(warnings[i].code) >= 0) warnings.splice(i, 1);
+    }
+    if (!warnings.length) warnings.push({ code: "ok", level: "ok", text: "No blocking issues detected for this plan." });
 
     return {
       params: p, planStart, planEnd, totalDays, cap, maxMachines, deployed, idleMachines, capApplied,
       manpowerCapped: maxMachines, calendar: cal, workingDayCount,
-      queue, worked, blocked, candidates, totalMTO, blockedMTO,
+      queue, worked, blocked, candidates, totalMTO, blockedMTO, blockedExcluded: !!p.excludeBlocked,
       startStock, windowArrivals, profileRows,
       perM, schedule: plan.schedule, totalInstalled: installable, idleMachineDays: plan.idleMachineDays,
       steadyDaily, effectiveDailyCapacity: steadyDaily * deployed,
