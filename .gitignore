@@ -1,0 +1,57 @@
+# =============================================================================
+# Sheet Pile Installation Planner — .gitignore
+#
+# NOTE: vendor/ (SheetJS, three.js), data/ (sample input files) and
+# js/chainage_data.js are intentionally COMMITTED — the app is designed to run
+# fully offline, so those are NOT ignored.
+# =============================================================================
+
+# ---- Secrets / environment --------------------------------------------------
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+
+# ---- OS noise ---------------------------------------------------------------
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# ---- Editor / IDE -----------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ---- Claude Code local settings ---------------------------------------------
+.claude/settings.local.json
+
+# ---- Python (the data-prep scripts in ./scripts) ----------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+.ipynb_checkpoints/
+
+# ---- Node (not used by the app; only if tooling is added later) -------------
+node_modules/
+npm-debug.log*
+yarn-error.log*
+
+# ---- Logs / temp / scratch --------------------------------------------------
+*.log
+*.tmp
+*.bak
+tmp/
+temp/
+temp_*.py            # local scratch/inspection scripts
+_verify*.html        # throwaway headless-test harnesses
+
+# ---- Excel lock files (created while a .xlsx is open) -----------------------
+~$*.xlsx
