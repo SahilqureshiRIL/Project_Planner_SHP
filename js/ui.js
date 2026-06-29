@@ -13,7 +13,7 @@
   const state = {
     parsed: { chainage: null, manpower: null, material: null, progress: null },
     store: null, defaults: null, result: null,
-    view: "gantt", ganttColor: "profile", mapZoom: 1, mapSelected: null
+    view: "gantt", ganttColor: "profile", mapZoom: 1, mapSelected: null, mapFilter: null
   };
 
   document.addEventListener("DOMContentLoaded", init);
@@ -53,12 +53,12 @@
       b.addEventListener("click", () => { state.ganttColor = b.dataset.mode; U.$$("#ganttColorMode .seg__btn").forEach((x) => x.classList.toggle("is-active", x === b)); if (state.result) renderGantt(); }));
     $("#tableGroup").addEventListener("change", () => { if (state.result) renderTable(); });
 
-    // Map zoom controls (Change 8)
-    $("#mapZoomIn").addEventListener("click", () => setMapZoom(state.mapZoom * 1.4));
-    $("#mapZoomOut").addEventListener("click", () => setMapZoom(state.mapZoom / 1.4));
-    $("#mapZoomFit").addEventListener("click", () => setMapZoom(1));
+    // Map zoom controls (Change 8) — delegate to the active renderer (three.js or SVG).
+    $("#mapZoomIn").addEventListener("click", () => mapZoomBy(1.4));
+    $("#mapZoomOut").addEventListener("click", () => mapZoomBy(1 / 1.4));
+    $("#mapZoomFit").addEventListener("click", () => mapZoomFit());
     $("#mapScroll").addEventListener("wheel", (e) => {
-      if (!state.result) return;
+      if (mapGL || !state.result) return;          // GL canvas handles its own wheel
       e.preventDefault();
       setMapZoom(state.mapZoom * (e.deltaY < 0 ? 1.15 : 1 / 1.15));
     }, { passive: false });
@@ -66,8 +66,10 @@
     updateStoredHistoryHint();
     refresh();
   }
+  function mapZoomBy(f) { if (mapGL) mapGL.zoomBy(f); else setMapZoom(state.mapZoom * f); }
+  function mapZoomFit() { if (mapGL) mapGL.fit(); else setMapZoom(1); }
   function setMapZoom(z) {
-    state.mapZoom = U.clamp(z, 0.5, 10);
+    state.mapZoom = U.clamp(z, 0.5, 12);
     if (state.result) renderMap();
   }
 
@@ -86,7 +88,7 @@
       built = true;
       const rows = ch.features.slice().sort((a, b) => a.sortKey - b.sortKey);
       const t = el("table", { class: "data" });
-      t.innerHTML = "<thead><tr><th>Chainage_Id</th><th>Priority</th><th>Profile</th><th class='num'>No. of Profiles</th><th>SAP Code</th></tr></thead>";
+      t.innerHTML = "<thead><tr><th>Chainage_Id</th><th>Priority</th><th>Profile</th><th class='num'>No. of Profiles</th><th>Item Code</th></tr></thead>";
       const tb = el("tbody");
       rows.forEach((f) => {
         const tr = el("tr");
@@ -526,9 +528,8 @@
 
     renderGantt();
     renderTable();
-    renderMap();
     renderValidation();
-    setView(state.view);
+    setView(state.view);   // the Map is rendered lazily when its view is shown
   }
 
   function setView(v) {
@@ -537,6 +538,8 @@
     $("#tableView").hidden = v !== "table";
     $("#mapView").hidden = v !== "map";
     U.$$("#viewToggle .view-toggle__btn").forEach((b) => b.classList.toggle("is-active", b.dataset.view === v));
+    // Render the map only when visible so the WebGL canvas gets correct dimensions.
+    if (v === "map" && state.result) renderMap();
   }
 
   /* ============================ TABLE VIEW (§6.1) ============================ */
@@ -731,79 +734,259 @@
   /* ============================ MAP VIEW (Change 8) ============================ */
   const MAP_STATUS = {
     complete:   { c: "#1f8f5f", label: "Complete" },
-    inprogress: { c: "#0f6e78", label: "In progress" },
-    planned:    { c: "#b6791f", label: "Planned" },
+    inprogress: { c: "#0f6e78", label: "Planned Chainages" },
+    planned:    { c: "#b6791f", label: "Priority Scope" },
     blocked:    { c: "#c2412f", label: "Blocked (no material)" }
   };
   const MAP_CONTEXT = "#ccd4de";
-  let mapTipEl = null;
+  let mapTipEl = null, mapGL = null, _ptTex = null;
 
   function mapTipText(f, st, info) {
-    const lbl = (MAP_STATUS[st] || {}).label || st || "—";
+    const lbl = (MAP_STATUS[st] || {}).label || st || "Other priority";
     let t = f.id + " · " + f.profile + "\nStatus: " + lbl + "\nMTO: " + U.fmtInt(f.mto) + " piles";
     if (info) t += "\nMachine " + info.machine + " · " + U.fmtShort(info.startDate) + "–" + U.fmtShort(info.lastDate) +
       "\n" + Math.round(info.done) + " / " + U.fmtInt(info.mto) + " (" + U.fmtNum(info.done / info.mto * 100, 1) + "%)";
     return U.esc(t);
   }
+  function showTip(clientX, clientY, html) {
+    if (!mapTipEl) { mapTipEl = el("div", { class: "map-tip" }); document.body.appendChild(mapTipEl); }
+    mapTipEl.style.display = "block"; mapTipEl.style.left = (clientX + 14) + "px"; mapTipEl.style.top = (clientY + 14) + "px";
+    mapTipEl.innerHTML = html.replace(/\n/g, "<br>");
+  }
+  function hideTip() { if (mapTipEl) mapTipEl.style.display = "none"; }
+  function webglOK() {
+    try { const c = document.createElement("canvas"); return !!(window.WebGLRenderingContext && (c.getContext("webgl") || c.getContext("experimental-webgl"))); }
+    catch (e) { return false; }
+  }
 
-  function renderMap() {
-    const host = $("#mapScroll"), r = state.result;
+  // Shared model: status/info per chainage + projection bounds.
+  function computeMapData() {
+    const r = state.result;
     const feats = state.parsed.chainage ? state.parsed.chainage.features : [];
     const geoFeats = feats.filter((f) => f.seg);
-    if (!r || !geoFeats.length) { U.clear(host); host.appendChild(el("div", { class: "emptystate", html: "<p>No geo-coordinates available to map.</p>" })); return; }
-
-    // status + worked-info per chainage (selected priority)
     const statusById = {}, infoById = {}, inPriority = {};
-    r.candidates.forEach((c) => { statusById[c.id] = "planned"; inPriority[c.id] = true; });
-    r.blocked.forEach((b) => { statusById[b.id] = "blocked"; });
-    r.worked.forEach((w) => { statusById[w.id] = w.completed ? "complete" : "inprogress"; infoById[w.id] = w; });
-
-    // bounds + equirectangular projection (north up)
+    if (r) {
+      r.candidates.forEach((c) => { statusById[c.id] = "planned"; inPriority[c.id] = true; });
+      r.blocked.forEach((b) => { statusById[b.id] = "blocked"; });
+      r.worked.forEach((w) => { statusById[w.id] = w.completed ? "complete" : "inprogress"; infoById[w.id] = w; });
+    }
     let minLng = Infinity, maxLng = -Infinity, minLat = Infinity, maxLat = -Infinity;
     geoFeats.forEach((f) => f.seg.forEach((p) => {
       if (p[0] < minLng) minLng = p[0]; if (p[0] > maxLng) maxLng = p[0];
       if (p[1] < minLat) minLat = p[1]; if (p[1] > maxLat) maxLat = p[1];
     }));
     const lat0 = (minLat + maxLat) / 2, kx = Math.cos(lat0 * Math.PI / 180);
+    return {
+      r, geoFeats, statusById, infoById, inPriority, minLng, maxLng, minLat, maxLat, kx,
+      catOf: (f) => inPriority[f.id] ? (statusById[f.id] || "planned") : "context"
+    };
+  }
+
+  function renderMap() {
+    const host = $("#mapScroll");
+    if (mapGL) { try { mapGL.dispose(); } catch (e) {} mapGL = null; }
+    const data = computeMapData();
+    if (!data.r || !data.geoFeats.length) { U.clear(host); host.appendChild(el("div", { class: "emptystate", html: "<p>No geo-coordinates available to map.</p>" })); return; }
+    let usedGL = false;
+    if (window.THREE && webglOK()) {
+      try { renderMapGL(data); usedGL = true; }
+      catch (e) { console.warn("WebGL map unavailable, using SVG fallback:", e); if (mapGL) { try { mapGL.dispose(); } catch (_) {} mapGL = null; } }
+    }
+    if (!usedGL) renderMapSVG(data);
+    renderMapLegend(data);
+    updateLegendActive();
+  }
+
+  /* ---- three.js renderer (primary): smooth wheel-zoom + drag-pan + picking ---- */
+  function roundPointTexture() {
+    if (_ptTex) return _ptTex;
+    const c = document.createElement("canvas"); c.width = c.height = 64;
+    const x = c.getContext("2d"); x.beginPath(); x.arc(32, 32, 27, 0, Math.PI * 2); x.fillStyle = "#fff"; x.fill();
+    _ptTex = new THREE.CanvasTexture(c); _ptTex.needsUpdate = true; return _ptTex;
+  }
+  function renderMapGL(data) {
+    const host = $("#mapScroll"); U.clear(host);
+    const { geoFeats, infoById, minLng, maxLng, minLat, maxLat, kx, catOf } = data;
+    const PX = (lng) => (lng - minLng) * kx, PY = (lat) => (lat - minLat);   // y up = north
+    const dataW = (maxLng - minLng) * kx || 1e-6, dataH = (maxLat - minLat) || 1e-6;
+    const W = Math.max(320, host.clientWidth || 880);
+    const Hh = Math.max(380, Math.round(window.innerHeight * 0.58));
+
+    const scene = new THREE.Scene(); scene.background = new THREE.Color(0xfbfcff);
+    const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, -10, 10); cam.position.z = 1;
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setSize(W, Hh);
+    host.appendChild(renderer.domElement);
+    const tex = roundPointTexture();
+    const hex = (c) => parseInt(c.slice(1), 16);
+
+    // group geometry by category
+    const segByCat = { context: [], inprogress: [], planned: [], complete: [], blocked: [] };
+    const mkByCat = { inprogress: [], planned: [], complete: [], blocked: [] };
+    const pickables = [];
+    geoFeats.forEach((f) => {
+      const cat = catOf(f), a = f.seg[0], b = f.seg[1];
+      segByCat[cat].push(PX(a[0]), PY(a[1]), 0, PX(b[0]), PY(b[1]), 0);
+      if (cat !== "context" && f.mid) {
+        const mx = PX(f.mid[0]), my = PY(f.mid[1]);
+        mkByCat[cat].push(mx, my, 0);
+        pickables.push({ id: f.id, wx: mx, wy: my, cat: cat, feature: f, info: infoById[f.id] });
+      }
+    });
+    const objs = {};
+    const add = (cat, o) => { (objs[cat] = objs[cat] || []).push(o); scene.add(o); };
+    Object.keys(segByCat).forEach((cat) => {
+      if (!segByCat[cat].length) return;
+      const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(segByCat[cat], 3));
+      const o = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: cat === "context" ? 0xccd4de : hex(MAP_STATUS[cat].c) }));
+      o.renderOrder = cat === "context" ? 0 : 1; add(cat, o);
+    });
+    Object.keys(mkByCat).forEach((cat) => {
+      if (!mkByCat[cat].length) return;
+      const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(mkByCat[cat], 3));
+      const o = new THREE.Points(g, new THREE.PointsMaterial({ size: 9, sizeAttenuation: false, map: tex, transparent: true, depthTest: false, color: hex(MAP_STATUS[cat].c) }));
+      o.renderOrder = 3; add(cat, o);
+    });
+    // selection halo
+    const selGeom = new THREE.BufferGeometry(); selGeom.setAttribute("position", new THREE.Float32BufferAttribute([0, 0, 0], 3));
+    const selObj = new THREE.Points(selGeom, new THREE.PointsMaterial({ size: 17, sizeAttenuation: false, map: tex, transparent: true, depthTest: false, color: 0x1c2733 }));
+    selObj.renderOrder = 2; selObj.visible = false; scene.add(selObj);
+
+    // camera fit + pan/zoom
+    const cx = dataW / 2, cy = dataH / 2;
+    let panX = cx, panY = cy, zoom = 1;
+    function applyCam() {
+      const aspect = W / Hh, margin = 1.08;
+      let halfW = dataW * margin / 2, halfH = dataH * margin / 2;
+      if (halfW / halfH < aspect) halfW = halfH * aspect; else halfH = halfW / aspect;
+      halfW /= zoom; halfH /= zoom;
+      cam.left = panX - halfW; cam.right = panX + halfW; cam.top = panY + halfH; cam.bottom = panY - halfH;
+      cam.updateProjectionMatrix();
+    }
+    const camW = () => cam.right - cam.left, camH = () => cam.top - cam.bottom;
+    const draw = () => renderer.render(scene, cam);
+    const s2w = (mx, my) => [cam.left + (mx / W) * camW(), cam.top - (my / Hh) * camH()];
+    const w2s = (wx, wy) => [(wx - cam.left) / camW() * W, (cam.top - wy) / camH() * Hh];
+    applyCam(); draw();
+
+    function pick(mx, my) {
+      let best = null, bd = 144;
+      for (const p of pickables) {
+        if (state.mapFilter && state.mapFilter !== p.cat) continue;
+        const sc = w2s(p.wx, p.wy), d = (sc[0] - mx) * (sc[0] - mx) + (sc[1] - my) * (sc[1] - my);
+        if (d < bd) { bd = d; best = p; }
+      }
+      return best;
+    }
+    function placeSel(p) {
+      if (!p) { selObj.visible = false; return; }
+      selObj.geometry.attributes.position.setXYZ(0, p.wx, p.wy, 0);
+      selObj.geometry.attributes.position.needsUpdate = true;
+      selObj.visible = !state.mapFilter || state.mapFilter === p.cat;
+    }
+
+    const cv = renderer.domElement; cv.style.cursor = "grab"; cv.style.touchAction = "none";
+    let dragging = false, lastX = 0, lastY = 0, moved = false;
+    cv.addEventListener("wheel", (e) => {
+      e.preventDefault(); e.stopPropagation();
+      const rect = cv.getBoundingClientRect(), mx = e.clientX - rect.left, my = e.clientY - rect.top;
+      const b = s2w(mx, my);
+      zoom = U.clamp(zoom * (e.deltaY < 0 ? 1.15 : 1 / 1.15), 1, 6000); applyCam();
+      const a = s2w(mx, my); panX += b[0] - a[0]; panY += b[1] - a[1]; applyCam(); draw();
+    }, { passive: false });
+    cv.addEventListener("pointerdown", (e) => { dragging = true; moved = false; lastX = e.clientX; lastY = e.clientY; try { cv.setPointerCapture(e.pointerId); } catch (_) {} cv.style.cursor = "grabbing"; });
+    cv.addEventListener("pointermove", (e) => {
+      const rect = cv.getBoundingClientRect(), mx = e.clientX - rect.left, my = e.clientY - rect.top;
+      if (dragging) {
+        const dx = e.clientX - lastX, dy = e.clientY - lastY; lastX = e.clientX; lastY = e.clientY;
+        if (Math.abs(dx) + Math.abs(dy) > 2) moved = true;
+        panX -= dx / W * camW(); panY += dy / Hh * camH(); applyCam(); draw(); hideTip(); return;
+      }
+      const hit = pick(mx, my);
+      if (hit) { showTip(e.clientX, e.clientY, mapTipText(hit.feature, hit.cat, hit.info)); cv.style.cursor = "pointer"; }
+      else { hideTip(); cv.style.cursor = "grab"; }
+    });
+    cv.addEventListener("pointerup", (e) => {
+      dragging = false; cv.style.cursor = "grab"; try { cv.releasePointerCapture(e.pointerId); } catch (_) {}
+      if (moved) return;
+      const rect = cv.getBoundingClientRect(), hit = pick(e.clientX - rect.left, e.clientY - rect.top);
+      if (!hit) return;
+      state.mapSelected = state.mapSelected === hit.id ? null : hit.id;
+      placeSel(state.mapSelected ? hit : null);
+      showMapInfo(state.mapSelected ? hit.feature : null, hit.cat, hit.info);
+      draw();
+    });
+    cv.addEventListener("pointerleave", hideTip);
+
+    function applyFilter(f) {
+      Object.keys(objs).forEach((cat) => { const vis = !f || f === cat; objs[cat].forEach((o) => (o.visible = vis)); });
+      if (state.mapSelected) { const ps = pickables.find((p) => p.id === state.mapSelected); selObj.visible = !!ps && (!f || f === ps.cat); }
+      draw();
+    }
+    function onResize() { if ((host.clientWidth || 880) !== W) renderMap(); }
+    window.addEventListener("resize", onResize);
+
+    // restore prior selection (e.g. after a filter change re-render)
+    if (state.mapSelected) { const ps = pickables.find((p) => p.id === state.mapSelected); if (ps) placeSel(ps); }
+    applyFilter(state.mapFilter);
+
+    mapGL = {
+      zoomBy: (fac) => { zoom = U.clamp(zoom * fac, 1, 6000); applyCam(); draw(); },
+      fit: () => { zoom = 1; panX = cx; panY = cy; applyCam(); draw(); },
+      applyFilter: applyFilter,
+      dispose: () => {
+        window.removeEventListener("resize", onResize);
+        try { scene.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); } }); } catch (_) {}
+        try { renderer.dispose(); } catch (_) {}
+        if (cv.parentNode) cv.parentNode.removeChild(cv);
+      }
+    };
+  }
+
+  /* ---- SVG renderer (fallback when WebGL is unavailable) ---- */
+  function renderMapSVG(data) {
+    const host = $("#mapScroll");
+    const { geoFeats, statusById, infoById, inPriority, minLng, maxLng, minLat, maxLat, kx } = data;
+    const flt = state.mapFilter;
     const dataW = (maxLng - minLng) * kx || 1e-6, dataH = (maxLat - minLat) || 1e-6;
     const pad = 26, targetW = 880;
     const S = ((targetW - 2 * pad) / dataW) * state.mapZoom;
     const W = dataW * S + 2 * pad, H = dataH * S + 2 * pad;
-    const X = (lng) => pad + (lng - minLng) * kx * S;
-    const Y = (lat) => pad + (maxLat - lat) * S;
-
+    const X = (lng) => pad + (lng - minLng) * kx * S, Y = (lat) => pad + (maxLat - lat) * S;
     let s = '<svg width="' + W.toFixed(0) + '" height="' + H.toFixed(0) + '" font-family="inherit" font-size="10">';
-    // context segments (other priorities)
-    geoFeats.forEach((f) => {
-      if (inPriority[f.id]) return;
-      const a = f.seg[0], b = f.seg[1];
+    if (!flt || flt === "context") geoFeats.forEach((f) => {
+      if (inPriority[f.id]) return; const a = f.seg[0], b = f.seg[1];
       s += '<line x1="' + X(a[0]).toFixed(1) + '" y1="' + Y(a[1]).toFixed(1) + '" x2="' + X(b[0]).toFixed(1) + '" y2="' + Y(b[1]).toFixed(1) + '" stroke="' + MAP_CONTEXT + '" stroke-width="1.5" stroke-linecap="round"/>';
     });
-    // selected-priority segments (coloured by status)
     geoFeats.forEach((f) => {
-      if (!inPriority[f.id]) return;
-      const st = statusById[f.id] || "planned", col = (MAP_STATUS[st] || {}).c || MAP_CONTEXT;
-      const a = f.seg[0], b = f.seg[1], sel = state.mapSelected === f.id ? " is-sel" : "";
+      if (!inPriority[f.id]) return; const st = statusById[f.id] || "planned"; if (flt && flt !== st) return;
+      const col = (MAP_STATUS[st] || {}).c, a = f.seg[0], b = f.seg[1], sel = state.mapSelected === f.id ? " is-sel" : "";
       s += '<line class="map-seg' + sel + '" data-id="' + U.esc(f.id) + '" data-tip="' + mapTipText(f, st, infoById[f.id]) + '" x1="' + X(a[0]).toFixed(1) + '" y1="' + Y(a[1]).toFixed(1) + '" x2="' + X(b[0]).toFixed(1) + '" y2="' + Y(b[1]).toFixed(1) + '" stroke="' + col + '" stroke-width="' + (sel ? 6 : 3.5) + '" stroke-linecap="round"/>';
     });
-    // markers at segment midpoints (selected priority)
     geoFeats.forEach((f) => {
-      if (!inPriority[f.id] || !f.mid) return;
-      const st = statusById[f.id] || "planned", col = (MAP_STATUS[st] || {}).c || MAP_CONTEXT;
+      if (!inPriority[f.id] || !f.mid) return; const st = statusById[f.id] || "planned"; if (flt && flt !== st) return;
+      const col = (MAP_STATUS[st] || {}).c;
       s += '<circle class="map-marker" data-id="' + U.esc(f.id) + '" data-tip="' + mapTipText(f, st, infoById[f.id]) + '" cx="' + X(f.mid[0]).toFixed(1) + '" cy="' + Y(f.mid[1]).toFixed(1) + '" r="' + (state.mapSelected === f.id ? 5.5 : 3.5) + '" fill="' + col + '" stroke="#fff" stroke-width="1"/>';
     });
-    // north arrow + scale bar
     s += '<g transform="translate(' + (W - 32) + ',30)"><line x1="0" y1="16" x2="0" y2="-4" stroke="#5b6877" stroke-width="1.5"/><polygon points="-4,-1 4,-1 0,-9" fill="#5b6877"/><text x="0" y="28" text-anchor="middle" fill="#8a96a5">N</text></g>';
     s += mapScaleBar(S, pad, H);
     s += "</svg>";
     host.innerHTML = s;
-
-    attachMapInteractions(host, infoById, statusById, geoFeats);
-    renderMapLegend(statusById, geoFeats, inPriority);
+    if (!mapTipEl) { mapTipEl = el("div", { class: "map-tip" }); document.body.appendChild(mapTipEl); }
+    host.onmousemove = (ev) => { const t = ev.target.getAttribute && ev.target.getAttribute("data-tip"); if (t) showTip(ev.clientX, ev.clientY, t); else hideTip(); };
+    host.onmouseleave = hideTip;
+    host.onclick = (ev) => {
+      const id = ev.target.getAttribute && ev.target.getAttribute("data-id"); if (!id) return;
+      state.mapSelected = state.mapSelected === id ? null : id;
+      const f = geoFeats.find((x) => x.id === id);
+      showMapInfo(state.mapSelected ? f : null, statusById[id], infoById[id]);
+      renderMap();
+    };
   }
 
   function mapScaleBar(S, pad, H) {
-    const mPerPx = 111320 / S;                 // metres per screen pixel (lng, at this scale)
+    const mPerPx = 111320 / S;
     const raw = mPerPx * 120, pow = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / pow;
     const nice = (f < 1.5 ? 1 : f < 3.5 ? 2 : f < 7.5 ? 5 : 10) * pow;
     const px = nice / mPerPx, y = H - 16, x0 = pad;
@@ -815,43 +998,42 @@
       '<text x="' + (x0 + px / 2) + '" y="' + (y - 6) + '" text-anchor="middle" fill="#5b6877" font-size="10">' + label + '</text>';
   }
 
-  function attachMapInteractions(host, infoById, statusById, geoFeats) {
-    if (!mapTipEl) { mapTipEl = el("div", { class: "map-tip" }); document.body.appendChild(mapTipEl); }
-    host.onmousemove = (ev) => {
-      const t = ev.target.getAttribute && ev.target.getAttribute("data-tip");
-      if (t) { mapTipEl.style.display = "block"; mapTipEl.style.left = (ev.clientX + 14) + "px"; mapTipEl.style.top = (ev.clientY + 14) + "px"; mapTipEl.innerHTML = t.replace(/\n/g, "<br>"); }
-      else mapTipEl.style.display = "none";
-    };
-    host.onmouseleave = () => { if (mapTipEl) mapTipEl.style.display = "none"; };
-    host.onclick = (ev) => {
-      const id = ev.target.getAttribute && ev.target.getAttribute("data-id");
-      if (!id) return;
-      state.mapSelected = state.mapSelected === id ? null : id;
-      const f = geoFeats.find((x) => x.id === id);
-      showMapInfo(state.mapSelected ? f : null, statusById[id], infoById[id]);
-      renderMap();
-    };
-  }
-
   function showMapInfo(f, st, info) {
     const box = $("#mapInfo");
-    if (!f) { box.textContent = "Hover a chainage segment for details; click to pin it here."; return; }
-    const lbl = (MAP_STATUS[st] || {}).label || st || "—";
+    if (!f) { box.textContent = "Drag to pan, scroll to zoom. Hover a chainage for details; click to pin. Click a legend entry to filter."; return; }
+    const lbl = (MAP_STATUS[st] || {}).label || "Other priority";
     let html = "<strong>" + U.esc(f.id) + "</strong> · " + U.esc(f.profile) + " · <strong>" + lbl + "</strong> · MTO " + U.fmtInt(f.mto);
     if (info) html += " · Machine " + info.machine + " · " + U.fmtFriendly(info.startDate) + " → " + U.fmtShort(info.lastDate) +
       " · " + Math.round(info.done) + "/" + U.fmtInt(info.mto) + " piles (" + U.fmtNum(info.done / info.mto * 100, 1) + "%)";
     box.innerHTML = html;
   }
 
-  function renderMapLegend(statusById, geoFeats, inPriority) {
+  // Clickable legend = isolate filter (click a category to show only it; click again to clear).
+  function renderMapLegend(data) {
     const host = $("#mapLegend"); U.clear(host);
-    const counts = { inprogress: 0, planned: 0, complete: 0, blocked: 0 };
-    geoFeats.forEach((f) => { if (inPriority[f.id]) { const st = statusById[f.id] || "planned"; if (counts[st] != null) counts[st]++; } });
-    ["inprogress", "planned", "complete", "blocked"].forEach((k) => {
-      if (!counts[k]) return;
-      host.appendChild(el("span", { class: "legend-item" }, [el("span", { class: "legend-swatch", style: "background:" + MAP_STATUS[k].c }), document.createTextNode(MAP_STATUS[k].label + " (" + counts[k] + ")")]));
+    const counts = { inprogress: 0, planned: 0, complete: 0, blocked: 0, context: 0 };
+    data.geoFeats.forEach((f) => { const cat = data.catOf(f); if (counts[cat] != null) counts[cat]++; });
+    const items = [];
+    ["inprogress", "planned", "complete", "blocked"].forEach((k) => { if (counts[k]) items.push({ cat: k, c: MAP_STATUS[k].c, label: MAP_STATUS[k].label, n: counts[k] }); });
+    items.push({ cat: "context", c: MAP_CONTEXT, label: "Other priorities", n: counts.context });
+    items.forEach((it) => {
+      const node = el("span", { class: "legend-item", title: "Click to show only: " + it.label, dataset: { cat: it.cat } },
+        [el("span", { class: "legend-swatch", style: "background:" + it.c }), document.createTextNode(it.label + " (" + U.fmtInt(it.n) + ")")]);
+      node.addEventListener("click", () => setMapFilter(it.cat));
+      host.appendChild(node);
     });
-    host.appendChild(el("span", { class: "legend-item" }, [el("span", { class: "legend-swatch", style: "background:" + MAP_CONTEXT }), document.createTextNode("Other priorities")]));
+  }
+  function setMapFilter(cat) {
+    state.mapFilter = state.mapFilter === cat ? null : cat;
+    if (mapGL) mapGL.applyFilter(state.mapFilter); else renderMap();
+    updateLegendActive();
+  }
+  function updateLegendActive() {
+    const f = state.mapFilter;
+    U.$$("#mapLegend .legend-item").forEach((it) => {
+      it.classList.toggle("is-active", !!f && it.dataset.cat === f);
+      it.classList.toggle("is-dim", !!f && it.dataset.cat !== f);
+    });
   }
 
   /* ============================ VALIDATION (§6.3) ============================ */

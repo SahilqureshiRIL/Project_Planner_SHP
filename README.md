@@ -107,12 +107,19 @@ and change:
   segment with a midpoint marker at its true location; the selected priority is
   coloured by status (in-progress / planned / complete / blocked) and other priorities
   show as grey context. Hover for a tooltip and click to pin chainage value, profile,
-  status, scheduled dates and progress. It's a self-contained SVG plan view
-  (equirectangular projection, zoom + scroll-pan, north arrow, scale bar) — **no map
-  library or tile server**, so it works offline. The compact per-chainage segment
-  `geo: [lngA,latA,lngB,latB]` lives in `js/chainage_data.js` (the two most-distant
-  footprint vertices); full polygon geometry is intentionally not shipped. A tiled
-  basemap (e.g. Leaflet) could be layered in later if online tiles are acceptable.
+  status, scheduled dates and progress. The legend is **click-to-filter**: click a
+  category (In progress / Planned / Complete / Blocked / Other priorities) to isolate
+  it; click again to clear.
+  - Rendered with **three.js** (vendored in `vendor/three.min.js`, so it works
+    offline) — an orthographic 2-D plan view with smooth wheel-zoom-toward-cursor and
+    drag-to-pan, plus a north arrow and scale bar. Picking/selection is done in screen
+    space (nearest marker). If WebGL is unavailable it automatically falls back to a
+    self-contained **SVG** renderer with the same colors, filtering, hover/click and
+    zoom buttons.
+  - The compact per-chainage segment `geo: [lngA,latA,lngB,latB]` lives in
+    `js/chainage_data.js` (the two most-distant footprint vertices); full polygon
+    geometry is intentionally not shipped. A tiled basemap (e.g. Leaflet) could be
+    layered in later if online tiles are acceptable.
 - **Cost-optimization** — the engine simulates every machine count from 1 to the
   manpower cap and deploys the **fewest** machines that still install the maximum
   the window can absorb (material/work limited), and stores that count in

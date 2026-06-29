@@ -1,10 +1,10 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Sheet Pile Installation Planner</title>
-  <link rel="stylesheet" href="styles.css?v=5" />
+  <link rel="stylesheet" href="styles.css?v=6" />
   <!--
     SheetJS (xlsx) is vendored locally in ./vendor so the app works fully offline.
     If you prefer the CDN, replace the src below with:
@@ -268,8 +268,8 @@
               </div>
               <div class="map-legend" id="mapLegend"></div>
             </div>
-            <div class="map-scroll" id="mapScroll"></div>
-            <div class="map-info" id="mapInfo">Hover a chainage segment for details; click to pin it here.</div>
+            <div class="map-canvas" id="mapScroll"></div>
+            <div class="map-info" id="mapInfo">Drag to pan, scroll to zoom. Hover a chainage for details; click to pin. Click a legend entry to filter.</div>
           </div>
         </div>
       </section>
@@ -309,16 +309,15 @@
   <!-- Toast -->
   <div class="toast" id="toast" hidden></div>
 
+  <!-- three.js vendored locally (Map view WebGL renderer); works offline. -->
+  <script src="vendor/three.min.js"></script>
   <!-- Scripts (load order matters: util -> data -> engine -> ui).
        The ?v= query string is a cache-buster: bump it whenever js/ changes so
        browsers don't run a stale copy. -->
-  <script src="js/chainage_data.js?v=5"></script>
-  <script src="js/util.js?v=5"></script>
-  <script src="js/data.js?v=5"></script>
-  <script src="js/engine.js?v=5"></script>
-  <script src="js/ui.js?v=5"></script>
+  <script src="js/chainage_data.js?v=6"></script>
+  <script src="js/util.js?v=6"></script>
+  <script src="js/data.js?v=6"></script>
+  <script src="js/engine.js?v=6"></script>
+  <script src="js/ui.js?v=6"></script>
 </body>
 </html>
-
-
-
