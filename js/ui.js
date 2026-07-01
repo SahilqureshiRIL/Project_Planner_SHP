@@ -1076,13 +1076,11 @@
     const res = section("Resources");
     res.appendChild(statGrid([
       { label: "Machines chosen", value: r.params.machinesInput, sub: "planner input", kind: "" },
+      { label: "Recommended machines", value: r.deployed, sub: r.idleMachines > 0 ? r.idleMachines + " fewer than chosen" : "matches input", kind: r.idleMachines > 0 ? "warn" : "ok" },
+      { label: "Idle if all deployed", value: r.idleMachines, sub: r.idleMachines > 0 ? "add 0 piles — material/work limited" : "none", kind: r.idleMachines > 0 ? "warn" : "ok" },
       { label: "Manpower cap", value: r.cap, sub: r.params.manpower + " ÷ 6", kind: r.capApplied ? "warn" : "" },
-      { label: "Deployed (cost-opt)", value: r.deployed, sub: r.idleMachines > 0 ? r.idleMachines + " would be idle" : "all productive", kind: r.idleMachines > 0 ? "warn" : "ok" },
-      { label: "Manpower utilization", value: (r.deployed * 6) + " / " + r.params.manpower, sub: U.fmtNum(r.params.manpower ? (r.deployed * 6 / r.params.manpower) * 100 : 0, 0) + "% of available", kind: "" }
+      { label: "Manpower utilization (at recommended)", value: (r.deployed * 6) + " / " + r.params.manpower, sub: U.fmtNum(r.params.manpower ? (r.deployed * 6 / r.params.manpower) * 100 : 0, 0) + "% of available", kind: "" }
     ]));
-    // per-machine install transparency
-    const perMtxt = Object.keys(r.perM).map((m) => "M" + m + ": " + U.fmtInt(Math.round(r.perM[m]))).join("  ·  ");
-    if (perMtxt) res.appendChild(el("div", { class: "kv", html: "Piles installed by machine count — " + perMtxt + " &nbsp;(fewest machines reaching the max is deployed)." }));
     body.appendChild(res);
 
     /* ---- Productivity ---- */
