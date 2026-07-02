@@ -601,7 +601,7 @@
     // Two header rows: day (spans 3) over Avail / In / Cons.
     const thead = el("thead");
     const hDay = el("tr");
-    hDay.appendChild(el("th", { class: "mp-profile mp-corner", rowspan: 2, text: "Profile" }));
+    hDay.appendChild(el("th", { class: "mp-profile mp-corner", rowspan: 2, html: "Profile <span class='mp-dow'>Item Code</span>" }));
     days.forEach((d) => {
       const off = !d.isWorking;
       hDay.appendChild(el("th", {
@@ -626,7 +626,10 @@
     const tb = el("tbody");
     mp.rows.forEach((row) => {
       const tr = el("tr");
-      tr.appendChild(el("td", { class: "mp-profile", title: "Item code " + row.code, text: row.profile }));
+      tr.appendChild(el("td", { class: "mp-profile", title: "Item code " + row.code }, [
+        el("div", { text: row.profile }),
+        el("span", { class: "mp-code", text: row.code || "—" })
+      ]));
       row.cells.forEach((c, i) => {
         const off = !days[i].isWorking;
         tr.appendChild(el("td", { class: "num mp-groupstart" + (off ? " mp-off" : ""), text: U.fmtInt(Math.round(c.available)) }));

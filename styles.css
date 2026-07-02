@@ -316,6 +316,7 @@ table.data tr.row-completed td { color: var(--success); }
 .material-pivot thead .mp-profile, .material-pivot .mp-corner { z-index: 4; background: var(--surface-3); }
 .material-pivot tbody tr:nth-child(even) td.mp-profile { background: var(--surface-2); }
 .material-pivot tbody tr:hover td.mp-profile { background: var(--accent-100); }
+.material-pivot .mp-code { display: block; font-weight: 500; font-size: 10px; color: var(--text-faint); font-variant-numeric: tabular-nums; margin-top: 1px; }
 /* left separator between day groups */
 .material-pivot .mp-groupstart { border-left: 1px solid var(--border-strong); }
 /* de-emphasise inbound / consumed vs the primary Available number */
