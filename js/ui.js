@@ -383,107 +383,47 @@
     $("#storedHistoryHint").textContent = s ? ("Stored: " + s.machines + " machines · " + (s.priority || "") + " · " + U.fmtShort(new Date(s.ts))) : "Nothing stored yet.";
   }
 
-  /* ============================ GENERATE (with per-warning confirmation, Change 6) ============================ */
-  // What declining each warning does. Structural codes mutate params (a real fix that
-  // clears the warning on re-run); acknowledge-only codes are suppressed by the engine.
-  const ADJUST_HINT = {
-    noManpower: "Decline → set manpower to 6 so at least one machine can work.",
-    cap: "Decline → reduce machines to the manpower cap (no capping needed).",
-    blocked: "Decline → exclude the no-material chainages from the plan scope.",
-    shortfall: "Decline → only start chainages each profile's window material can cover.",
-    hindranceDays: "Decline → remove hindrances so no working days are lost.",
-    hindranceHours: "Decline → remove hindrances so no hours are trimmed.",
-    idle: "Decline → deploy the cost-optimized machine count (no idle machines).",
-    idleDays: "Decline → acknowledge; the idle machine-days are recorded with the plan.",
-    carryOver: "Decline → acknowledge; the plan is scoped to what fits the window."
-  };
-
-  // TODO: confirm adjustment semantics — assumed each decline resolves its warning as
-  // below. Structural codes (cap/blocked/shortfall/hindrance/idle/noManpower) mutate the
-  // plan; carry-over and idle-days have no structural fix so a decline acknowledges them
-  // (suppresses the warning) and records the decision.
-  function applyAdjustment(params, code, result) {
-    switch (code) {
-      case "noManpower": params.manpower = 6; return "Set manpower to 6 (enables 1 machine).";
-      case "cap": params.machinesInput = result.cap; return "Reduced machines to the manpower cap (" + result.cap + ").";
-      case "blocked": params.excludeBlocked = true; return "Excluded " + result.blocked.length + " no-material chainage(s) from the plan scope.";
-      case "shortfall": params.capToMaterial = true; return "Capped started chainages to each profile's window material.";
-      case "hindranceDays":
-      case "hindranceHours": params.hindrances = []; return "Removed all hindrances.";
-      case "idle":
-        params.machinesInput = Math.max(1, result.deployed);
-        params.prevMachines = Math.min(params.prevMachines, params.machinesInput);
-        return "Deployed the cost-optimized count (" + result.deployed + ").";
-      case "idleDays":
-        params.suppressCodes = (params.suppressCodes || []).concat(["idleDays"]);
-        return "Acknowledged the idle machine-days.";
-      case "carryOver":
-        params.suppressCodes = (params.suppressCodes || []).concat(["carryOver"]);
-        return "Acknowledged — plan scoped to what fits the window.";
-      default:
-        params.suppressCodes = (params.suppressCodes || []).concat([code]);
-        return "Acknowledged.";
-    }
-  }
-
-  // Show one warning and resolve with the planner's choice.
-  function askWarning(w, idx, hint) {
+  /* ============================ GENERATE ============================ */
+  // Show all warnings together; the planner either Proceeds (plan is shown as-is with
+  // the warnings in the Validation panel) or Aborts (nothing generated — back to the form).
+  function confirmWarnings(warns) {
     return new Promise((resolve) => {
       const modal = $("#warnModal");
-      const levelLabel = { bad: "Critical", warn: "Warning", info: "Notice" }[w.level] || w.level;
-      $("#warnNum").textContent = "Warning " + idx;
-      const lvl = $("#warnLevel"); lvl.className = "warn-badge w-" + w.level; lvl.textContent = levelLabel;
-      $("#warnText").textContent = w.text;
-      $("#warnHint").textContent = hint || "";
+      $("#warnCount").textContent = warns.length + (warns.length === 1 ? " warning" : " warnings");
+      const list = $("#warnModalList"); U.clear(list);
+      const icon = { bad: "⛔", warn: "⚠", info: "ℹ" };
+      warns.forEach((w) => list.appendChild(el("li", { class: "w-" + w.level }, [
+        el("span", { class: "warnlist__icon", text: icon[w.level] || "•" }),
+        document.createTextNode(" " + w.text)
+      ])));
       modal.hidden = false;
-      const accept = $("#warnAccept"), decline = $("#warnDecline"), cancel = $("#warnCancel");
-      function cleanup(val) { modal.hidden = true; accept.onclick = decline.onclick = cancel.onclick = null; resolve(val); }
-      accept.onclick = () => cleanup("accept");
-      decline.onclick = () => cleanup("decline");
-      cancel.onclick = () => cleanup("cancel");
+      const proceed = $("#warnProceed"), abort = $("#warnAbort");
+      function cleanup(val) { modal.hidden = true; proceed.onclick = abort.onclick = null; resolve(val); }
+      proceed.onclick = () => cleanup(true);
+      abort.onclick = () => cleanup(false);
     });
   }
 
   async function onGenerate() {
     if (!allLoaded()) { U.toast("Load the manpower, material and progress files first.", "bad"); return; }
-    const base = gatherParams();
-    if (!base) return;
-    // Mutable copy the adjustments operate on (keep `base` for the record).
-    const params = Object.assign({}, base, {
-      hindrances: base.hindrances.slice(), rampProfile: base.rampProfile.slice(),
-      excludeBlocked: false, capToMaterial: false, suppressCodes: []
-    });
+    const p = gatherParams();
+    if (!p) return;
 
     let result;
-    try { result = SPP.engine.generate(state.store, params); }
+    try { result = SPP.engine.generate(state.store, p); }
     catch (err) { U.toast("Plan failed: " + err.message, "bad"); console.error(err); return; }
 
-    // Surface each warning one by one; accept proceeds, decline adjusts & re-runs.
-    const decisions = [];
-    const decided = {};
-    while (true) {
-      const w = result.warnings.find((x) => x.level !== "ok" && !decided[x.code]);
-      if (!w) break;
-      decided[w.code] = true;
-      const ans = await askWarning(w, decisions.length + 1, ADJUST_HINT[w.code] || "This warning will be acknowledged on decline.");
-      if (ans === "cancel") { U.toast("Plan generation cancelled.", ""); return; }
-      if (ans === "accept") {
-        decisions.push({ code: w.code, level: w.level, text: w.text, decision: "accepted", detail: "Proceeded with this warning." });
-      } else {
-        const detail = applyAdjustment(params, w.code, result);
-        decisions.push({ code: w.code, level: w.level, text: w.text, decision: "adjusted", detail: detail });
-        try { result = SPP.engine.generate(state.store, params); }
-        catch (err) { U.toast("Adjustment failed: " + err.message, "bad"); console.error(err); return; }
-      }
+    // If there are warnings, let the planner review them and Proceed or Abort.
+    const warns = result.warnings.filter((w) => w.level !== "ok");
+    if (warns.length) {
+      const proceed = await confirmWarnings(warns);
+      if (!proceed) { U.toast("Generation aborted — adjust the parameters and try again.", ""); return; }
     }
 
-    result.decisions = decisions;
-    result.baseParams = base;
     state.result = result;
-    writeStored(result.deployed, params.priority, decisions);  // §5.6 + decisions persisted
+    writeStored(result.deployed, p.priority);   // §5.6 persist effective deployed count
     renderAll();
-    const nAdj = decisions.filter((d) => d.decision === "adjusted").length;
-    U.toast("Plan generated — " + result.deployed + " machine(s) deployed" + (nAdj ? " · " + nAdj + " warning(s) adjusted" : "") + ".", "ok");
+    U.toast("Plan generated — " + result.deployed + " machine(s) deployed.", "ok");
     document.getElementById("resultsCard").scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
@@ -562,11 +502,12 @@
     computeDisplay(r.schedule);
     const groupBy = $("#tableGroup").value;
 
-    const cols = ["Date", "Day #", "Machine", "Chainage", "Profile", "Piles (day)", "Cum.", "MTO", "% Comp.", "Status", "Material left"];
+    const cols = ["Date", "Day #", "Machine", "Chainage", "Profile", "Item Code", "Piles (day)", "Cum.", "MTO", "% Comp.", "Status", "Material left"];
+    const NUM_COLS = { "Piles (day)": 1, "Cum.": 1, "MTO": 1, "% Comp.": 1, "Material left": 1 };
     const table = el("table", { class: "data" });
     const thead = el("thead");
     const htr = el("tr");
-    cols.forEach((c, i) => htr.appendChild(el("th", { class: i >= 5 && i <= 8 || i === 10 ? "num" : "", text: c })));
+    cols.forEach((c) => htr.appendChild(el("th", { class: NUM_COLS[c] ? "num" : "", text: c })));
     thead.appendChild(htr); table.appendChild(thead);
     const tb = el("tbody");
 
@@ -624,6 +565,7 @@
       el("td", { text: "Machine " + e.machine }),
       el("td", { text: e.chId }),
       el("td", { text: e.profile }),
+      el("td", { text: e.code || "—" }),
       el("td", { class: "num", text: U.fmtInt(e.dispInstall) }),
       el("td", { class: "num", text: U.fmtInt(e.dispCum) }),
       el("td", { class: "num", text: U.fmtInt(e.mto) }),
@@ -1172,12 +1114,13 @@
     /* ---- Material ---- */
     const mat = section("Material");
     const mt = el("table", { class: "data" });
-    mt.innerHTML = "<thead><tr><th>Profile</th><th class='num'>On-site</th><th class='num'>Start stock</th><th class='num'>Inbound (window)</th><th class='num'>Available</th><th class='num'>Consumed</th><th class='num'>End stock</th><th class='num'>Shortfall</th></tr></thead>";
+    mt.innerHTML = "<thead><tr><th>Profile</th><th>Item Code</th><th class='num'>On-site</th><th class='num'>Start stock</th><th class='num'>Inbound (window)</th><th class='num'>Available</th><th class='num'>Consumed</th><th class='num'>End stock</th><th class='num'>Shortfall</th></tr></thead>";
     const mtb = el("tbody");
     r.profileRows.forEach((p) => {
       const tr = el("tr");
       tr.innerHTML =
         "<td>" + U.esc(p.profile) + "</td>" +
+        "<td>" + U.esc(p.code || "—") + "</td>" +
         "<td class='num'>" + U.fmtInt(p.onsite) + "</td>" +
         "<td class='num'>" + U.fmtInt(Math.round(p.starting)) + "</td>" +
         "<td class='num'>" + U.fmtInt(p.inboundWindow) + "</td>" +

@@ -42,9 +42,9 @@
       else workable.push(f);
     });
     const blockedMTO = blocked.reduce((s, f) => s + f.mto, 0);
-    // Plan scope MTO: drops blocked chainages when the planner chose to exclude them
-    // (the "blocked" warning's decline-adjustment sets p.excludeBlocked).
-    const totalMTO = (p.excludeBlocked ? workable : candidates).reduce((s, f) => s + f.mto, 0);
+    // Plan scope MTO is ALWAYS the full priority scope. Blocked chainages (no material)
+    // remain in the MTO; because they cannot be installed they surface as carry-over.
+    const totalMTO = candidates.reduce((s, f) => s + f.mto, 0);
 
     /* ---- 3. per-code material state at plan start (§5.3) -------------------- */
     // startingStock = on-site + inbound already usable by plan start.
@@ -285,7 +285,7 @@
     const warnings = [];
     if (cap === 0) warnings.push({ code: "noManpower", level: "bad", text: "Manpower (" + p.manpower + ") supports 0 machines (6 per machine). No installation is possible — increase manpower." });
     else if (capApplied) warnings.push({ code: "cap", level: "warn", text: "Machine cap applied: input " + p.machinesInput + " capped to " + cap + " (manpower " + p.manpower + " ÷ 6 = " + cap + " × 6 = " + (cap * 6) + " people)." });
-    if (blocked.length && !p.excludeBlocked) warnings.push({ code: "blocked", level: "bad", text: blocked.length + " chainage(s) blocked — profile has no material on-site or inbound (" + U.fmtInt(blockedMTO) + " piles of scope)." });
+    if (blocked.length) warnings.push({ code: "blocked", level: "bad", text: blocked.length + " chainage(s) blocked — profile has no material on-site or inbound (" + U.fmtInt(blockedMTO) + " piles of scope, carried over)." });
     const shortfalls = profileRows.filter((r) => r.startedCount > 0 && r.shortfall > 0);
     if (shortfalls.length) warnings.push({ code: "shortfall", level: "warn", text: shortfalls.length + " profile(s) cannot fully cover their in-progress chainages from window material (shortfall total " + U.fmtInt(shortfalls.reduce((s, r) => s + r.shortfall, 0)) + " piles)." });
     if (lostDays.length) warnings.push({ code: "hindranceDays", level: "warn", text: lostDays.length + " working day(s) removed by hindrances (" + lostDays.map((d) => U.fmtShort(d)).join(", ") + "); installation shifts past them." });
@@ -303,7 +303,7 @@
     return {
       params: p, planStart, planEnd, totalDays, cap, maxMachines, deployed, idleMachines, capApplied,
       manpowerCapped: maxMachines, calendar: cal, workingDayCount,
-      queue, worked, blocked, candidates, totalMTO, blockedMTO, blockedExcluded: !!p.excludeBlocked,
+      queue, worked, blocked, candidates, totalMTO, blockedMTO,
       startStock, windowArrivals, profileRows, materialPivot,
       perM, schedule: plan.schedule, totalInstalled: installable, idleMachineDays: plan.idleMachineDays,
       steadyDaily, effectiveDailyCapacity: steadyDaily * deployed,

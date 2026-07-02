@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Sheet Pile Installation Planner</title>
-  <link rel="stylesheet" href="styles.css?v=12" />
+  <link rel="stylesheet" href="styles.css?v=15" />
   <!--
     SheetJS (xlsx) is vendored locally in ./vendor so the app works fully offline.
     If you prefer the CDN, replace the src below with:
@@ -16,7 +16,7 @@
   <!-- ============================ HEADER ============================ -->
   <header class="app-header">
     <div class="app-header__title">
-      <div class="app-header__mark">SP</div>
+      <img class="app-header__logo" src="assets/logo.jpg" alt="Reliance New Energy" />
       <div>
         <h1>Sheet Pile Installation Planner</h1>
         <p class="app-header__sub">Chainage-wise day-by-day planning &middot; Phase&nbsp;1 prototype</p>
@@ -281,23 +281,21 @@
     </div>
   </main>
 
-  <!-- Per-warning confirmation modal (Change 6) -->
+  <!-- Warnings confirmation modal: review warnings, then Proceed or Abort -->
   <div class="modal-overlay" id="warnModal" hidden>
-    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="warnNum">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="warnModalTitle">
       <div class="modal__head">
-        <span id="warnNum">Warning</span>
-        <span class="warn-badge" id="warnLevel"></span>
+        <span id="warnModalTitle">Plan warnings</span>
+        <span class="warn-badge w-warn" id="warnCount"></span>
       </div>
       <div class="modal__body">
-        <p class="modal__text" id="warnText"></p>
-        <p class="modal__hint" id="warnHint"></p>
-        <p class="modal__q">Proceed with this warning?</p>
+        <p class="modal__q">Review the warnings below.</p>
+        <ul class="warnlist" id="warnModalList"></ul>
       </div>
       <div class="modal__actions">
-        <button type="button" class="btn btn--ghost btn--sm" id="warnCancel">Cancel generation</button>
+        <button type="button" class="btn btn--ghost" id="warnAbort">Abort &mdash; back to planning</button>
         <span class="modal__spacer"></span>
-        <button type="button" class="btn btn--ghost" id="warnDecline">No &mdash; adjust to resolve</button>
-        <button type="button" class="btn btn--primary" id="warnAccept">Yes &mdash; proceed</button>
+        <button type="button" class="btn btn--primary" id="warnProceed">Proceed</button>
       </div>
     </div>
   </div>
@@ -310,11 +308,14 @@
   <!-- Scripts (load order matters: util -> data -> engine -> ui).
        The ?v= query string is a cache-buster: bump it whenever js/ changes so
        browsers don't run a stale copy. -->
-  <script src="js/chainage_data.js?v=12"></script>
-  <script src="js/util.js?v=12"></script>
-  <script src="js/data.js?v=12"></script>
-  <script src="js/engine.js?v=12"></script>
-  <script src="js/ui.js?v=12"></script>
+  <script src="js/chainage_data.js?v=15"></script>
+  <script src="js/util.js?v=15"></script>
+  <script src="js/data.js?v=15"></script>
+  <script src="js/engine.js?v=15"></script>
+  <script src="js/ui.js?v=15"></script>
 </body>
 </html>
+
+
+
 

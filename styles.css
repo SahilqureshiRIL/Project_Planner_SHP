@@ -15,6 +15,7 @@
   /* Text */
   --text:          #1c2733;
   --text-muted:    #5b6877;
+  --text-muted1:   #6f7c8a;
   --text-faint:    #8a96a5;
 
   /* Accent (calm teal-navy) */
@@ -91,12 +92,7 @@ button { font-family: inherit; }
   box-shadow: var(--shadow-sm);
 }
 .app-header__title { display: flex; align-items: center; gap: var(--s-3); }
-.app-header__mark {
-  width: 36px; height: 36px; border-radius: var(--r-md);
-  background: var(--accent); color: var(--accent-fg);
-  display: grid; place-items: center;
-  font-weight: 700; letter-spacing: .5px; font-size: 14px;
-}
+.app-header__logo { height: 34px; width: auto; display: block; object-fit: contain; }
 .app-header h1 { font-size: 16px; font-weight: 650; letter-spacing: -.01em; }
 .app-header__sub { font-size: 11.5px; color: var(--text-muted); }
 .app-header__actions { display: flex; align-items: center; gap: var(--s-3); }
@@ -160,7 +156,7 @@ button { font-family: inherit; }
 .notice--info { background: var(--info-bg);     border-color: #b9cdf0; color: #284c8a; }
 
 /* ============================ FILE ROWS ============================ */
-.hint { font-size: 12px; color: var(--text-muted); margin-bottom: var(--s-3); }
+.hint { font-size: 12px; font-weight: bold ; color: var(--text-muted); margin-bottom: var(--s-3); }
 .hint--inline { display: inline; margin: 0 0 0 var(--s-2); }
 .filerow {
   border: 1px solid var(--border);
