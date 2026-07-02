@@ -243,6 +243,36 @@
       };
     });
 
+    /* ---- 9b. day-by-day material availability per profile (pivot view) -----
+       One row per item code used anywhere in this priority (workable OR blocked —
+       inbound can still arrive for a blocked profile even if no work happens),
+       one column per calendar day in the plan window (hindrance days included).
+       Per day we expose:
+         available = stock carried into that day (on-site + inbound already usable),
+                     BEFORE that day's consumption;
+         inbound   = qty becoming usable ON that day (arrival + 1-day buffer is
+                     already baked into inb.usable in data.js);
+         consumed  = left null for now (to be wired to the sim later).
+       Availability is tracked on the real calendar so the 1-day arrival buffer and
+       weekly-off/hindrance days line up with the rest of the plan. */
+    const pivotCodes = Array.from(new Set(candidates.map((f) => f.code).filter(Boolean)));
+    const materialPivot = {
+      days: cal.map((c) => ({ date: c.date, dayNum: c.dayNum, isWorking: c.isWorking, nonWorkReason: c.nonWorkReason })),
+      rows: pivotCodes.map((code) => {
+        const m = codeMaterial(code);
+        // stock usable at (before) plan start = on-site + inbound usable on/before planStart
+        let stock = m ? m.onsite : 0;
+        if (m) m.inbound.forEach((inb) => { if (U.cmpDate(inb.usable, planStart) <= 0) stock += inb.qty; });
+        const cells = cal.map((c) => {
+          const inbound = m ? m.inbound.reduce((s, inb) => s + (U.sameDay(inb.usable, c.date) ? inb.qty : 0), 0) : 0;
+          stock += inbound;                    // material lands on its usable date, working or not
+          const available = stock;             // carried into the day, before consumption
+          return { available, inbound, consumed: null };
+        });
+        return { code, profile: profileForCode(code), onsite: m ? m.onsite : 0, cells };
+      }).sort((a, b) => a.profile.localeCompare(b.profile))
+    };
+
     /* ---- 10. feasibility + warnings (§6.3) --------------------------------- */
     const installable = plan.totalInstalled;
     const pctComplete = totalMTO > 0 ? (installable / totalMTO) * 100 : 0;
@@ -274,7 +304,7 @@
       params: p, planStart, planEnd, totalDays, cap, maxMachines, deployed, idleMachines, capApplied,
       manpowerCapped: maxMachines, calendar: cal, workingDayCount,
       queue, worked, blocked, candidates, totalMTO, blockedMTO, blockedExcluded: !!p.excludeBlocked,
-      startStock, windowArrivals, profileRows,
+      startStock, windowArrivals, profileRows, materialPivot,
       perM, schedule: plan.schedule, totalInstalled: installable, idleMachineDays: plan.idleMachineDays,
       steadyDaily, effectiveDailyCapacity: steadyDaily * deployed,
       pctComplete, carryOver, hindDays: lostDays.length, hindHours, lostDays, trimmedDays,

@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Sheet Pile Installation Planner</title>
-  <link rel="stylesheet" href="styles.css?v=8" />
+  <link rel="stylesheet" href="styles.css?v=12" />
   <!--
     SheetJS (xlsx) is vendored locally in ./vendor so the app works fully offline.
     If you prefer the CDN, replace the src below with:
@@ -25,6 +25,7 @@
     <div class="app-header__actions">
       <div class="view-toggle" id="viewToggle" hidden>
         <button type="button" class="view-toggle__btn" data-view="gantt">Gantt</button>
+        <button type="button" class="view-toggle__btn" data-view="material">Material</button>
         <button type="button" class="view-toggle__btn is-active" data-view="table">Table</button>
         <button type="button" class="view-toggle__btn" data-view="map">Map</button>
       </div>
@@ -35,24 +36,6 @@
   <main class="layout">
     <!-- ============================ SIDEBAR (INPUTS) ============================ -->
     <aside class="sidebar">
-
-      <!-- ---- Chainage data (FROZEN / read-only) ----  -->
-      <section class="card" id="chainageCard">
-        <div class="card__head">
-          <h2 class="card__title">Chainage Data</h2>
-          <span class="badge badge--muted">Frozen &middot; read-only</span>
-        </div>
-        <div class="card__body">
-          <p class="hint" id="chainageSummary">Loading frozen chainage data&hellip;</p>
-          <details class="advanced" id="chainageDetails">
-            <summary>View chainages (read-only)</summary>
-            <div class="advanced__body">
-               <p class="field__hint">Hardcoded values &mdash; not editable here. Overrides are made by the team directly in <code>js/chainage_data.js</code>.</p> 
-              <div class="table-scroll" id="chainageTableScroll" style="max-height:260px"></div>
-            </div>
-          </details>
-        </div>
-      </section> 
 
       <!-- ---- Data files ---- -->
       <section class="card" id="dataCard">
@@ -242,6 +225,19 @@
             <div class="gantt-scroll" id="ganttScroll"></div>
           </div>
 
+          <!-- Material (day-by-day availability per profile) -->
+          <div class="view view--material" id="materialView" hidden>
+            <div class="table-controls">
+              <span class="hint hint--inline" id="materialSummary"></span>
+            </div>
+            <div class="table-scroll" id="materialScroll"></div>
+            <p class="field__hint" style="margin-top:8px">
+              <strong>Available</strong> = stock carried into the day (before consumption).
+              <strong>Inbound</strong> = qty becoming usable that day (arrival + 1-day buffer applied).
+              <strong>Consumed</strong> = to be added later. Inbound is shown on hindrance / off days too, since material still arrives.
+            </p>
+          </div>
+
           <!-- Table -->
           <div class="view view--table" id="tableView" hidden>
             <div class="table-controls">
@@ -314,11 +310,11 @@
   <!-- Scripts (load order matters: util -> data -> engine -> ui).
        The ?v= query string is a cache-buster: bump it whenever js/ changes so
        browsers don't run a stale copy. -->
-  <script src="js/chainage_data.js?v=8"></script>
-  <script src="js/util.js?v=8"></script>
-  <script src="js/data.js?v=8"></script>
-  <script src="js/engine.js?v=8"></script>
-  <script src="js/ui.js?v=8"></script>
+  <script src="js/chainage_data.js?v=12"></script>
+  <script src="js/util.js?v=12"></script>
+  <script src="js/data.js?v=12"></script>
+  <script src="js/engine.js?v=12"></script>
+  <script src="js/ui.js?v=12"></script>
 </body>
 </html>
 

@@ -77,8 +77,10 @@
   function renderChainageReadonly() {
     const ch = state.parsed.chainage;
     if (!ch) return;
+    const summary = $("#chainageSummary");
+    if (!summary) return;   // Chainage card removed from the UI; data still loads for the engine.
     const counts = ch.priorities.map((p) => p + " " + U.fmtInt(ch.priorityCounts[p])).join(" · ");
-    $("#chainageSummary").innerHTML = "<strong>" + U.fmtInt(ch.features.length) + "</strong> chainages · " +
+    summary.innerHTML = "<strong>" + U.fmtInt(ch.features.length) + "</strong> chainages · " +
       ch.profiles.length + " profiles · " + counts;
     // Build the read-only table lazily the first time the section is opened.
     const det = $("#chainageDetails");
@@ -527,6 +529,7 @@
       "<span>" + r.workingDayCount + " working days</span>";
 
     renderGantt();
+    renderMaterial();
     renderTable();
     renderValidation();
     setView(state.view);   // the Map is rendered lazily when its view is shown
@@ -535,6 +538,7 @@
   function setView(v) {
     state.view = v;
     $("#ganttView").hidden = v !== "gantt";
+    $("#materialView").hidden = v !== "material";
     $("#tableView").hidden = v !== "table";
     $("#mapView").hidden = v !== "map";
     U.$$("#viewToggle .view-toggle__btn").forEach((b) => b.classList.toggle("is-active", b.dataset.view === v));
@@ -633,6 +637,69 @@
     const tr = el("tr", { class: "row-nonwork" });
     tr.appendChild(el("td", { colspan: span, text: U.fmtShort(c.date) + " (Day " + c.dayNum + ") — " + c.nonWorkReason + " · no installation" }));
     return tr;
+  }
+
+  /* ============================ MATERIAL VIEW (day-by-day availability) ======
+     Pivot: rows = profiles (item codes), columns = planned days, each day split
+     into Available / Inbound / Consumed sub-columns. Data comes straight from
+     r.materialPivot (built in engine.js so the 1-day arrival buffer and calendar
+     stay consistent with the plan). Consumed is intentionally blank for now. */
+  function renderMaterial() {
+    const r = state.result;
+    const host = $("#materialScroll"); U.clear(host);
+    const mp = r.materialPivot;
+    if (!mp || !mp.rows.length) {
+      host.appendChild(el("div", { class: "emptystate", html: "<p>No material profiles in scope for this priority.</p>" }));
+      $("#materialSummary").textContent = "";
+      return;
+    }
+    const days = mp.days;
+    const table = el("table", { class: "data material-pivot" });
+
+    // Two header rows: day (spans 3) over Avail / In / Cons.
+    const thead = el("thead");
+    const hDay = el("tr");
+    hDay.appendChild(el("th", { class: "mp-profile mp-corner", rowspan: 2, text: "Profile" }));
+    days.forEach((d) => {
+      const off = !d.isWorking;
+      hDay.appendChild(el("th", {
+        class: "num mp-daygroup" + (off ? " mp-off" : ""),
+        colspan: 3,
+        title: off && d.nonWorkReason ? d.nonWorkReason : "",
+        html: U.fmtShort(d.date) + "<span class='mp-dow'>" + U.weekdayShort(d.date) + (off ? " · off" : "") + "</span>"
+      }));
+    });
+    thead.appendChild(hDay);
+    const hSub = el("tr");
+    days.forEach((d) => {
+      const off = !d.isWorking;
+      hSub.appendChild(el("th", { class: "num mp-sub mp-groupstart" + (off ? " mp-off" : ""), text: "Avail" }));
+      hSub.appendChild(el("th", { class: "num mp-sub" + (off ? " mp-off" : ""), text: "In" }));
+      hSub.appendChild(el("th", { class: "num mp-sub mp-cons" + (off ? " mp-off" : ""), text: "Cons" }));
+    });
+    thead.appendChild(hSub);
+    table.appendChild(thead);
+
+    // Body: one row per profile.
+    const tb = el("tbody");
+    mp.rows.forEach((row) => {
+      const tr = el("tr");
+      tr.appendChild(el("td", { class: "mp-profile", title: "Item code " + row.code, text: row.profile }));
+      row.cells.forEach((c, i) => {
+        const off = !days[i].isWorking;
+        tr.appendChild(el("td", { class: "num mp-groupstart" + (off ? " mp-off" : ""), text: U.fmtInt(Math.round(c.available)) }));
+        tr.appendChild(el("td", { class: "num mp-in" + (off ? " mp-off" : ""), text: c.inbound > 0 ? "+" + U.fmtInt(Math.round(c.inbound)) : "—" }));
+        tr.appendChild(el("td", { class: "num mp-cons" + (off ? " mp-off" : ""), text: c.consumed == null ? "" : U.fmtInt(Math.round(c.consumed)) }));
+      });
+      tb.appendChild(tr);
+    });
+    table.appendChild(tb);
+    host.appendChild(table);
+
+    const totalInbound = mp.rows.reduce((s, row) => s + row.cells.reduce((a, c) => a + c.inbound, 0), 0);
+    $("#materialSummary").textContent =
+      mp.rows.length + " profile(s) · " + days.length + " days · " +
+      (totalInbound > 0 ? U.fmtInt(Math.round(totalInbound)) + " piles inbound within window" : "no inbound within window");
   }
 
   /* ============================ GANTT VIEW (§6.2) ============================ */
@@ -1073,12 +1140,21 @@
     body.appendChild(feas);
 
     /* ---- Resources ---- */
+    // "Surplus" = chosen machines that never install a pile, whether blocked by the
+    // manpower cap (chosen − cap) or unused by the cost-optimizer (cap − deployed).
+    // Measure against the planner's chosen input so the KPI matches "Machines chosen".
     const res = section("Resources");
+    const surplus = Math.max(0, r.params.machinesInput - r.deployed);
+    const cappedOut = Math.max(0, r.params.machinesInput - r.maxMachines);   // lost to manpower cap
+    const optIdle = Math.max(0, r.maxMachines - r.deployed);                  // cap allows, but no gain
+    const surplusSub = surplus === 0 ? "matches recommended"
+      : cappedOut && optIdle ? cappedOut + " capped by manpower · " + optIdle + " add 0 piles"
+      : cappedOut ? cappedOut + " capped by manpower (need " + (r.params.machinesInput * 6) + " people)"
+      : "add 0 piles — material/work limited";
     res.appendChild(statGrid([
       { label: "Machines chosen", value: r.params.machinesInput, sub: "planner input", kind: "" },
-      { label: "Recommended machines", value: r.deployed, sub: r.idleMachines > 0 ? r.idleMachines + " fewer than chosen" : "matches input", kind: r.idleMachines > 0 ? "warn" : "ok" },
-      { label: "Idle if all deployed", value: r.idleMachines, sub: r.idleMachines > 0 ? "add 0 piles — material/work limited" : "none", kind: r.idleMachines > 0 ? "warn" : "ok" },
-      { label: "Manpower cap", value: r.cap, sub: r.params.manpower + " ÷ 6", kind: r.capApplied ? "warn" : "" },
+      { label: "Recommended machines", value: r.deployed, sub: surplus > 0 ? surplus + " fewer than chosen" : "matches input", kind: surplus > 0 ? "warn" : "ok" },
+      { label: "Idle if all deployed", value: surplus, sub: surplusSub, kind: surplus > 0 ? "warn" : "ok" },
       { label: "Manpower utilization (at recommended)", value: (r.deployed * 6) + " / " + r.params.manpower, sub: U.fmtNum(r.params.manpower ? (r.deployed * 6 / r.params.manpower) * 100 : 0, 0) + "% of available", kind: "" }
     ]));
     body.appendChild(res);

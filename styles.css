@@ -301,6 +301,34 @@ table.data tr.row-completed td { color: var(--success); }
 .pill--done { background: var(--success-bg); color: var(--success); }
 .pill--wait { background: var(--warning-bg); color: var(--warning); }
 
+/* ---- Material pivot (day-by-day availability per profile) ---- */
+/* Reuses table.data look & feel; adds a sticky profile column, day-group
+   separators, and off-day tinting. */
+.material-pivot { min-width: max-content; }
+.material-pivot th, .material-pivot td { text-align: right; }
+.material-pivot .mp-daygroup { text-align: center; border-bottom: none; padding-bottom: 4px; }
+.material-pivot .mp-dow { display: block; font-weight: 500; font-size: 9.5px; color: var(--text-faint); text-transform: none; letter-spacing: 0; margin-top: 1px; }
+.material-pivot .mp-sub { top: 0; font-size: 10px; padding: 4px 10px; }
+/* sub-header row sits below the day row, so pin it lower when scrolling */
+.material-pivot thead tr:nth-child(2) th { top: 34px; }
+/* sticky first column (both header rows and body cells) */
+.material-pivot .mp-profile {
+  position: sticky; left: 0; z-index: 3;
+  text-align: left; white-space: nowrap; font-weight: 600;
+  background: var(--surface); border-right: 1px solid var(--border-strong);
+}
+.material-pivot thead .mp-profile, .material-pivot .mp-corner { z-index: 4; background: var(--surface-3); }
+.material-pivot tbody tr:nth-child(even) td.mp-profile { background: var(--surface-2); }
+.material-pivot tbody tr:hover td.mp-profile { background: var(--accent-100); }
+/* left separator between day groups */
+.material-pivot .mp-groupstart { border-left: 1px solid var(--border-strong); }
+/* de-emphasise inbound / consumed vs the primary Available number */
+.material-pivot td.mp-in { color: var(--info); }
+.material-pivot td.mp-cons, .material-pivot th.mp-cons { color: var(--text-faint); }
+/* off / hindrance days: subtle warm tint so they read as non-working */
+.material-pivot .mp-off { background: #faf6ec; }
+.material-pivot thead .mp-off { background: #f3ecd9; color: #7a6a3a; }
+
 /* mini progress bar in cells */
 .minibar { position: relative; height: 14px; width: 64px; background: var(--surface-3); border-radius: 3px; overflow: hidden; display: inline-block; vertical-align: middle; }
 .minibar__fill { position: absolute; inset: 0 auto 0 0; background: var(--accent); }
