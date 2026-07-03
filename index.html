@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Sheet Pile Installation Planner</title>
-  <link rel="stylesheet" href="styles.css?v=16" />
+  <link rel="stylesheet" href="styles.css?v=17" />
   <!--
     SheetJS (xlsx) is vendored locally in ./vendor so the app works fully offline.
     If you prefer the CDN, replace the src below with:
@@ -37,10 +37,11 @@
     <!-- ============================ SIDEBAR (INPUTS) ============================ -->
     <aside class="sidebar">
 
-      <!-- ---- Data files ---- -->
-      <section class="card" id="dataCard">
+      <!-- ---- Data files (hidden: files are auto-loaded from ./data/; this card only
+           re-appears as a fallback if auto-loading fails, e.g. opened via file://) ---- -->
+      <section class="card" id="dataCard" hidden>
         <div class="card__head">
-          <h2 class="card__title">1 &middot; Data Files</h2>
+          <h2 class="card__title">Data Files</h2>
           <span class="badge" id="dataStatusBadge">0 / 3 loaded</span>
         </div>
         <div class="card__body">
@@ -80,11 +81,11 @@
       <!-- ---- Parameters ---- -->
       <section class="card" id="paramsCard" aria-disabled="true">
         <div class="card__head">
-          <h2 class="card__title">2 &middot; Plan Parameters</h2>
+          <h2 class="card__title">Plan Parameters</h2>
           <span class="badge badge--muted">Onsite Last 7 Day Avg defaults</span>
         </div>
         <div class="card__body" id="paramsBody">
-          <p class="placeholder" id="paramsPlaceholder">Load the three data files to compute defaults.</p>
+          <p class="placeholder" id="paramsPlaceholder">Loading data from ./data/ &hellip;</p>
 
           <div id="paramsForm" hidden>
             <!-- Priority -->
@@ -308,13 +309,14 @@
   <!-- Scripts (load order matters: util -> data -> engine -> ui).
        The ?v= query string is a cache-buster: bump it whenever js/ changes so
        browsers don't run a stale copy. -->
-  <script src="js/chainage_data.js?v=16"></script>
-  <script src="js/util.js?v=16"></script>
-  <script src="js/data.js?v=16"></script>
-  <script src="js/engine.js?v=16"></script>
-  <script src="js/ui.js?v=16"></script>
+  <script src="js/chainage_data.js?v=17"></script>
+  <script src="js/util.js?v=17"></script>
+  <script src="js/data.js?v=17"></script>
+  <script src="js/engine.js?v=17"></script>
+  <script src="js/ui.js?v=17"></script>
 </body>
 </html>
+
 
 
 

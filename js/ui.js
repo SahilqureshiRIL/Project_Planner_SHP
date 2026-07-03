@@ -65,6 +65,7 @@
 
     updateStoredHistoryHint();
     refresh();
+    tryBundled();   // auto-load the three files from ./data/ so the app opens on the Plan Parameters screen
   }
   function mapZoomBy(f) { if (mapGL) mapGL.zoomBy(f); else setMapZoom(state.mapZoom * f); }
   function mapZoomFit() { if (mapGL) mapGL.fit(); else setMapZoom(1); }
@@ -181,8 +182,16 @@
           setStatus(kind, summarize(kind, state.parsed[kind]), "is-ok"); ok++;
         })
         .catch((err) => setStatus(kind, "✗ " + err.message + " (use upload instead)", "is-bad"))
-        .finally(() => { if (++done === kinds.length) { refresh(); if (!ok) U.toast("Bundled fetch blocked (likely file://). Use the upload inputs.", "bad"); } });
+        .finally(() => { if (++done === kinds.length) { refresh(); if (ok < kinds.length) revealDataCard(); } });
     });
+  }
+
+  // Fallback: if auto-loading from ./data/ didn't fully succeed (e.g. opened via file://),
+  // un-hide the Data Files card so the planner can upload the files manually.
+  function revealDataCard() {
+    const card = $("#dataCard");
+    if (card) card.hidden = false;
+    U.toast("Couldn't auto-load all files from ./data/ — serve over http, or upload them manually.", "bad");
   }
 
   /* ============================ DEFAULTS -> FORM ============================ */
