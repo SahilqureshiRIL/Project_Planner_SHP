@@ -43,10 +43,16 @@
       const id = p["Chainage_Id"];
       if (id == null || id === "") return;
       const mto = parseInt(U.toNum(p["No of Profiles"]), 10);
+      // "Profile" shown across the app = the full Item Description
+      // (e.g. "VINYL SHEET PILE 735X300X10.4X4750"); fall back to the short
+      // "Profile Name" code (e.g. "ZU735-300-10.4-4750") only if it's missing.
+      const itemDesc = String(p["Item Description"] || "").trim();
+      const profileCode = String(p["Profile Name"] || "").trim();
       features.push({
         id: String(id).trim(),
         priority: String(p["Priority"] || "").trim(),
-        profile: String(p["Profile Name"] || "").trim(),
+        profile: itemDesc || profileCode,
+        profileCode: profileCode,  // short code kept for reference
         code: String(p["New SAP Code"] == null ? "" : p["New SAP Code"]).trim(),
         mto: isFinite(mto) ? mto : 0,
         name: p["name"] || null,

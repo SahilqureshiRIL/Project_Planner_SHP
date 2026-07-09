@@ -31,10 +31,14 @@
     const candidates = chainage.features.filter((f) => f.priority === p.priority);
 
     function codeMaterial(code) { return material.byCode[code] || null; }
+    // An inbound delivery is only usable if it actually arrives on/after the plan
+    // start. Overdue on-hold material (Expected Arrival already past, not yet
+    // delivered) is NOT on site, so it does not count as available for this plan.
+    function arrivesInPlan(inb) { return U.cmpDate(inb.arrival, planStart) >= 0; }
     function totalMaterialQty(code) {
       const m = codeMaterial(code);
       if (!m) return 0;
-      return m.onsite + m.inbound.reduce((s, i) => s + i.qty, 0);
+      return m.onsite + m.inbound.reduce((s, i) => s + (arrivesInPlan(i) ? i.qty : 0), 0);
     }
     const workable = [], blocked = [];
     candidates.forEach((f) => {
@@ -47,19 +51,20 @@
     const totalMTO = candidates.reduce((s, f) => s + f.mto, 0);
 
     /* ---- 3. per-code material state at plan start (§5.3) -------------------- */
-    // startingStock = on-site + inbound already usable by plan start.
-    // replenishments = inbound usable strictly after plan start (dated events).
+    // startingStock = Accepted-at-Site on-site stock only.
+    // replenishments = inbound that arrives on/after plan start (dated events);
+    //   overdue on-hold material (arrival already past) is not available at all.
     const startStock = {};
     const replen = [];                       // {usable, code, qty}
     const usedCodes = Array.from(new Set(workable.map((f) => f.code)));
     usedCodes.forEach((code) => {
       const m = codeMaterial(code);
-      let start = m.onsite;
+      startStock[code] = m.onsite;           // only what's physically on site at start
       m.inbound.forEach((inb) => {
-        if (U.cmpDate(inb.usable, planStart) <= 0) start += inb.qty;
-        else replen.push({ usable: inb.usable, code: code, qty: inb.qty });
+        // Arrives within the plan → replenishes stock on its usable date (arrival + 1).
+        // Overdue pre-window on-hold material is skipped entirely (not on site).
+        if (arrivesInPlan(inb)) replen.push({ usable: inb.usable, code: code, qty: inb.qty });
       });
-      startStock[code] = start;
     });
     replen.sort((a, b) => U.cmpDate(a.usable, b.usable));
 
@@ -248,11 +253,16 @@
        inbound can still arrive for a blocked profile even if no work happens),
        one column per calendar day in the plan window (hindrance days included).
        Per day we expose:
-         available = stock carried into that day (on-site + inbound already usable),
-                     BEFORE that day's consumption;
-         inbound   = qty becoming usable ON that day (arrival + 1-day buffer is
-                     already baked into inb.usable in data.js);
-         consumed  = left null for now (to be wired to the sim later).
+         available = Accepted-at-Site on-site stock (m.onsite, see data.js) PLUS
+                     inbound that actually ARRIVES WITHIN this plan window and is
+                     usable by that day (usable = arrival + 1). So a delivery shown
+                     as Inbound on its arrival day rolls into Available the NEXT day.
+                     Expected material whose arrival date is BEFORE the window
+                     (e.g. on-hold deliveries whose date has passed) is not on site,
+                     so it never inflates Available.
+         inbound   = qty ARRIVING on that day (its Expected Arrival date). This is
+                     the not-yet-on-site quantity; it is not counted in Available
+                     until the following day.
        Availability is tracked on the real calendar so the 1-day arrival buffer and
        weekly-off/hindrance days line up with the rest of the plan. */
     const pivotCodes = Array.from(new Set(candidates.map((f) => f.code).filter(Boolean)));
@@ -260,16 +270,20 @@
       days: cal.map((c) => ({ date: c.date, dayNum: c.dayNum, isWorking: c.isWorking, nonWorkReason: c.nonWorkReason })),
       rows: pivotCodes.map((code) => {
         const m = codeMaterial(code);
-        // stock usable at (before) plan start = on-site + inbound usable on/before planStart
-        let stock = m ? m.onsite : 0;
-        if (m) m.inbound.forEach((inb) => { if (U.cmpDate(inb.usable, planStart) <= 0) stock += inb.qty; });
+        const base = m ? m.onsite : 0;           // Accepted-at-Site on-site stock only
+        const inbList = m ? m.inbound : [];
         const cells = cal.map((c) => {
-          const inbound = m ? m.inbound.reduce((s, inb) => s + (U.sameDay(inb.usable, c.date) ? inb.qty : 0), 0) : 0;
-          stock += inbound;                    // material lands on its usable date, working or not
-          const available = stock;             // carried into the day, before consumption
-          return { available, inbound, consumed: null };
+          // Inbound column = qty arriving on this day (Expected Arrival date).
+          const inbound = inbList.reduce((s, inb) => s + (U.sameDay(inb.arrival, c.date) ? inb.qty : 0), 0);
+          // Available = Accepted-at-Site + inbound that ARRIVES within the window
+          // (arrival on/after plan start) and is already usable by this day. Overdue
+          // pre-window expected material is excluded — it is not physically on site.
+          const received = inbList.reduce((s, inb) =>
+            s + (U.cmpDate(inb.arrival, planStart) >= 0 && U.cmpDate(inb.usable, c.date) <= 0 ? inb.qty : 0), 0);
+          const available = base + received;
+          return { available, inbound };
         });
-        return { code, profile: profileForCode(code), onsite: m ? m.onsite : 0, cells };
+        return { code, profile: profileForCode(code), onsite: base, cells };
       }).sort((a, b) => a.profile.localeCompare(b.profile))
     };
 
@@ -285,7 +299,7 @@
     const warnings = [];
     if (cap === 0) warnings.push({ code: "noManpower", level: "bad", text: "Manpower (" + p.manpower + ") supports 0 machines (6 per machine). No installation is possible — increase manpower." });
     else if (capApplied) warnings.push({ code: "cap", level: "warn", text: "Machine cap applied: input " + p.machinesInput + " capped to " + cap + " (manpower " + p.manpower + " ÷ 6 = " + cap + " × 6 = " + (cap * 6) + " people)." });
-    if (blocked.length) warnings.push({ code: "blocked", level: "bad", text: blocked.length + " chainage(s) blocked — profile has no material on-site or inbound (" + U.fmtInt(blockedMTO) + " piles of scope, carried over)." });
+    if (blocked.length) warnings.push({ code: "blocked", level: "bad", text: blocked.length + " chainage(s) blocked — no usable material (nothing Accepted at Site and none arriving in-window; overdue on-hold stock is excluded) (" + U.fmtInt(blockedMTO) + " piles of scope, carried over)." });
     const shortfalls = profileRows.filter((r) => r.startedCount > 0 && r.shortfall > 0);
     if (shortfalls.length) warnings.push({ code: "shortfall", level: "warn", text: shortfalls.length + " profile(s) cannot fully cover their in-progress chainages from window material (shortfall total " + U.fmtInt(shortfalls.reduce((s, r) => s + r.shortfall, 0)) + " piles)." });
     if (lostDays.length) warnings.push({ code: "hindranceDays", level: "warn", text: lostDays.length + " working day(s) removed by hindrances (" + lostDays.map((d) => U.fmtShort(d)).join(", ") + "); installation shifts past them." });

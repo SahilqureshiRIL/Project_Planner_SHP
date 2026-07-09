@@ -495,7 +495,11 @@
     const layout = document.querySelector(".layout");
     if (layout) layout.classList.toggle("is-collapsed", collapsed);
     const btn = $("#sidebarToggle");
-    if (btn) { btn.hidden = false; btn.innerHTML = collapsed ? "▶&nbsp;Show inputs" : "◀&nbsp;Hide inputs"; }
+    if (btn) {
+      btn.hidden = false;
+      const ico = '<svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="9" y1="4" x2="9" y2="20"/></svg>';
+      btn.innerHTML = ico + "<span>" + (collapsed ? "Show inputs" : "Hide inputs") + "</span>";
+    }
   }
 
   /* Plan summary: a plain-language headline plus KPI tiles surfacing what a
@@ -512,8 +516,8 @@
     const inboundWindow = r.windowArrivals.reduce((s, a) => s + a.qty, 0);
 
     host.appendChild(el("p", { class: "plan-summary__lead", html:
-      "This <strong>" + r.params.periodWeeks + "-week</strong> plan for <strong>" + U.esc(r.params.priority) +
-      "</strong> installs <strong>" + U.fmtInt(Math.round(r.totalInstalled)) + "</strong> of <strong>" + U.fmtInt(r.totalMTO) +
+      "This <strong>" + r.params.periodWeeks + "-week</strong> plan for Priority <strong>" + U.esc(r.params.priority) +
+      "</strong> of installing <strong>" + U.fmtInt(Math.round(r.totalInstalled)) + "</strong> of <strong>" + U.fmtInt(r.totalMTO) +
       "</strong> piles (<strong>" + U.fmtNum(r.pctComplete, 1) + "%</strong> of scope) across <strong>" + U.fmtInt(covered) +
       "</strong> of " + U.fmtInt(totalCh) + " chainages over <strong>" + r.workingDayCount +
       "</strong> working day" + (r.workingDayCount === 1 ? "" : "s") + ", using <strong>" + r.deployed + "</strong> machine" +
@@ -523,7 +527,7 @@
 
     host.appendChild(statGrid([
       { label: "Piles installed", value: U.fmtInt(Math.round(r.totalInstalled)), sub: U.fmtNum(r.pctComplete, 1) + "% of " + U.fmtInt(r.totalMTO) + " scope", kind: "" },
-      { label: "Chainages covered", value: U.fmtInt(covered) + " / " + U.fmtInt(totalCh), sub: r.blocked.length ? r.blocked.length + " blocked (no material)" : "all in scope reachable", kind: r.blocked.length ? "warn" : "ok" },
+      { label: "Chainages covered", value: U.fmtInt(covered) + " / " + U.fmtInt(totalCh), sub: r.blocked.length ? r.blocked.length + " blocked (no usable material)" : "all in scope reachable", kind: r.blocked.length ? "warn" : "ok" },
       { label: "Machines deployed", value: r.deployed, sub: r.params.machinesInput !== r.deployed ? "of " + r.params.machinesInput + " chosen" : "matches input", kind: "" },
       { label: "Manpower engaged", value: U.fmtInt(people), sub: U.fmtNum(r.params.manpower ? people / r.params.manpower * 100 : 0, 0) + "% of " + U.fmtInt(r.params.manpower) + " available", kind: "" },
       { label: "Avg piles / working day", value: U.fmtInt(Math.round(avgPerDay)), sub: r.workingDayCount + " of " + r.totalDays + " calendar days", kind: "" },
@@ -640,9 +644,9 @@
 
   /* ============================ MATERIAL VIEW (day-by-day availability) ======
      Pivot: rows = profiles (item codes), columns = planned days, each day split
-     into Available / Inbound / Consumed sub-columns. Data comes straight from
+     into Available / Inbound sub-columns. Data comes straight from
      r.materialPivot (built in engine.js so the 1-day arrival buffer and calendar
-     stay consistent with the plan). Consumed is intentionally blank for now. */
+     stay consistent with the plan). Available is based on Accepted-at-Site stock. */
   function renderMaterial() {
     const r = state.result;
     const host = $("#materialScroll"); U.clear(host);
@@ -655,7 +659,7 @@
     const days = mp.days;
     const table = el("table", { class: "data material-pivot" });
 
-    // Two header rows: day (spans 3) over Avail / In / Cons.
+    // Two header rows: day (spans 2) over Avail / In.
     const thead = el("thead");
     const hDay = el("tr");
     hDay.appendChild(el("th", { class: "mp-profile mp-corner", rowspan: 2, html: "Profile <span class='mp-dow'>Item Code</span>" }));
@@ -663,7 +667,7 @@
       const off = !d.isWorking;
       hDay.appendChild(el("th", {
         class: "num mp-daygroup" + (off ? " mp-off" : ""),
-        colspan: 3,
+        colspan: 2,
         title: off && d.nonWorkReason ? d.nonWorkReason : "",
         html: U.fmtShort(d.date) + "<span class='mp-dow'>" + U.weekdayShort(d.date) + (off ? " · off" : "") + "</span>"
       }));
@@ -674,7 +678,6 @@
       const off = !d.isWorking;
       hSub.appendChild(el("th", { class: "num mp-sub mp-groupstart" + (off ? " mp-off" : ""), text: "Avail" }));
       hSub.appendChild(el("th", { class: "num mp-sub" + (off ? " mp-off" : ""), text: "In" }));
-      hSub.appendChild(el("th", { class: "num mp-sub mp-cons" + (off ? " mp-off" : ""), text: "Cons" }));
     });
     thead.appendChild(hSub);
     table.appendChild(thead);
@@ -691,7 +694,6 @@
         const off = !days[i].isWorking;
         tr.appendChild(el("td", { class: "num mp-groupstart" + (off ? " mp-off" : ""), text: U.fmtInt(Math.round(c.available)) }));
         tr.appendChild(el("td", { class: "num mp-in" + (off ? " mp-off" : ""), text: c.inbound > 0 ? "+" + U.fmtInt(Math.round(c.inbound)) : "—" }));
-        tr.appendChild(el("td", { class: "num mp-cons" + (off ? " mp-off" : ""), text: c.consumed == null ? "" : U.fmtInt(Math.round(c.consumed)) }));
       });
       tb.appendChild(tr);
     });
@@ -805,7 +807,7 @@
     complete:   { c: "#2bb673", label: "Complete" },
     inprogress: { c: "#19b8c9", label: "Planned Chainages" },
     planned:    { c: "#e3a82b", label: "Priority Scope" },
-    blocked:    { c: "#e0563c", label: "Blocked (no material)" }
+    blocked:    { c: "#e0563c", label: "Blocked (no usable material)" }
   };
   const MAP_CONTEXT = "#8593a3";   // boundary / other-priority lines (visible on dark map)
   let mapTipEl = null, mapGL = null, _ptTex = null;
@@ -1201,7 +1203,7 @@
     }
     if (r.blocked.length) {
       const bl = el("div", { class: "blocked-list" });
-      bl.innerHTML = "<strong>Blocked — no material (" + r.blocked.length + " chainages, " + U.fmtInt(r.blockedMTO) + " piles):</strong> " +
+      bl.innerHTML = "<strong>Blocked — no usable material (" + r.blocked.length + " chainages, " + U.fmtInt(r.blockedMTO) + " piles):</strong> " +
         r.blocked.slice(0, 40).map((b) => "<code>" + U.esc(b.id) + "</code>").join(" ") + (r.blocked.length > 40 ? " …" : "");
       mat.appendChild(bl);
     }

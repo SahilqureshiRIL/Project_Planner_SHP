@@ -15,7 +15,9 @@
       "Bash(python -c ' *)",
       "Bash(node -e ' *)",
       "Bash(node --check js/ui.js)",
-      "Bash(node --check js/data.js)"
+      "Bash(node --check js/data.js)",
+      "Bash(python -m http.server 8791)",
+      "Bash(curl -s -o /dev/null -w \"server HTTP %{http_code}\\\\n\" http://localhost:8791/index.html)"
     ]
   }
 }
