@@ -110,6 +110,10 @@ button { font-family: inherit; }
 .sidebar { display: flex; flex-direction: column; gap: var(--s-5); position: sticky; top: calc(var(--header-h) + var(--s-5)); }
 .main { display: flex; flex-direction: column; gap: var(--s-5); min-width: 0; }
 
+/* Collapsed state: hide the inputs sidebar so the plan gets the full width. */
+.layout.is-collapsed { grid-template-columns: minmax(0, 1fr); }
+.layout.is-collapsed .sidebar { display: none; }
+
 @media (max-width: 1080px) {
   .layout { grid-template-columns: 1fr; }
   .sidebar { position: static; }
@@ -354,6 +358,11 @@ table.data tr.row-completed td { color: var(--success); }
 .vsection:last-child { margin-bottom: 0; }
 .vsection__title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); margin-bottom: var(--s-3); display: flex; align-items: center; gap: var(--s-2); }
 .vsection__title::before { content: ""; width: 4px; height: 14px; background: var(--accent); border-radius: 2px; display: inline-block; }
+
+/* Plan summary — headline sentence + KPI tiles at the top of the results. */
+.plan-summary { margin-bottom: var(--s-4); padding-bottom: var(--s-4); border-bottom: 1px solid var(--border); }
+.plan-summary__lead { font-size: 13.5px; line-height: 1.55; color: var(--text); margin-bottom: var(--s-3); }
+.plan-summary__lead strong { color: var(--accent); font-weight: 700; font-variant-numeric: tabular-nums; }
 
 .statgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--s-3); margin-bottom: var(--s-3); }
 .stat { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-md); padding: var(--s-3); }

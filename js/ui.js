@@ -49,6 +49,10 @@
 
     U.$$("#viewToggle .view-toggle__btn").forEach((b) =>
       b.addEventListener("click", () => setView(b.dataset.view)));
+    $("#sidebarToggle").addEventListener("click", () => {
+      const layout = document.querySelector(".layout");
+      setSidebarCollapsed(!(layout && layout.classList.contains("is-collapsed")));
+    });
     U.$$("#ganttColorMode .seg__btn").forEach((b) =>
       b.addEventListener("click", () => { state.ganttColor = b.dataset.mode; U.$$("#ganttColorMode .seg__btn").forEach((x) => x.classList.toggle("is-active", x === b)); if (state.result) renderGantt(); }));
     $("#tableGroup").addEventListener("change", () => { if (state.result) renderTable(); });
@@ -477,11 +481,55 @@
       "<span>" + r.deployed + (r.deployed !== r.maxMachines ? "/" + r.maxMachines : "") + " machine" + (r.deployed === 1 ? "" : "s") + "</span>" +
       "<span>" + r.workingDayCount + " working days</span>";
 
+    renderSummary();
     renderGantt();
     renderMaterial();
     renderTable();
     renderValidation();
     setView(state.view);   // the Map is rendered lazily when its view is shown
+    setSidebarCollapsed(true);   // collapse inputs on generate for a full-width plan view
+  }
+
+  // Show/hide the inputs sidebar and keep the toggle label in sync.
+  function setSidebarCollapsed(collapsed) {
+    const layout = document.querySelector(".layout");
+    if (layout) layout.classList.toggle("is-collapsed", collapsed);
+    const btn = $("#sidebarToggle");
+    if (btn) { btn.hidden = false; btn.innerHTML = collapsed ? "▶&nbsp;Show inputs" : "◀&nbsp;Hide inputs"; }
+  }
+
+  /* Plan summary: a plain-language headline plus KPI tiles surfacing what a
+     planner most wants to read off a freshly generated plan. */
+  function renderSummary() {
+    const r = state.result, host = $("#planSummary");
+    host.hidden = false;
+    U.clear(host);
+
+    const covered = r.worked.length;
+    const totalCh = r.candidates.length;
+    const people = r.deployed * 6;                                   // 6 people per deployed machine
+    const avgPerDay = r.workingDayCount > 0 ? r.totalInstalled / r.workingDayCount : 0;
+    const inboundWindow = r.windowArrivals.reduce((s, a) => s + a.qty, 0);
+
+    host.appendChild(el("p", { class: "plan-summary__lead", html:
+      "This <strong>" + r.params.periodWeeks + "-week</strong> plan for <strong>" + U.esc(r.params.priority) +
+      "</strong> installs <strong>" + U.fmtInt(Math.round(r.totalInstalled)) + "</strong> of <strong>" + U.fmtInt(r.totalMTO) +
+      "</strong> piles (<strong>" + U.fmtNum(r.pctComplete, 1) + "%</strong> of scope) across <strong>" + U.fmtInt(covered) +
+      "</strong> of " + U.fmtInt(totalCh) + " chainages over <strong>" + r.workingDayCount +
+      "</strong> working day" + (r.workingDayCount === 1 ? "" : "s") + ", using <strong>" + r.deployed + "</strong> machine" +
+      (r.deployed === 1 ? "" : "s") + " and <strong>" + U.fmtInt(people) + "</strong> people" +
+      (r.carryOver > 0 ? ", leaving <strong>" + U.fmtInt(r.carryOver) + "</strong> piles to carry over." : ".")
+    }));
+
+    host.appendChild(statGrid([
+      { label: "Piles installed", value: U.fmtInt(Math.round(r.totalInstalled)), sub: U.fmtNum(r.pctComplete, 1) + "% of " + U.fmtInt(r.totalMTO) + " scope", kind: "" },
+      { label: "Chainages covered", value: U.fmtInt(covered) + " / " + U.fmtInt(totalCh), sub: r.blocked.length ? r.blocked.length + " blocked (no material)" : "all in scope reachable", kind: r.blocked.length ? "warn" : "ok" },
+      { label: "Machines deployed", value: r.deployed, sub: r.params.machinesInput !== r.deployed ? "of " + r.params.machinesInput + " chosen" : "matches input", kind: "" },
+      { label: "Manpower engaged", value: U.fmtInt(people), sub: U.fmtNum(r.params.manpower ? people / r.params.manpower * 100 : 0, 0) + "% of " + U.fmtInt(r.params.manpower) + " available", kind: "" },
+      { label: "Avg piles / working day", value: U.fmtInt(Math.round(avgPerDay)), sub: r.workingDayCount + " of " + r.totalDays + " calendar days", kind: "" },
+      { label: "Carry-over", value: U.fmtInt(r.carryOver), sub: r.carryOver > 0 ? "piles beyond window" : "scope fits window", kind: r.carryOver > 0 ? "warn" : "ok" },
+      { label: "Inbound material", value: U.fmtInt(Math.round(inboundWindow)), sub: r.windowArrivals.length + " arrival" + (r.windowArrivals.length === 1 ? "" : "s") + " in window", kind: "" }
+    ]));
   }
 
   function setView(v) {

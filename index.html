@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Sheet Pile Installation Planner</title>
-  <link rel="stylesheet" href="styles.css?v=17" />
+  <link rel="stylesheet" href="styles.css?v=18" />
   <!--
     SheetJS (xlsx) is vendored locally in ./vendor so the app works fully offline.
     If you prefer the CDN, replace the src below with:
@@ -23,6 +23,7 @@
       </div>
     </div>
     <div class="app-header__actions">
+      <button type="button" id="sidebarToggle" class="btn btn--ghost btn--sm" hidden>&#9664;&nbsp;Hide inputs</button>
       <div class="view-toggle" id="viewToggle" hidden>
         <button type="button" class="view-toggle__btn" data-view="gantt">Gantt</button>
         <button type="button" class="view-toggle__btn" data-view="material">Material</button>
@@ -208,6 +209,9 @@
           <div class="card__head-meta" id="planMeta"></div>
         </div>
         <div class="card__body">
+          <!-- Plan summary: headline + KPI tiles, populated on Generate. -->
+          <div class="plan-summary" id="planSummary" hidden></div>
+
           <div class="emptystate" id="resultsEmpty">
             <div class="emptystate__icon">&#128221;</div>
             <p>Load data, choose a priority, then <strong>Generate Plan</strong>.</p>
@@ -309,11 +313,11 @@
   <!-- Scripts (load order matters: util -> data -> engine -> ui).
        The ?v= query string is a cache-buster: bump it whenever js/ changes so
        browsers don't run a stale copy. -->
-  <script src="js/chainage_data.js?v=17"></script>
-  <script src="js/util.js?v=17"></script>
-  <script src="js/data.js?v=17"></script>
-  <script src="js/engine.js?v=17"></script>
-  <script src="js/ui.js?v=17"></script>
+  <script src="js/chainage_data.js?v=18"></script>
+  <script src="js/util.js?v=18"></script>
+  <script src="js/data.js?v=18"></script>
+  <script src="js/engine.js?v=18"></script>
+  <script src="js/ui.js?v=18"></script>
 </body>
 </html>
 
