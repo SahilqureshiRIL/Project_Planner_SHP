@@ -169,7 +169,7 @@
   function tryBundled() {
     const map = {
       manpower: "data/manpower_resources.xlsx",
-      material: "data/material_logistics.xlsx",
+      material: "data/material_avalibility.xlsx",
       progress: "data/progress_history.xlsx"
     };
     const kinds = Object.keys(map);

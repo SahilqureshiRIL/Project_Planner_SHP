@@ -32,7 +32,7 @@ Three files are uploaded by the planner:
 | File | What it provides |
 |---|---|
 | `manpower_resources.xlsx` | Sheets `Machine Status`, `Manpower Status`, `Shifthour Status` (one row per shift-date). |
-| `material_logistics.xlsx` | Sheet `Material Logistics` — on-site stock + dated inbound deliveries per `Item Code`. |
+| `material_avalibility.xlsx` | Sheet `Planner tool Input` — per `Item Code`: `Delivered` rows count as on-site stock (usable = `Accepted at site` qty, falling back to `Quantity` when blank; `Damaged` excluded); all other statuses are treated as inbound (`Quantity` expected on `Expected Arrival`). |
 | `progress_history.xlsx` | Sheet `Progress history` — used for the productivity baseline (`Sub Activity = "Sheet Pile Installed"`). |
 
 Sample copies of all four source files are in `./data/`.

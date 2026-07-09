@@ -11,7 +11,9 @@
       "PowerShell(python -m http.server 8000 --bind 127.0.0.1)",
       "PowerShell(python \"C:\\\\Users\\\\SAHIL2~1.QUR\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-Sahil2-Qureshi-Documents-Project-Planner-SHP\\\\ccc0afd5-80e3-49f9-a92c-5b5d4f330208\\\\scratchpad\\\\gen_chainage.py\")",
       "PowerShell(python \"C:\\\\Users\\\\SAHIL2~1.QUR\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-Sahil2-Qureshi-Documents-Project-Planner-SHP\\\\ccc0afd5-80e3-49f9-a92c-5b5d4f330208\\\\scratchpad\\\\gen_chainage2.py\")",
-      "PowerShell(Remove-Item \"c:\\\\Users\\\\Sahil2.Qureshi\\\\Documents\\\\Project_Planner_SHP\\\\_verify_map.html\" -Force; \"cleaned: \" + \\(-not \\(Test-Path \"c:\\\\Users\\\\Sahil2.Qureshi\\\\Documents\\\\Project_Planner_SHP\\\\_verify_map.html\"\\)\\))"
+      "PowerShell(Remove-Item \"c:\\\\Users\\\\Sahil2.Qureshi\\\\Documents\\\\Project_Planner_SHP\\\\_verify_map.html\" -Force; \"cleaned: \" + \\(-not \\(Test-Path \"c:\\\\Users\\\\Sahil2.Qureshi\\\\Documents\\\\Project_Planner_SHP\\\\_verify_map.html\"\\)\\))",
+      "Bash(python -c ' *)",
+      "Bash(node -e ' *)"
     ]
   }
 }
