@@ -215,6 +215,7 @@ button { font-family: inherit; }
   background: var(--grad-gold); display: inline-block; flex: none;
 }
 .card__head-meta { font-size: 12px; color: var(--text-muted); display: flex; gap: var(--s-3); flex-wrap: wrap; }
+.card__head-spacer { flex: 1; }
 .card__body { padding: var(--s-4); }
 .card[aria-disabled="true"] .card__body { opacity: .55; }
 

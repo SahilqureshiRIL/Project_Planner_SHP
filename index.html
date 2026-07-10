@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Sheet Pile Installation Planner</title>
-  <link rel="stylesheet" href="styles.css?v=33" />
+  <link rel="stylesheet" href="styles.css?v=35" />
   <!--
     SheetJS (xlsx) is vendored locally in ./vendor so the app works fully offline.
     If you prefer the CDN, replace the src below with:
@@ -223,6 +223,10 @@
         <div class="card__head">
           <h2 class="card__title">Plan</h2>
           <div class="card__head-meta" id="planMeta"></div>
+          <span class="card__head-spacer"></span>
+          <button type="button" id="exportXerBtn" class="btn btn--ghost btn--sm" hidden title="Export this plan as a Primavera P6 .xer file for taskmapper">
+            <svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg><span>Export .xer</span>
+          </button>
         </div>
         <div class="card__body">
           <!-- Plan summary: headline + KPI tiles, populated on Generate. -->
@@ -326,14 +330,15 @@
 
   <!-- three.js vendored locally (Map view WebGL renderer); works offline. -->
   <script src="vendor/three.min.js"></script>
-  <!-- Scripts (load order matters: util -> data -> engine -> ui).
+  <!-- Scripts (load order matters: util -> data -> engine -> xer -> ui).
        The ?v= query string is a cache-buster: bump it whenever js/ changes so
        browsers don't run a stale copy. -->
-  <script src="js/chainage_data.js?v=33"></script>
-  <script src="js/util.js?v=33"></script>
-  <script src="js/data.js?v=33"></script>
-  <script src="js/engine.js?v=33"></script>
-  <script src="js/ui.js?v=33"></script>
+  <script src="js/chainage_data.js?v=35"></script>
+  <script src="js/util.js?v=35"></script>
+  <script src="js/data.js?v=35"></script>
+  <script src="js/engine.js?v=35"></script>
+  <script src="js/xer.js?v=35"></script>
+  <script src="js/ui.js?v=35"></script>
 </body>
 </html>
 

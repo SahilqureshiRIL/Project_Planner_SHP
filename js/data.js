@@ -55,6 +55,8 @@
         profileCode: profileCode,  // short code kept for reference
         code: String(p["New SAP Code"] == null ? "" : p["New SAP Code"]).trim(),
         mto: isFinite(mto) ? mto : 0,
+        lengthMm: U.toNum(p["Length (mm)"]) || 0,   // for the .xer "Length Km" UDF
+        areaSqm: U.toNum(p["Area (sqm)"]) || 0,      // for the .xer "Area SqMtr" UDF
         name: p["name"] || null,
         seg: p["__seg"] || null,   // [[lngA,latA],[lngB,latB]] boundary segment (Map view)
         mid: p["__mid"] || null,   // [lng,lat] segment midpoint (marker)

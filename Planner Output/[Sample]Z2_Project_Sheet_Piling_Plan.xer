@@ -1,0 +1,351 @@
+ERMHDR	21.12	2026-05-14	Project	ADMIN	admin	dbxDatabaseNoName	Project Management	INR
+%T	CURRTYPE
+%F	curr_id	decimal_digit_cnt	curr_symbol	decimal_symbol	digit_group_symbol	pos_curr_fmt_type	neg_curr_fmt_type	curr_type	curr_short_name	group_digit_cnt	base_exch_rate
+%R	1	2	Rs	.	,	#1.1	(#1.1)	Indian Rupees	INR	3	1
+%T	FINTMPL
+%F	fintmpl_id	fintmpl_name	default_flag
+%R	1	Calendar	Y
+%T	OBS
+%F	obs_id	parent_obs_id	guid	seq_num	obs_name	obs_descr
+%R	1001			0	Enterprise	
+%T	UDFTYPE
+%F	udf_type_id	table_name	udf_type_name	udf_type_label	logical_data_type	super_flag	indicator_expression	summary_indicator_expression	export_flag
+%R	901	TASK	user_field_901	Quantity Nos	FT_TEXT	N			
+%R	902	TASK	user_field_902	Pile Type	FT_TEXT	N			
+%R	903	TASK	user_field_903	Length Km	FT_TEXT	N			
+%R	904	TASK	user_field_904	Area SqMtr	FT_TEXT	N			
+%R	905	TASK	user_field_905	Notes	FT_TEXT	N			
+%T	UMEASURE
+%F	unit_id	seq_num	unit_abbrev	unit_name
+%R	1	1	Nos	Numbers
+%R	2	2	EA	Each
+%R	3	3	M	Meter
+%R	4	4	KM	Kilometer
+%R	5	5	SQM	Square Meter
+%T	PROJECT
+%F	proj_id	fy_start_month_num	rsrc_self_add_flag	allow_complete_flag	rsrc_multi_assign_flag	checkout_flag	project_flag	step_complete_flag	cost_qty_recalc_flag	batch_sum_flag	name_sep_char	def_complete_pct_type	proj_short_name	acct_id	orig_proj_id	source_proj_id	base_type_id	clndr_id	sum_base_proj_id	task_code_base	task_code_step	priority_num	wbs_max_sum_level	strgy_priority_num	last_checksum	critical_drtn_hr_cnt	def_cost_per_qty	last_recalc_date	plan_start_date	plan_end_date	scd_end_date	add_date	last_tasksum_date	fcst_start_date	def_duration_type	task_code_prefix	guid	def_qty_type	add_by_name	web_local_root_path	proj_url	def_rate_type	add_act_remain_flag	act_this_per_link_flag	def_task_type	act_pct_link_flag	critical_path_type	task_code_prefix_flag	def_rollup_dates_flag	use_project_baseline_flag	rem_target_link_flag	reset_planned_flag	allow_neg_act_flag	sum_assign_level	last_fin_dates_id	fintmpl_id	last_baseline_update_date	cr_external_key	apply_actuals_date	location_id	loaded_scope_level	export_flag	new_fin_dates_id	baselines_to_export	baseline_names_to_export	next_data_date	close_period_flag	sum_refresh_date	trsrcsum_loaded	sumtask_loaded
+%R	4001	1	Y	Y	Y	N	Y	N	N	Y	.	CP_Drtn	Z2-SHPL					7001		1000	10	10	2	500		0	0.0000	2026-04-01 00:00	2026-04-01 00:00		2026-07-31 16:00	2026-04-01 00:00			DT_FixedDUR2	A	IaLDoZ9LRJKIGfux9mKd+Q	QT_Hour	admin			COST_PER_QTY	N	Y	TT_Task	Y	CT_TotFloat	Y	Y	Y	Y	N	N	SL_Taskrsrc		1					7	Y								
+%T	CALENDAR
+%F	clndr_id	default_flag	clndr_name	proj_id	base_clndr_id	last_chng_date	clndr_type	day_hr_cnt	week_hr_cnt	month_hr_cnt	year_hr_cnt	rsrc_private	clndr_data
+%R	7001	N	Z2 7-Day 8h Workweek			2026-05-14 06:00	CA_Base	8	56	172	2000	N	(0||CalendarData()(  (0||DaysOfWeek()(    (0||1()(      (0||0(s|08:00|f|16:00)())))    (0||2()(      (0||0(s|08:00|f|16:00)())))    (0||3()(      (0||0(s|08:00|f|16:00)())))    (0||4()(      (0||0(s|08:00|f|16:00)())))    (0||5()(      (0||0(s|08:00|f|16:00)())))    (0||6()(      (0||0(s|08:00|f|16:00)())))    (0||7()(      (0||0(s|08:00|f|16:00)())))))  (0||VIEW(ShowTotal|Y)())  (0||Exceptions()())))
+%T	SCHEDOPTIONS
+%F	schedoptions_id	proj_id	sched_outer_depend_type	sched_open_critical_flag	sched_lag_early_start_flag	sched_retained_logic	sched_setplantoforecast	sched_float_type	sched_calendar_on_relationship_lag	sched_use_expect_end_flag	sched_progress_override	level_float_thrs_cnt	level_outer_assign_flag	level_outer_assign_priority	level_over_alloc_pct	level_within_float_flag	level_keep_sched_date_flag	level_all_rsrc_flag	sched_use_project_end_date_for_float	enable_multiple_longest_path_calc	limit_multiple_longest_path_calc	max_multiple_longest_path	use_total_float_multiple_longest_paths	key_activity_for_multiple_longest_paths	LevelPriorityList
+%R	1	4001	SD_Both	N	Y	Y	N	FT_FF	rcal_Predecessor	Y	N	0	N	5	25	N	Y	Y	Y	N	Y	10	Y		priority_type,ASC_BY_FIELD/ASC
+%T	PROJWBS
+%F	wbs_id	proj_id	obs_id	seq_num	est_wt	proj_node_flag	sum_data_flag	status_code	wbs_short_name	wbs_name	phase_id	parent_wbs_id	ev_user_pct	ev_etc_user_value	orig_cost	indep_remain_total_cost	ann_dscnt_rate_pct	dscnt_period_type	indep_remain_work_qty	anticip_start_date	anticip_end_date	ev_compute_type	ev_etc_compute_type	guid	tmpl_guid	plan_open_state
+%R	3001	4001	1001	1	1	Y	N	WS_Open	Z2SHPL	Z2 Project Sheet Piling Works Plan - Bund			6	0.88	0.0000	0.0000	0	DP_Month	0			EC_Cmp_pct	EE_Rem_hr	6nqDDbRETyyZ9JhcHdGTJA		
+%R	3010	4001	1001	2	1	N	N	WS_Open	MOB	Z2 Sheetpile installation Plan by Zone & Priority		3001	6	0.88	0.0000	0.0000	0	DP_Month	0			EC_Cmp_pct	EE_Rem_hr	h6D3ukEfT+ePVRIeeg8OYw		
+%R	3020	4001	1001	3	1	N	N	WS_Open	MATL	2 Overall Material Delivery Plan		3001	6	0.88	0.0000	0.0000	0	DP_Month	0			EC_Cmp_pct	EE_Rem_hr	hfQhmaS4Rpaw0nwQVfz/UA		
+%R	3021	4001	1001	4	1	N	N	WS_Open	MATL1	2.1 Sheet-01 Hongzhi China - 121770 Nos		3020	6	0.88	0.0000	0.0000	0	DP_Month	0			EC_Cmp_pct	EE_Rem_hr	I7wHjb2UQsGXKpvk2fy6Rg		
+%R	3022	4001	1001	5	1	N	N	WS_Open	MATL2	2.2 Sheet-02 ZHIZHENG - 34040 Nos		3020	6	0.88	0.0000	0.0000	0	DP_Month	0			EC_Cmp_pct	EE_Rem_hr	yA+yNWXMQpKLOfwQMWox5g		
+%R	3023	4001	1001	6	1	N	N	WS_Open	MATL3	2.3 Sheet-03 EIETRUCGA - 9120 Nos		3020	6	0.88	0.0000	0.0000	0	DP_Month	0			EC_Cmp_pct	EE_Rem_hr	5L+xqkisSuyynBz7B9OoSA		
+%R	3030	4001	1001	7	1	N	N	WS_Open	INST	3 Overall Installation Plan		3001	6	0.88	0.0000	0.0000	0	DP_Month	0			EC_Cmp_pct	EE_Rem_hr	E64oKEIyS5iVHzmyDMMgcg		
+%R	3031	4001	1001	8	1	N	N	WS_Open	INST1	3.1 Sheet-01 Installation		3030	6	0.88	0.0000	0.0000	0	DP_Month	0			EC_Cmp_pct	EE_Rem_hr	cM7cZUExSRCDEykWj0lAaA		
+%R	3032	4001	1001	9	1	N	N	WS_Open	INST2	3.2 Sheet-02 Installation		3030	6	0.88	0.0000	0.0000	0	DP_Month	0			EC_Cmp_pct	EE_Rem_hr	+ZvHqADKTPWz68fb4o2n/Q		
+%R	3033	4001	1001	10	1	N	N	WS_Open	INST3	3.3 Sheet-03 Installation		3030	6	0.88	0.0000	0.0000	0	DP_Month	0			EC_Cmp_pct	EE_Rem_hr	CgKm1JMUS4ySLAUmrjC5dw		
+%R	3040	4001	1001	11	1	N	N	WS_Open	PRIO	4 Priority Zone Plan Bund Sheet Pile		3001	6	0.88	0.0000	0.0000	0	DP_Month	0			EC_Cmp_pct	EE_Rem_hr	uYPlrKGgQueSMxOVK58F+w		
+%R	3041	4001	1001	12	1	N	N	WS_Open	Z35P1	4.01 Zone-35 Priority-01 Length 5.07 Km		3040	6	0.88	0.0000	0.0000	0	DP_Month	0			EC_Cmp_pct	EE_Rem_hr	haPPuBldSceU+5QzQ1OakA		
+%R	3042	4001	1001	13	1	N	N	WS_Open	Z30P2	4.02 Zone-30 Priority-02 Length 3.98 Km		3040	6	0.88	0.0000	0.0000	0	DP_Month	0			EC_Cmp_pct	EE_Rem_hr	o+fMDKVOREmQSVAYBk5Hlw		
+%R	3043	4001	1001	14	1	N	N	WS_Open	Z39P3	4.03 Zone-39 Priority-03 Length 1.55 Km		3040	6	0.88	0.0000	0.0000	0	DP_Month	0			EC_Cmp_pct	EE_Rem_hr	CYOedUINQ52GkWzrM3RhVQ		
+%R	3044	4001	1001	15	1	N	N	WS_Open	Z25P4	4.04 Zone-25 Priority-04 Length 4.07 Km		3040	6	0.88	0.0000	0.0000	0	DP_Month	0			EC_Cmp_pct	EE_Rem_hr	tjpygsubRDSxh8kR9Uc8ww		
+%R	3045	4001	1001	16	1	N	N	WS_Open	Z38P5	4.05 Zone-38 Priority-05 Length 3.14 Km		3040	6	0.88	0.0000	0.0000	0	DP_Month	0			EC_Cmp_pct	EE_Rem_hr	Z5hilkeHSbmH8VRVlEXIrQ		
+%R	3046	4001	1001	17	1	N	N	WS_Open	Z24P6	4.06 Zone-24 Priority-06 Length 3.07 Km		3040	6	0.88	0.0000	0.0000	0	DP_Month	0			EC_Cmp_pct	EE_Rem_hr	CQdtepx8S1+6sdYBNeCPiw		
+%R	3047	4001	1001	18	1	N	N	WS_Open	Z37P7	4.07 Zone-37 Priority-07 Length 3.56 Km		3040	6	0.88	0.0000	0.0000	0	DP_Month	0			EC_Cmp_pct	EE_Rem_hr	Zokpd4lmQ7echhS4qUjKvA		
+%R	3048	4001	1001	19	1	N	N	WS_Open	Z36P8	4.08 Zone-36 Priority-08 Length 4.59 Km		3040	6	0.88	0.0000	0.0000	0	DP_Month	0			EC_Cmp_pct	EE_Rem_hr	hMrgVJurQpSsray8MB5/lQ		
+%R	3049	4001	1001	20	1	N	N	WS_Open	Z31P9	4.09 Zone-31 Priority-09 Length 1.74 Km		3040	6	0.88	0.0000	0.0000	0	DP_Month	0			EC_Cmp_pct	EE_Rem_hr	Ik8dbx3MS1me50elAytrWA		
+%R	3050	4001	1001	21	1	N	N	WS_Open	Z26P10	4.10 Zone-26 Priority-10 Length 3.96 Km		3040	6	0.88	0.0000	0.0000	0	DP_Month	0			EC_Cmp_pct	EE_Rem_hr	mWn1AKvlS9+3o8HC6+Thkg		
+%T	RSRC
+%F	rsrc_id	parent_rsrc_id	clndr_id	role_id	shift_id	user_id	pobs_id	guid	rsrc_seq_num	email_addr	employee_code	office_phone	other_phone	rsrc_name	rsrc_short_name	rsrc_title_name	def_qty_per_hr	cost_qty_type	ot_factor	active_flag	auto_compute_act_flag	def_cost_qty_link_flag	ot_flag	curr_id	unit_id	rsrc_type	location_id	rsrc_notes	load_tasks_flag	level_flag	last_checksum
+%R	5001		7001					00gtWiZhRf+kuCTd0uCASA	1					Vibro Hammer Machine	VIBROMC		1	QT_Hour		Y	N	Y	N	1		RT_Equip					
+%R	5002		7001					WuuUfGFrSh23TUzZGN596Q	2					Sheet Pile Crew	CREW		1	QT_Hour		Y	N	Y	N	1		RT_Labor					
+%R	5003		7001					+KFGAMleTKCTJONxd135eQ	3					Sub-Agency	SUBAGY		1	QT_Hour		Y	N	Y	N	1		RT_Labor					
+%T	RSRCRATE
+%F	rsrc_rate_id	rsrc_id	max_qty_per_hr	cost_per_qty	start_date	shift_period_id	cost_per_qty2	cost_per_qty3	cost_per_qty4	cost_per_qty5
+%T	TASK
+%F	task_id	proj_id	wbs_id	clndr_id	phys_complete_pct	rev_fdbk_flag	est_wt	lock_plan_flag	auto_compute_act_flag	complete_pct_type	task_type	duration_type	status_code	task_code	task_name	rsrc_id	total_float_hr_cnt	free_float_hr_cnt	remain_drtn_hr_cnt	act_work_qty	remain_work_qty	target_work_qty	target_drtn_hr_cnt	target_equip_qty	act_equip_qty	remain_equip_qty	cstr_date	act_start_date	act_end_date	late_start_date	late_end_date	expect_end_date	early_start_date	early_end_date	restart_date	reend_date	target_start_date	target_end_date	rem_late_start_date	rem_late_end_date	cstr_type	priority_type	suspend_date	resume_date	float_path	float_path_order	guid	tmpl_guid	cstr_date2	cstr_type2	driving_path_flag	act_this_per_work_qty	act_this_per_equip_qty	external_early_start_date	external_late_end_date	create_date	update_date	create_user	update_user	location_id	crt_path_num
+%R	8001	4001	3001	7001	0	N	1	N	N	CP_Drtn	TT_Mile	DT_FixedDUR2	TK_NotStart	A1001	Project Start Milestone		0	0	0	0	0	0	0	0	0	0				2026-04-01 08:00	2026-04-01 08:00		2026-04-01 08:00	2026-04-01 08:00	2026-04-01 08:00	2026-04-01 08:00	2026-04-01 08:00	2026-04-01 08:00	2026-04-01 08:00	2026-04-01 08:00		PT_Normal					yzUAUSFUTKe4bY43dWWPQw				N	0	0			2026-05-14 06:00	2026-05-14 06:00	admin	admin		
+%R	8999	4001	3001	7001	0	N	1	N	N	CP_Drtn	TT_FinMile	DT_FixedDUR2	TK_NotStart	A9999	Project Finish Milestone		0	0	0	0	0	0	0	0	0	0				2026-07-31 08:00	2026-07-31 16:00		2026-07-31 08:00	2026-07-31 16:00	2026-07-31 08:00	2026-07-31 16:00	2026-07-31 08:00	2026-07-31 16:00	2026-07-31 08:00	2026-07-31 16:00		PT_Normal					XanN8yVLQba/sWnCYJUpPQ				N	0	0			2026-05-14 06:00	2026-05-14 06:00	admin	admin		
+%R	8100	4001	3010	7001	0	N	1	N	N	CP_Drtn	TT_Task	DT_FixedDUR2	TK_NotStart	A1010	LOI Issuance to balance 02 Agency		0	0	344	0	0	0	344	0	0	0				2026-04-01 08:00	2026-05-14 16:00		2026-04-01 08:00	2026-05-14 16:00	2026-04-01 08:00	2026-05-14 16:00	2026-04-01 08:00	2026-05-14 16:00	2026-04-01 08:00	2026-05-14 16:00		PT_Normal					yp7a2kyESo+smJko2/gzZg				N	0	0			2026-05-14 06:00	2026-05-14 06:00	admin	admin		
+%R	8101	4001	3010	7001	0	N	1	N	N	CP_Drtn	TT_Task	DT_FixedDUR2	TK_NotStart	A1020	Deploy 3 Sub-Agencies at Site		0	0	352	0	0	0	352	0	0	0				2026-04-01 08:00	2026-05-15 16:00		2026-04-01 08:00	2026-05-15 16:00	2026-04-01 08:00	2026-05-15 16:00	2026-04-01 08:00	2026-05-15 16:00	2026-04-01 08:00	2026-05-15 16:00		PT_Normal					hYxUJFuER9qLLMOr2Q3Esw				N	0	0			2026-05-14 06:00	2026-05-14 06:00	admin	admin		
+%R	8102	4001	3010	7001	0	N	1	N	N	CP_Drtn	TT_FinMile	DT_FixedDUR2	TK_NotStart	A1030	Initial 3 Machines with Vibro Hammer Available		0	0	0	0	0	0	0	0	0	0				2026-04-01 08:00	2026-04-01 16:00		2026-04-01 08:00	2026-04-01 16:00	2026-04-01 08:00	2026-04-01 16:00	2026-04-01 08:00	2026-04-01 16:00	2026-04-01 08:00	2026-04-01 16:00		PT_Normal					7wJ+caY1RsmVZYbgwxVzrQ				N	0	0			2026-05-14 06:00	2026-05-14 06:00	admin	admin		
+%R	8103	4001	3010	7001	0	N	1	N	N	CP_Drtn	TT_Task	DT_FixedDUR2	TK_NotStart	A1040	Mobilize Next 4 Machines with Vibro Hammer		0	0	424	0	0	0	424	0	0	0				2026-04-01 08:00	2026-05-24 16:00		2026-04-01 08:00	2026-05-24 16:00	2026-04-01 08:00	2026-05-24 16:00	2026-04-01 08:00	2026-05-24 16:00	2026-04-01 08:00	2026-05-24 16:00		PT_Normal					NECtmL7ZR9ytWDGfmPNDTQ				N	0	0			2026-05-14 06:00	2026-05-14 06:00	admin	admin		
+%R	8104	4001	3010	7001	0	N	1	N	N	CP_Drtn	TT_Task	DT_FixedDUR2	TK_NotStart	A1050	Mobilize Next 8 Machines with Vibro Hammer		0	0	488	0	0	0	488	0	0	0				2026-04-01 08:00	2026-06-01 16:00		2026-04-01 08:00	2026-06-01 16:00	2026-04-01 08:00	2026-06-01 16:00	2026-04-01 08:00	2026-06-01 16:00	2026-04-01 08:00	2026-06-01 16:00		PT_Normal					kIvrpX5JSkOVlGFj03pS8A				N	0	0			2026-05-14 06:00	2026-05-14 06:00	admin	admin		
+%R	8105	4001	3010	7001	0	N	1	N	N	CP_Drtn	TT_FinMile	DT_FixedDUR2	TK_NotStart	A1060	Working Hour Step-Up 8 Hr Shift May W-3		0	0	0	0	0	0	0	0	0	0				2026-05-18 08:00	2026-05-18 16:00		2026-05-18 08:00	2026-05-18 16:00	2026-05-18 08:00	2026-05-18 16:00	2026-05-18 08:00	2026-05-18 16:00	2026-05-18 08:00	2026-05-18 16:00		PT_Normal					nBQkdisBT7eb0R/LIJ1N/Q				N	0	0			2026-05-14 06:00	2026-05-14 06:00	admin	admin		
+%R	8106	4001	3010	7001	0	N	1	N	N	CP_Drtn	TT_FinMile	DT_FixedDUR2	TK_NotStart	A1070	Working Hour Step-Up 12 Hr Shift May W-4		0	0	0	0	0	0	0	0	0	0				2026-05-25 08:00	2026-05-25 16:00		2026-05-25 08:00	2026-05-25 16:00	2026-05-25 08:00	2026-05-25 16:00	2026-05-25 08:00	2026-05-25 16:00	2026-05-25 08:00	2026-05-25 16:00		PT_Normal					71ZCrb2KRn+iXprCez5x9Q				N	0	0			2026-05-14 06:00	2026-05-14 06:00	admin	admin		
+%R	8107	4001	3010	7001	0	N	1	N	N	CP_Drtn	TT_FinMile	DT_FixedDUR2	TK_NotStart	A1080	Working Hour Step-Up 16 Hr 2-Shift Jun W-1		0	0	0	0	0	0	0	0	0	0				2026-06-01 08:00	2026-06-01 16:00		2026-06-01 08:00	2026-06-01 16:00	2026-06-01 08:00	2026-06-01 16:00	2026-06-01 08:00	2026-06-01 16:00	2026-06-01 08:00	2026-06-01 16:00		PT_Normal					0jph5nmWQdGdACGCMHUVUA				N	0	0			2026-05-14 06:00	2026-05-14 06:00	admin	admin		
+%R	8210	4001	3021	7001	0	N	1	N	N	CP_Drtn	TT_Task	DT_FixedDUR2	TK_NotStart	A2010	Sheet-01 Hongzhi China Material Delivery 121770 Nos		0	0	200	0	0	121770	200	0	0	0				2026-04-01 08:00	2026-04-26 16:00		2026-04-01 08:00	2026-04-26 16:00	2026-04-01 08:00	2026-04-26 16:00	2026-04-01 08:00	2026-04-26 16:00	2026-04-01 08:00	2026-04-26 16:00		PT_Normal					qjapnPzRRDCIZsv9b9UVHA				N	0	0			2026-05-14 06:00	2026-05-14 06:00	admin	admin		
+%R	8220	4001	3022	7001	0	N	1	N	N	CP_Drtn	TT_Task	DT_FixedDUR2	TK_NotStart	A2020	Sheet-02 ZHIZHENG Material Delivery 34040 Nos		0	0	592	0	0	34040	592	0	0	0				2026-04-01 08:00	2026-06-14 16:00		2026-04-01 08:00	2026-06-14 16:00	2026-04-01 08:00	2026-06-14 16:00	2026-04-01 08:00	2026-06-14 16:00	2026-04-01 08:00	2026-06-14 16:00		PT_Normal					skr4aoM6TEm941ZdLHZ4xA				N	0	0			2026-05-14 06:00	2026-05-14 06:00	admin	admin		
+%R	8230	4001	3023	7001	0	N	1	N	N	CP_Drtn	TT_Task	DT_FixedDUR2	TK_NotStart	A2030	Sheet-03 EIETRUCGA Material Delivery 9120 Nos		0	0	872	0	0	9120	872	0	0	0				2026-04-13 08:00	2026-07-31 16:00		2026-04-13 08:00	2026-07-31 16:00	2026-04-13 08:00	2026-07-31 16:00	2026-04-13 08:00	2026-07-31 16:00	2026-04-13 08:00	2026-07-31 16:00		PT_Normal					41hj8xwsQ3S7v6R20lBlLA				N	0	0			2026-05-14 06:00	2026-05-14 06:00	admin	admin		
+%R	8310	4001	3031	7001	0	N	1	N	N	CP_Drtn	TT_Task	DT_FixedDUR2	TK_NotStart	A3010	Sheet-01 Installation Plan 121770 Nos		0	0	536	0	0	121770	536	0	0	0				2026-04-01 08:00	2026-06-07 16:00		2026-04-01 08:00	2026-06-07 16:00	2026-04-01 08:00	2026-06-07 16:00	2026-04-01 08:00	2026-06-07 16:00	2026-04-01 08:00	2026-06-07 16:00		PT_Normal					S7dYWc5YQcav0LPVVa/0Cw				N	0	0			2026-05-14 06:00	2026-05-14 06:00	admin	admin		
+%R	8320	4001	3032	7001	0	N	1	N	N	CP_Drtn	TT_Task	DT_FixedDUR2	TK_NotStart	A3020	Sheet-02 Installation Plan 34040 Nos		0	0	592	0	0	34040	592	0	0	0				2026-04-01 08:00	2026-06-14 16:00		2026-04-01 08:00	2026-06-14 16:00	2026-04-01 08:00	2026-06-14 16:00	2026-04-01 08:00	2026-06-14 16:00	2026-04-01 08:00	2026-06-14 16:00		PT_Normal					3FzltMc5QO6V0pnO5gH8nA				N	0	0			2026-05-14 06:00	2026-05-14 06:00	admin	admin		
+%R	8330	4001	3033	7001	0	N	1	N	N	CP_Drtn	TT_Task	DT_FixedDUR2	TK_NotStart	A3030	Sheet-03 Installation Plan 9120 Nos		0	0	728	0	0	9120	728	0	0	0				2026-05-01 08:00	2026-07-31 16:00		2026-05-01 08:00	2026-07-31 16:00	2026-05-01 08:00	2026-07-31 16:00	2026-05-01 08:00	2026-07-31 16:00	2026-05-01 08:00	2026-07-31 16:00		PT_Normal					nScbI+X8TUWrWpAJnMM+Mg				N	0	0			2026-05-14 06:00	2026-05-14 06:00	admin	admin		
+%R	8401	4001	3041	7001	0	N	1	N	N	CP_Drtn	TT_Task	DT_FixedDUR2	TK_NotStart	A4101	Material Delivery Sheet Pile 10.4X735X4.75 Zone-35 - 2177 Nos		0	0	96	0	0	2177	96	0	0	0				2026-06-12 08:00	2026-06-24 16:00		2026-06-12 08:00	2026-06-24 16:00	2026-06-12 08:00	2026-06-24 16:00	2026-06-12 08:00	2026-06-24 16:00	2026-06-12 08:00	2026-06-24 16:00		PT_Normal					c1LFbVbnSAuxTzGuroPl6w				N	0	0			2026-05-14 06:00	2026-05-14 06:00	admin	admin		
+%R	8402	4001	3041	7001	0	N	1	N	N	CP_Drtn	TT_Task	DT_FixedDUR2	TK_NotStart	A4102	Material Delivery Sheet Pile 10.4X735X5 Zone-35 - 544 Nos		0	0	24	0	0	544	24	0	0	0				2026-06-09 08:00	2026-06-12 16:00		2026-06-09 08:00	2026-06-12 16:00	2026-06-09 08:00	2026-06-12 16:00	2026-06-09 08:00	2026-06-12 16:00	2026-06-09 08:00	2026-06-12 16:00		PT_Normal					hH4h0R4WTue9qARjz1cfIw				N	0	0			2026-05-14 06:00	2026-05-14 06:00	admin	admin		
+%R	8403	4001	3041	7001	0	N	1	N	N	CP_Drtn	TT_Task	DT_FixedDUR2	TK_NotStart	A4103	Material Delivery Sheet Pile 12X735X5.5 Zone-35 - 3500 Nos		0	0	184	0	0	3500	184	0	0	0				2026-05-17 08:00	2026-06-09 16:00		2026-05-17 08:00	2026-06-09 16:00	2026-05-17 08:00	2026-06-09 16:00	2026-05-17 08:00	2026-06-09 16:00	2026-05-17 08:00	2026-06-09 16:00		PT_Normal					mHEMafq5QyiByuXgTvAQ2w				N	0	0			2026-05-14 06:00	2026-05-14 06:00	admin	admin		
+%R	8410	4001	3041	7001	0	N	1	N	N	CP_Drtn	TT_Task	DT_FixedDUR2	TK_NotStart	A4110	Zone-35 Sheet Pile Installation P-01 5.07 Km 6221 Nos		0	0	304	0	0	6221	304	0	0	0				2026-05-17 08:00	2026-06-24 16:00		2026-05-17 08:00	2026-06-24 16:00	2026-05-17 08:00	2026-06-24 16:00	2026-05-17 08:00	2026-06-24 16:00	2026-05-17 08:00	2026-06-24 16:00		PT_Normal					8aYoleF+TMiTfNhzl8Ir/Q				N	0	0			2026-05-14 06:00	2026-05-14 06:00	admin	admin		
+%R	8501	4001	3042	7001	0	N	1	N	N	CP_Drtn	TT_Task	DT_FixedDUR2	TK_NotStart	A4201	Material Delivery Sheet Pile 7.2X606X4.5 Zone-30 - 1323 Nos		0	0	96	0	0	1323	96	0	0	0				2026-05-25 08:00	2026-06-06 16:00		2026-05-25 08:00	2026-06-06 16:00	2026-05-25 08:00	2026-06-06 16:00	2026-05-25 08:00	2026-06-06 16:00	2026-05-25 08:00	2026-06-06 16:00		PT_Normal					tB3olO51QFuSCPfW9t/MQw				N	0	0			2026-05-14 06:00	2026-05-14 06:00	admin	admin		
+%R	8502	4001	3042	7001	0	N	1	N	N	CP_Drtn	TT_Task	DT_FixedDUR2	TK_NotStart	A4202	Material Delivery Sheet Pile 10.4X735X5.25 Zone-30 - 24 Nos		0	0	8	0	0	24	8	0	0	0				2026-06-06 08:00	2026-06-07 16:00		2026-06-06 08:00	2026-06-07 16:00	2026-06-06 08:00	2026-06-07 16:00	2026-06-06 08:00	2026-06-07 16:00	2026-06-06 08:00	2026-06-07 16:00		PT_Normal					YnBVfiPUQIaJoyoVtbFXPA				N	0	0			2026-05-14 06:00	2026-05-14 06:00	admin	admin		
+%R	8503	4001	3042	7001	0	N	1	N	N	CP_Drtn	TT_Task	DT_FixedDUR2	TK_NotStart	A4203	Material Delivery Sheet Pile 10.4X735X5 Zone-30 - 816 Nos		0	0	64	0	0	816	64	0	0	0				2026-06-07 08:00	2026-06-15 16:00		2026-06-07 08:00	2026-06-15 16:00	2026-06-07 08:00	2026-06-15 16:00	2026-06-07 08:00	2026-06-15 16:00	2026-06-07 08:00	2026-06-15 16:00		PT_Normal					k2OoMWNwRviEtE/OcWYPSA				N	0	0			2026-05-14 06:00	2026-05-14 06:00	admin	admin		
+%R	8510	4001	3042	7001	0	N	1	N	N	CP_Drtn	TT_Task	DT_FixedDUR2	TK_NotStart	A4210	Zone-30 Sheet Pile Installation P-02 3.98 Km 2163 Nos		0	0	168	0	0	2163	168	0	0	0				2026-05-25 08:00	2026-06-15 16:00		2026-05-25 08:00	2026-06-15 16:00	2026-05-25 08:00	2026-06-15 16:00	2026-05-25 08:00	2026-06-15 16:00	2026-05-25 08:00	2026-06-15 16:00		PT_Normal					vnegPtP8RJiiDc0It8lTGQ				N	0	0			2026-05-14 06:00	2026-05-14 06:00	admin	admin		
+%R	8601	4001	3043	7001	0	N	1	N	N	CP_Drtn	TT_Task	DT_FixedDUR2	TK_NotStart	A4301	Material Delivery Sheet Pile 10.4X735X4.75 Zone-39 - 710 Nos		0	0	24	0	0	710	24	0	0	0				2026-06-05 08:00	2026-06-08 16:00		2026-06-05 08:00	2026-06-08 16:00	2026-06-05 08:00	2026-06-08 16:00	2026-06-05 08:00	2026-06-08 16:00	2026-06-05 08:00	2026-06-08 16:00		PT_Normal					rh7ybFlZTYKHsXL9+mlmig				N	0	0			2026-05-14 06:00	2026-05-14 06:00	admin	admin		
+%R	8602	4001	3043	7001	0	N	1	N	N	CP_Drtn	TT_Task	DT_FixedDUR2	TK_NotStart	A4302	Material Delivery Sheet Pile 12X735X5.5 Zone-39 - 719 Nos		0	0	88	0	0	719	88	0	0	0				2026-05-25 08:00	2026-06-05 16:00		2026-05-25 08:00	2026-06-05 16:00	2026-05-25 08:00	2026-06-05 16:00	2026-05-25 08:00	2026-06-05 16:00	2026-05-25 08:00	2026-06-05 16:00		PT_Normal					bDBmZ4wDQkK0fC0HS0Altg				N	0	0			2026-05-14 06:00	2026-05-14 06:00	admin	admin		
+%R	8610	4001	3043	7001	0	N	1	N	N	CP_Drtn	TT_Task	DT_FixedDUR2	TK_NotStart	A4310	Zone-39 Sheet Pile Installation P-03 1.55 Km 1429 Nos		0	0	112	0	0	1429	112	0	0	0				2026-05-25 08:00	2026-06-08 16:00		2026-05-25 08:00	2026-06-08 16:00	2026-05-25 08:00	2026-06-08 16:00	2026-05-25 08:00	2026-06-08 16:00	2026-05-25 08:00	2026-06-08 16:00		PT_Normal					47HO+SFoRT+D5YzIPAGhcw				N	0	0			2026-05-14 06:00	2026-05-14 06:00	admin	admin		
+%R	8701	4001	3044	7001	0	N	1	N	N	CP_Drtn	TT_Task	DT_FixedDUR2	TK_NotStart	A4401	Material Delivery Sheet Pile 7.2X606X3.75 Zone-25 - 618 Nos		0	0	24	0	0	618	24	0	0	0				2026-06-02 08:00	2026-06-05 16:00		2026-06-02 08:00	2026-06-05 16:00	2026-06-02 08:00	2026-06-05 16:00	2026-06-02 08:00	2026-06-05 16:00	2026-06-02 08:00	2026-06-05 16:00		PT_Normal					lzvO6bCSTyeG1WCWfLyk5Q				N	0	0			2026-05-14 06:00	2026-05-14 06:00	admin	admin		
+%R	8702	4001	3044	7001	0	N	1	N	N	CP_Drtn	TT_Task	DT_FixedDUR2	TK_NotStart	A4402	Material Delivery Sheet Pile 10.4X735X4.75 Zone-25 - 329 Nos		0	0	8	0	0	329	8	0	0	0				2026-06-05 08:00	2026-06-06 16:00		2026-06-05 08:00	2026-06-06 16:00	2026-06-05 08:00	2026-06-06 16:00	2026-06-05 08:00	2026-06-06 16:00	2026-06-05 08:00	2026-06-06 16:00		PT_Normal					thgPfKOBT6CHx/XPXJPqSg				N	0	0			2026-05-14 06:00	2026-05-14 06:00	admin	admin		
+%R	8703	4001	3044	7001	0	N	1	N	N	CP_Drtn	TT_Task	DT_FixedDUR2	TK_NotStart	A4403	Material Delivery Sheet Pile 10.4X735X3.75 Zone-25 - 378 Nos		0	0	72	0	0	378	72	0	0	0				2026-06-08 08:00	2026-06-17 16:00		2026-06-08 08:00	2026-06-17 16:00	2026-06-08 08:00	2026-06-17 16:00	2026-06-08 08:00	2026-06-17 16:00	2026-06-08 08:00	2026-06-17 16:00		PT_Normal					kupEFStRS6O9Dp1KM9+/MQ				N	0	0			2026-05-14 06:00	2026-05-14 06:00	admin	admin		
+%R	8704	4001	3044	7001	0	N	1	N	N	CP_Drtn	TT_Task	DT_FixedDUR2	TK_NotStart	A4404	Material Delivery Sheet Pile 7.2X606X3.5 Zone-25 - 618 Nos		0	0	96	0	0	618	96	0	0	0				2026-06-17 08:00	2026-06-29 16:00		2026-06-17 08:00	2026-06-29 16:00	2026-06-17 08:00	2026-06-29 16:00	2026-06-17 08:00	2026-06-29 16:00	2026-06-17 08:00	2026-06-29 16:00		PT_Normal					7rkCWk5mRh2mts/RuNsf0g				N	0	0			2026-05-14 06:00	2026-05-14 06:00	admin	admin		
+%R	8710	4001	3044	7001	0	N	1	N	N	CP_Drtn	TT_Task	DT_FixedDUR2	TK_NotStart	A4410	Zone-25 Sheet Pile Installation P-04 4.07 Km 1943 Nos		0	0	216	0	0	1943	216	0	0	0				2026-06-02 08:00	2026-06-29 16:00		2026-06-02 08:00	2026-06-29 16:00	2026-06-02 08:00	2026-06-29 16:00	2026-06-02 08:00	2026-06-29 16:00	2026-06-02 08:00	2026-06-29 16:00		PT_Normal					TwTcrCnYRaeLK3vnXR0JEA				N	0	0			2026-05-14 06:00	2026-05-14 06:00	admin	admin		
+%R	8801	4001	3045	7001	0	N	1	N	N	CP_Drtn	TT_Task	DT_FixedDUR2	TK_NotStart	A4501	Material Delivery Sheet Pile 7.2X606X4.5 Zone-38 - 3733 Nos		0	0	112	0	0	3733	112	0	0	0				2026-06-01 08:00	2026-06-15 16:00		2026-06-01 08:00	2026-06-15 16:00	2026-06-01 08:00	2026-06-15 16:00	2026-06-01 08:00	2026-06-15 16:00	2026-06-01 08:00	2026-06-15 16:00		PT_Normal					P0gCJJDATZWNH2BGeUc8Pw				N	0	0			2026-05-14 06:00	2026-05-14 06:00	admin	admin		
+%R	8802	4001	3045	7001	0	N	1	N	N	CP_Drtn	TT_Task	DT_FixedDUR2	TK_NotStart	A4502	Material Delivery Sheet Pile 7.2X606X4.75 Zone-38 - 512 Nos		0	0	40	0	0	512	40	0	0	0				2026-06-16 08:00	2026-06-21 16:00		2026-06-16 08:00	2026-06-21 16:00	2026-06-16 08:00	2026-06-21 16:00	2026-06-16 08:00	2026-06-21 16:00	2026-06-16 08:00	2026-06-21 16:00		PT_Normal					o2wPYLJ7R3mwFM92tE+M1A				N	0	0			2026-05-14 06:00	2026-05-14 06:00	admin	admin		
+%R	8803	4001	3045	7001	0	N	1	N	N	CP_Drtn	TT_Task	DT_FixedDUR2	TK_NotStart	A4503	Material Delivery Sheet Pile 10.4X735X4.75 Zone-38 - 923 Nos		0	0	8	0	0	923	8	0	0	0				2026-06-21 08:00	2026-06-22 16:00		2026-06-21 08:00	2026-06-22 16:00	2026-06-21 08:00	2026-06-22 16:00	2026-06-21 08:00	2026-06-22 16:00	2026-06-21 08:00	2026-06-22 16:00		PT_Normal					84zfcPP7RfOrgEECWkojvA				N	0	0			2026-05-14 06:00	2026-05-14 06:00	admin	admin		
+%R	8810	4001	3045	7001	0	N	1	N	N	CP_Drtn	TT_Task	DT_FixedDUR2	TK_NotStart	A4510	Zone-38 Sheet Pile Installation P-05 3.14 Km 5168 Nos		0	0	168	0	0	5168	168	0	0	0				2026-06-01 08:00	2026-06-22 16:00		2026-06-01 08:00	2026-06-22 16:00	2026-06-01 08:00	2026-06-22 16:00	2026-06-01 08:00	2026-06-22 16:00	2026-06-01 08:00	2026-06-22 16:00		PT_Normal					hZpKDHitQWOymaayz2QAlA				N	0	0			2026-05-14 06:00	2026-05-14 06:00	admin	admin		
+%R	8901	4001	3046	7001	0	N	1	N	N	CP_Drtn	TT_Task	DT_FixedDUR2	TK_NotStart	A4601	Material Delivery Sheet Pile 7.2X606X4.5 Zone-24 - 3135 Nos		0	0	224	0	0	3135	224	0	0	0				2026-06-01 08:00	2026-06-29 16:00		2026-06-01 08:00	2026-06-29 16:00	2026-06-01 08:00	2026-06-29 16:00	2026-06-01 08:00	2026-06-29 16:00	2026-06-01 08:00	2026-06-29 16:00		PT_Normal					GGHlCmUjQrmqhB1FyCWjuQ				N	0	0			2026-05-14 06:00	2026-05-14 06:00	admin	admin		
+%R	8902	4001	3046	7001	0	N	1	N	N	CP_Drtn	TT_Task	DT_FixedDUR2	TK_NotStart	A4602	Material Delivery Sheet Pile 10.4X735X4.75 Zone-24 - 1032 Nos		0	0	40	0	0	1032	40	0	0	0				2026-06-29 08:00	2026-07-04 16:00		2026-06-29 08:00	2026-07-04 16:00	2026-06-29 08:00	2026-07-04 16:00	2026-06-29 08:00	2026-07-04 16:00	2026-06-29 08:00	2026-07-04 16:00		PT_Normal					Gi2TSml+RH+fLof8ZapXXw				N	0	0			2026-05-14 06:00	2026-05-14 06:00	admin	admin		
+%R	8910	4001	3046	7001	0	N	1	N	N	CP_Drtn	TT_Task	DT_FixedDUR2	TK_NotStart	A4610	Zone-24 Sheet Pile Installation P-06 3.07 Km 4167 Nos		0	0	264	0	0	4167	264	0	0	0				2026-06-01 08:00	2026-07-04 16:00		2026-06-01 08:00	2026-07-04 16:00	2026-06-01 08:00	2026-07-04 16:00	2026-06-01 08:00	2026-07-04 16:00	2026-06-01 08:00	2026-07-04 16:00		PT_Normal					u0FjKXkdR+66G2rL+8t7AA				N	0	0			2026-05-14 06:00	2026-05-14 06:00	admin	admin		
+%R	9001	4001	3047	7001	0	N	1	N	N	CP_Drtn	TT_Task	DT_FixedDUR2	TK_NotStart	A4701	Material Delivery Sheet Pile 7.2X606X4.5 Zone-37 - 5876 Nos		0	0	160	0	0	5876	160	0	0	0				2026-06-14 08:00	2026-07-04 16:00		2026-06-14 08:00	2026-07-04 16:00	2026-06-14 08:00	2026-07-04 16:00	2026-06-14 08:00	2026-07-04 16:00	2026-06-14 08:00	2026-07-04 16:00		PT_Normal					yYjxYKK0Rq2T/++R4AhEYA				N	0	0			2026-05-14 06:00	2026-05-14 06:00	admin	admin		
+%R	9010	4001	3047	7001	0	N	1	N	N	CP_Drtn	TT_Task	DT_FixedDUR2	TK_NotStart	A4710	Zone-37 Sheet Pile Installation P-07 3.56 Km 5876 Nos		0	0	160	0	0	5876	160	0	0	0				2026-06-14 08:00	2026-07-04 16:00		2026-06-14 08:00	2026-07-04 16:00	2026-06-14 08:00	2026-07-04 16:00	2026-06-14 08:00	2026-07-04 16:00	2026-06-14 08:00	2026-07-04 16:00		PT_Normal					CGp720zVR++CydC0a4tjRA				N	0	0			2026-05-14 06:00	2026-05-14 06:00	admin	admin		
+%R	9101	4001	3048	7001	0	N	1	N	N	CP_Drtn	TT_Task	DT_FixedDUR2	TK_NotStart	A4801	Material Delivery Sheet Pile 7.2X606X4.5 Zone-36 - 615 Nos		0	0	104	0	0	615	104	0	0	0				2026-06-21 08:00	2026-07-04 16:00		2026-06-21 08:00	2026-07-04 16:00	2026-06-21 08:00	2026-07-04 16:00	2026-06-21 08:00	2026-07-04 16:00	2026-06-21 08:00	2026-07-04 16:00		PT_Normal					1vfxzzVNTP2Bt2RD3Yuqcw				N	0	0			2026-05-14 06:00	2026-05-14 06:00	admin	admin		
+%R	9110	4001	3048	7001	0	N	1	N	N	CP_Drtn	TT_Task	DT_FixedDUR2	TK_NotStart	A4810	Zone-36 Sheet Pile Installation P-08 4.59 Km 615 Nos		0	0	104	0	0	615	104	0	0	0				2026-06-21 08:00	2026-07-04 16:00		2026-06-21 08:00	2026-07-04 16:00	2026-06-21 08:00	2026-07-04 16:00	2026-06-21 08:00	2026-07-04 16:00	2026-06-21 08:00	2026-07-04 16:00		PT_Normal					EcXrRJzMQZSfyu3cTXsAgg				N	0	0			2026-05-14 06:00	2026-05-14 06:00	admin	admin		
+%R	9201	4001	3049	7001	0	N	1	N	N	CP_Drtn	TT_Task	DT_FixedDUR2	TK_NotStart	A4901	Material Delivery Sheet Pile 7.2X606X4.5 Zone-31		0	0	320	0	0	4586	320	0	0	0				2026-06-21 08:00	2026-07-31 16:00		2026-06-21 08:00	2026-07-31 16:00	2026-06-21 08:00	2026-07-31 16:00	2026-06-21 08:00	2026-07-31 16:00	2026-06-21 08:00	2026-07-31 16:00		PT_Normal					7B+WUbB1QLiSrmxltCiHWQ				N	0	0			2026-05-14 06:00	2026-05-14 06:00	admin	admin		
+%R	9210	4001	3049	7001	0	N	1	N	N	CP_Drtn	TT_Task	DT_FixedDUR2	TK_NotStart	A4910	Zone-31 Sheet Pile Installation P-09 1.74 Km		0	0	320	0	0	4586	320	0	0	0				2026-06-21 08:00	2026-07-31 16:00		2026-06-21 08:00	2026-07-31 16:00	2026-06-21 08:00	2026-07-31 16:00	2026-06-21 08:00	2026-07-31 16:00	2026-06-21 08:00	2026-07-31 16:00		PT_Normal					u+O63ebLTH6fiKtp6fv1jQ				N	0	0			2026-05-14 06:00	2026-05-14 06:00	admin	admin		
+%R	9301	4001	3050	7001	0	N	1	N	N	CP_Drtn	TT_Task	DT_FixedDUR2	TK_NotStart	A5001	Material Delivery Sheet Pile 7.2X606X4.5 Zone-26		0	0	240	0	0	0	240	0	0	0				2026-07-01 08:00	2026-07-31 16:00		2026-07-01 08:00	2026-07-31 16:00	2026-07-01 08:00	2026-07-31 16:00	2026-07-01 08:00	2026-07-31 16:00	2026-07-01 08:00	2026-07-31 16:00		PT_Normal					fJ2X+fbcRW2fquHiRmUJqQ				N	0	0			2026-05-14 06:00	2026-05-14 06:00	admin	admin		
+%R	9310	4001	3050	7001	0	N	1	N	N	CP_Drtn	TT_Task	DT_FixedDUR2	TK_NotStart	A5010	Zone-26 Sheet Pile Installation P-10 3.96 Km		0	0	240	0	0	0	240	0	0	0				2026-07-01 08:00	2026-07-31 16:00		2026-07-01 08:00	2026-07-31 16:00	2026-07-01 08:00	2026-07-31 16:00	2026-07-01 08:00	2026-07-31 16:00	2026-07-01 08:00	2026-07-31 16:00		PT_Normal					RsZSyo+5TXyOkqs7apxJWg				N	0	0			2026-05-14 06:00	2026-05-14 06:00	admin	admin		
+%T	TASKPRED
+%F	task_pred_id	task_id	pred_task_id	proj_id	pred_proj_id	pred_type	lag_hr_cnt	comments	float_path	aref	arls
+%R	1	8100	8001	4001	4001	PR_FS	0				
+%R	2	8101	8001	4001	4001	PR_FS	0				
+%R	3	8102	8001	4001	4001	PR_FS	0				
+%R	4	8103	8001	4001	4001	PR_FS	0				
+%R	5	8104	8001	4001	4001	PR_FS	0				
+%R	6	8210	8001	4001	4001	PR_FS	0				
+%R	7	8220	8001	4001	4001	PR_FS	0				
+%R	8	8310	8001	4001	4001	PR_FS	0				
+%R	9	8320	8001	4001	4001	PR_FS	0				
+%R	10	8230	8001	4001	4001	PR_FS	96				
+%R	11	8330	8230	4001	4001	PR_SS	0				
+%R	12	8105	8001	4001	4001	PR_FS	376				
+%R	13	8106	8001	4001	4001	PR_FS	432				
+%R	14	8107	8104	4001	4001	PR_FS	0				
+%R	15	8310	8210	4001	4001	PR_SS	0				
+%R	16	8320	8220	4001	4001	PR_SS	0				
+%R	17	8410	8401	4001	4001	PR_SS	208				
+%R	18	8410	8402	4001	4001	PR_SS	184				
+%R	19	8410	8403	4001	4001	PR_SS	0				
+%R	20	8510	8501	4001	4001	PR_SS	0				
+%R	21	8510	8502	4001	4001	PR_SS	96				
+%R	22	8510	8503	4001	4001	PR_SS	104				
+%R	23	8610	8601	4001	4001	PR_SS	88				
+%R	24	8610	8602	4001	4001	PR_SS	0				
+%R	25	8710	8701	4001	4001	PR_SS	0				
+%R	26	8710	8702	4001	4001	PR_SS	24				
+%R	27	8710	8703	4001	4001	PR_SS	48				
+%R	28	8710	8704	4001	4001	PR_SS	120				
+%R	29	8810	8801	4001	4001	PR_SS	0				
+%R	30	8810	8802	4001	4001	PR_SS	120				
+%R	31	8810	8803	4001	4001	PR_SS	160				
+%R	32	8910	8901	4001	4001	PR_SS	0				
+%R	33	8910	8902	4001	4001	PR_SS	224				
+%R	34	9010	9001	4001	4001	PR_SS	0				
+%R	35	9110	9101	4001	4001	PR_SS	0				
+%R	36	9210	9201	4001	4001	PR_SS	0				
+%R	37	9310	9301	4001	4001	PR_SS	0				
+%R	38	8410	8102	4001	4001	PR_FS	0				
+%R	39	8510	8100	4001	4001	PR_FS	0				
+%R	40	8610	8100	4001	4001	PR_FS	0				
+%R	41	8710	8101	4001	4001	PR_FS	0				
+%R	42	8710	8103	4001	4001	PR_FS	0				
+%R	43	8810	8101	4001	4001	PR_FS	0				
+%R	44	8810	8103	4001	4001	PR_FS	0				
+%R	45	8910	8101	4001	4001	PR_FS	0				
+%R	46	8910	8103	4001	4001	PR_FS	0				
+%R	47	9010	8104	4001	4001	PR_FS	0				
+%R	48	9110	8104	4001	4001	PR_FS	0				
+%R	49	9210	8104	4001	4001	PR_FS	0				
+%R	50	9310	8104	4001	4001	PR_FS	0				
+%R	51	8510	8410	4001	4001	PR_SS	64				
+%R	52	8610	8510	4001	4001	PR_SS	0				
+%R	53	8710	8610	4001	4001	PR_SS	64				
+%R	54	8810	8710	4001	4001	PR_SS	0				
+%R	55	8910	8810	4001	4001	PR_SS	0				
+%R	56	9010	8910	4001	4001	PR_SS	104				
+%R	57	9110	9010	4001	4001	PR_SS	56				
+%R	58	9210	9110	4001	4001	PR_SS	0				
+%R	59	9310	9210	4001	4001	PR_SS	80				
+%R	60	8999	9010	4001	4001	PR_FS	0				
+%R	61	8999	9110	4001	4001	PR_FS	0				
+%R	62	8999	9210	4001	4001	PR_FS	0				
+%R	63	8999	9310	4001	4001	PR_FS	0				
+%R	64	8999	8310	4001	4001	PR_FS	0				
+%R	65	8999	8320	4001	4001	PR_FS	0				
+%R	66	8999	8330	4001	4001	PR_FS	0				
+%R	67	8999	8230	4001	4001	PR_FS	0				
+%T	TASKRSRC
+%F	taskrsrc_id	task_id	proj_id	cost_qty_link_flag	role_id	acct_id	rsrc_id	pobs_id	skill_level	remain_qty	target_qty	remain_qty_per_hr	target_lag_drtn_hr_cnt	target_qty_per_hr	act_ot_qty	act_reg_qty	relag_drtn_hr_cnt	ot_factor	cost_per_qty	target_cost	act_reg_cost	act_ot_cost	remain_cost	act_start_date	act_end_date	restart_date	reend_date	target_start_date	target_end_date	rem_late_start_date	rem_late_end_date	rollup_dates_flag	target_crv	remain_crv	actual_crv	ts_pend_act_end_flag	guid	rate_type	act_this_per_cost	act_this_per_qty	curv_id	rsrc_type	cost_per_qty_source_type	create_user	create_date	has_rsrchours	taskrsrc_sum_id
+%R	70001	8410	4001	Y			5001			1064	1064	1	0	1	0	0	0	0	1.0000	1064.0000	0.0000	0.0000	1064.0000			2026-05-17 08:00	2026-06-24 16:00	2026-05-17 08:00	2026-06-24 16:00	2026-05-17 08:00	2026-06-24 16:00	Y				N	qw93b1a+Q0qf2gWJ8vizUw	COST_PER_QTY	0.0000	0		RT_Equip	ST_Rsrc	admin	2026-05-14 06:00	N	
+%R	70002	8410	4001	Y			5002			6384	6384	1	0	1	0	0	0	0	1.0000	6384.0000	0.0000	0.0000	6384.0000			2026-05-17 08:00	2026-06-24 16:00	2026-05-17 08:00	2026-06-24 16:00	2026-05-17 08:00	2026-06-24 16:00	Y				N	YEoXnG+lRN2uD1YL698Vpw	COST_PER_QTY	0.0000	0		RT_Labor	ST_Rsrc	admin	2026-05-14 06:00	N	
+%R	70003	8510	4001	Y			5001			392	392	1	0	1	0	0	0	0	1.0000	392.0000	0.0000	0.0000	392.0000			2026-05-25 08:00	2026-06-15 16:00	2026-05-25 08:00	2026-06-15 16:00	2026-05-25 08:00	2026-06-15 16:00	Y				N	We0RZWg/Ssms7HZIax83EQ	COST_PER_QTY	0.0000	0		RT_Equip	ST_Rsrc	admin	2026-05-14 06:00	N	
+%R	70004	8510	4001	Y			5002			2352	2352	1	0	1	0	0	0	0	1.0000	2352.0000	0.0000	0.0000	2352.0000			2026-05-25 08:00	2026-06-15 16:00	2026-05-25 08:00	2026-06-15 16:00	2026-05-25 08:00	2026-06-15 16:00	Y				N	B18DxMdCRBGKTEeQrxgKUQ	COST_PER_QTY	0.0000	0		RT_Labor	ST_Rsrc	admin	2026-05-14 06:00	N	
+%R	70005	8610	4001	Y			5001			336	336	1	0	1	0	0	0	0	1.0000	336.0000	0.0000	0.0000	336.0000			2026-05-25 08:00	2026-06-08 16:00	2026-05-25 08:00	2026-06-08 16:00	2026-05-25 08:00	2026-06-08 16:00	Y				N	RbHWiMo9SZyYhbxYFTG3Dg	COST_PER_QTY	0.0000	0		RT_Equip	ST_Rsrc	admin	2026-05-14 06:00	N	
+%R	70006	8610	4001	Y			5002			2016	2016	1	0	1	0	0	0	0	1.0000	2016.0000	0.0000	0.0000	2016.0000			2026-05-25 08:00	2026-06-08 16:00	2026-05-25 08:00	2026-06-08 16:00	2026-05-25 08:00	2026-06-08 16:00	Y				N	OSJp2vQUQ+mMgDpmgIALTw	COST_PER_QTY	0.0000	0		RT_Labor	ST_Rsrc	admin	2026-05-14 06:00	N	
+%R	70007	8710	4001	Y			5001			336	336	1	0	1	0	0	0	0	1.0000	336.0000	0.0000	0.0000	336.0000			2026-06-02 08:00	2026-06-29 16:00	2026-06-02 08:00	2026-06-29 16:00	2026-06-02 08:00	2026-06-29 16:00	Y				N	QrCEEOj5TXauUx7laluYcA	COST_PER_QTY	0.0000	0		RT_Equip	ST_Rsrc	admin	2026-05-14 06:00	N	
+%R	70008	8710	4001	Y			5002			2016	2016	1	0	1	0	0	0	0	1.0000	2016.0000	0.0000	0.0000	2016.0000			2026-06-02 08:00	2026-06-29 16:00	2026-06-02 08:00	2026-06-29 16:00	2026-06-02 08:00	2026-06-29 16:00	Y				N	3tYzVxMuRPehwz7n80kzqQ	COST_PER_QTY	0.0000	0		RT_Labor	ST_Rsrc	admin	2026-05-14 06:00	N	
+%R	70009	8810	4001	Y			5001			784	784	1	0	1	0	0	0	0	1.0000	784.0000	0.0000	0.0000	784.0000			2026-06-01 08:00	2026-06-22 16:00	2026-06-01 08:00	2026-06-22 16:00	2026-06-01 08:00	2026-06-22 16:00	Y				N	3jVF108mQaO9v9drPrKJfw	COST_PER_QTY	0.0000	0		RT_Equip	ST_Rsrc	admin	2026-05-14 06:00	N	
+%R	70010	8810	4001	Y			5002			4704	4704	1	0	1	0	0	0	0	1.0000	4704.0000	0.0000	0.0000	4704.0000			2026-06-01 08:00	2026-06-22 16:00	2026-06-01 08:00	2026-06-22 16:00	2026-06-01 08:00	2026-06-22 16:00	Y				N	ZuuwyOrvQsi73XrAY1XfoA	COST_PER_QTY	0.0000	0		RT_Labor	ST_Rsrc	admin	2026-05-14 06:00	N	
+%R	70011	8910	4001	Y			5001			840	840	1	0	1	0	0	0	0	1.0000	840.0000	0.0000	0.0000	840.0000			2026-06-01 08:00	2026-07-04 16:00	2026-06-01 08:00	2026-07-04 16:00	2026-06-01 08:00	2026-07-04 16:00	Y				N	3CIo3konSMOc5s3WfmNF7g	COST_PER_QTY	0.0000	0		RT_Equip	ST_Rsrc	admin	2026-05-14 06:00	N	
+%R	70012	8910	4001	Y			5002			5040	5040	1	0	1	0	0	0	0	1.0000	5040.0000	0.0000	0.0000	5040.0000			2026-06-01 08:00	2026-07-04 16:00	2026-06-01 08:00	2026-07-04 16:00	2026-06-01 08:00	2026-07-04 16:00	Y				N	VqnvQ4W8TJKGBzXnxvYovA	COST_PER_QTY	0.0000	0		RT_Labor	ST_Rsrc	admin	2026-05-14 06:00	N	
+%R	70013	9010	4001	Y			5001			1512	1512	1	0	1	0	0	0	0	1.0000	1512.0000	0.0000	0.0000	1512.0000			2026-06-14 08:00	2026-07-04 16:00	2026-06-14 08:00	2026-07-04 16:00	2026-06-14 08:00	2026-07-04 16:00	Y				N	khYbeMagTvWk9UvPDbRtYw	COST_PER_QTY	0.0000	0		RT_Equip	ST_Rsrc	admin	2026-05-14 06:00	N	
+%R	70014	9010	4001	Y			5002			9072	9072	1	0	1	0	0	0	0	1.0000	9072.0000	0.0000	0.0000	9072.0000			2026-06-14 08:00	2026-07-04 16:00	2026-06-14 08:00	2026-07-04 16:00	2026-06-14 08:00	2026-07-04 16:00	Y				N	W6LQqAR5TamOw0PYX5aWXA	COST_PER_QTY	0.0000	0		RT_Labor	ST_Rsrc	admin	2026-05-14 06:00	N	
+%R	70015	9110	4001	Y			5001			168	168	1	0	1	0	0	0	0	1.0000	168.0000	0.0000	0.0000	168.0000			2026-06-21 08:00	2026-07-04 16:00	2026-06-21 08:00	2026-07-04 16:00	2026-06-21 08:00	2026-07-04 16:00	Y				N	MDpXrRBCT7C5WcVpirsBdw	COST_PER_QTY	0.0000	0		RT_Equip	ST_Rsrc	admin	2026-05-14 06:00	N	
+%R	70016	9110	4001	Y			5002			1008	1008	1	0	1	0	0	0	0	1.0000	1008.0000	0.0000	0.0000	1008.0000			2026-06-21 08:00	2026-07-04 16:00	2026-06-21 08:00	2026-07-04 16:00	2026-06-21 08:00	2026-07-04 16:00	Y				N	fp7GlaP+SNmbxF/7QWLpSQ	COST_PER_QTY	0.0000	0		RT_Labor	ST_Rsrc	admin	2026-05-14 06:00	N	
+%R	70017	9210	4001	Y			5001			280	280	1	0	1	0	0	0	0	1.0000	280.0000	0.0000	0.0000	280.0000			2026-06-21 08:00	2026-07-31 16:00	2026-06-21 08:00	2026-07-31 16:00	2026-06-21 08:00	2026-07-31 16:00	Y				N	vTp5z710TM6mYgQ39O5nmg	COST_PER_QTY	0.0000	0		RT_Equip	ST_Rsrc	admin	2026-05-14 06:00	N	
+%R	70018	9210	4001	Y			5002			1680	1680	1	0	1	0	0	0	0	1.0000	1680.0000	0.0000	0.0000	1680.0000			2026-06-21 08:00	2026-07-31 16:00	2026-06-21 08:00	2026-07-31 16:00	2026-06-21 08:00	2026-07-31 16:00	Y				N	Z8dImCxdS1SgzpYWY2cGuQ	COST_PER_QTY	0.0000	0		RT_Labor	ST_Rsrc	admin	2026-05-14 06:00	N	
+%R	70019	8310	4001	Y			5001			13496	13496	1	0	1	0	0	0	0	1.0000	13496.0000	0.0000	0.0000	13496.0000			2026-04-01 08:00	2026-06-07 16:00	2026-04-01 08:00	2026-06-07 16:00	2026-04-01 08:00	2026-06-07 16:00	Y				N	YDZWZmvsTlyR++QzpfmzxA	COST_PER_QTY	0.0000	0		RT_Equip	ST_Rsrc	admin	2026-05-14 06:00	N	
+%R	70020	8310	4001	Y			5002			94472	94472	1	0	1	0	0	0	0	1.0000	94472.0000	0.0000	0.0000	94472.0000			2026-04-01 08:00	2026-06-07 16:00	2026-04-01 08:00	2026-06-07 16:00	2026-04-01 08:00	2026-06-07 16:00	Y				N	vCtcgH3OQ4iEnFXknNwRNA	COST_PER_QTY	0.0000	0		RT_Labor	ST_Rsrc	admin	2026-05-14 06:00	N	
+%R	70021	8320	4001	Y			5001			3696	3696	1	0	1	0	0	0	0	1.0000	3696.0000	0.0000	0.0000	3696.0000			2026-04-01 08:00	2026-06-14 16:00	2026-04-01 08:00	2026-06-14 16:00	2026-04-01 08:00	2026-06-14 16:00	Y				N	gVEWs0vDRL2Zv74b3KSuJw	COST_PER_QTY	0.0000	0		RT_Equip	ST_Rsrc	admin	2026-05-14 06:00	N	
+%R	70022	8320	4001	Y			5002			25872	25872	1	0	1	0	0	0	0	1.0000	25872.0000	0.0000	0.0000	25872.0000			2026-04-01 08:00	2026-06-14 16:00	2026-04-01 08:00	2026-06-14 16:00	2026-04-01 08:00	2026-06-14 16:00	Y				N	c2ZSdgbNS/mx+Xk4VWepsg	COST_PER_QTY	0.0000	0		RT_Labor	ST_Rsrc	admin	2026-05-14 06:00	N	
+%R	70023	8330	4001	Y			5001			1680	1680	1	0	1	0	0	0	0	1.0000	1680.0000	0.0000	0.0000	1680.0000			2026-05-01 08:00	2026-07-31 16:00	2026-05-01 08:00	2026-07-31 16:00	2026-05-01 08:00	2026-07-31 16:00	Y				N	UcabHSTQQhW9j5Qa2cWAjA	COST_PER_QTY	0.0000	0		RT_Equip	ST_Rsrc	admin	2026-05-14 06:00	N	
+%R	70024	8330	4001	Y			5002			11760	11760	1	0	1	0	0	0	0	1.0000	11760.0000	0.0000	0.0000	11760.0000			2026-05-01 08:00	2026-07-31 16:00	2026-05-01 08:00	2026-07-31 16:00	2026-05-01 08:00	2026-07-31 16:00	Y				N	MbCd+RCARqmxaTkXV7c12w	COST_PER_QTY	0.0000	0		RT_Labor	ST_Rsrc	admin	2026-05-14 06:00	N	
+%R	70025	8100	4001	Y			5003			344	344	1	0	1	0	0	0	0	1.0000	344.0000	0.0000	0.0000	344.0000			2026-04-01 08:00	2026-05-14 16:00	2026-04-01 08:00	2026-05-14 16:00	2026-04-01 08:00	2026-05-14 16:00	Y				N	w/DEJ0KsSkSR2gmaUqrDZA	COST_PER_QTY	0.0000	0		RT_Labor	ST_Rsrc	admin	2026-05-14 06:00	N	
+%R	70026	8101	4001	Y			5003			1056	1056	1	0	1	0	0	0	0	1.0000	1056.0000	0.0000	0.0000	1056.0000			2026-04-01 08:00	2026-05-15 16:00	2026-04-01 08:00	2026-05-15 16:00	2026-04-01 08:00	2026-05-15 16:00	Y				N	TaeHY+TPTlelIFvNz+L4Dw	COST_PER_QTY	0.0000	0		RT_Labor	ST_Rsrc	admin	2026-05-14 06:00	N	
+%T	UDFVALUE
+%F	udf_type_id	fk_id	proj_id	udf_date	udf_number	udf_text	udf_code_id
+%R	905	8001	4001			Z2 Sheet Piling - Source notes. Productivity per machine: 4/hr; 32/8h; 48/12h; 64/16h. Manpower per machine: 6/shift; 11/2-shift. Night efficiency 0.6. Sheet areas SqM: Sheet-1=286888 Sheet-2=96948 Sheet-3=18000. Conversion SqM/No: Sheet-1=2.356 Sheet-2=2.848 Sheet-3=1.974. Note 1: Required complete availability with all accessories for each set of machines. Note 2: Priority zones to be handed over 2 days before scheduled start. Note 3: Machine tools and manpower deployment per schedule.	
+%R	905	8100	4001			LOI to balance 02 agency by 14-May-26	
+%R	905	8101	4001			All 3 sub-agencies deployed by 15-May-26	
+%R	905	8102	4001			3 machines already at site	
+%R	905	8103	4001			Next 4 machines by 24-May-26	
+%R	905	8104	4001			Next 8 machines by 1-Jun-26; enables 2-shift 16h working	
+%R	905	8105	4001			May W-3 8 hr/day	
+%R	905	8106	4001			May W-4 12 hr/day 6am-12 and 3-9pm	
+%R	905	8107	4001			Jun W-1 onwards 16 hr/day 2 shifts	
+%R	901	8210	4001			121770	
+%R	904	8210	4001			286888	
+%R	905	8210	4001			Weekly: 80325 22895 12770 5778	
+%R	901	8220	4001			34040	
+%R	904	8220	4001			96948	
+%R	905	8220	4001			Spread over 12 weeks	
+%R	901	8230	4001			9120	
+%R	904	8230	4001			18000	
+%R	905	8230	4001			Intermittent weekly deliveries	
+%R	901	8310	4001			121770	
+%R	904	8310	4001			286888	
+%R	905	8310	4001			Peak 25 machines 175 manpower 241 machine-weeks	
+%R	901	8320	4001			34040	
+%R	904	8320	4001			96948	
+%R	905	8320	4001			Peak 7 machines 49 manpower 66 machine-weeks	
+%R	901	8330	4001			9120	
+%R	904	8330	4001			18000	
+%R	905	8330	4001			Peak 5 machines 35 manpower 30 machine-weeks	
+%R	901	8401	4001			2177	
+%R	902	8401	4001			10.4X735X4.75	
+%R	903	8401	4001			5.07	
+%R	905	8401	4001			Zone-35 Priority-01 length 5.07 Km	
+%R	901	8402	4001			544	
+%R	902	8402	4001			10.4X735X5	
+%R	903	8402	4001			5.07	
+%R	905	8402	4001			Zone-35 Priority-01	
+%R	901	8403	4001			3500	
+%R	902	8403	4001			12X735X5.5	
+%R	903	8403	4001			5.07	
+%R	905	8403	4001			Zone-35 Priority-01	
+%R	901	8410	4001			6221	
+%R	903	8410	4001			5.07	
+%R	905	8410	4001			Zone-35 Priority-01 length 5.07 Km; peak 4 machines 24 manpower; 19 machine-weeks	
+%R	901	8501	4001			1323	
+%R	902	8501	4001			7.2X606X4.5	
+%R	903	8501	4001			3.98	
+%R	905	8501	4001			Zone-30 Priority-02 length 3.98 Km	
+%R	901	8502	4001			24	
+%R	902	8502	4001			10.4X735X5.25	
+%R	903	8502	4001			3.98	
+%R	905	8502	4001			Zone-30 Priority-02	
+%R	901	8503	4001			816	
+%R	902	8503	4001			10.4X735X5	
+%R	903	8503	4001			3.98	
+%R	905	8503	4001			Zone-30 Priority-02	
+%R	901	8510	4001			2163	
+%R	903	8510	4001			3.98	
+%R	905	8510	4001			Zone-30 Priority-02 length 3.98 Km; peak 2 machines 12 manpower; 7 machine-weeks	
+%R	901	8601	4001			710	
+%R	902	8601	4001			10.4X735X4.75	
+%R	903	8601	4001			1.55	
+%R	905	8601	4001			Zone-39 Priority-03	
+%R	901	8602	4001			719	
+%R	902	8602	4001			12X735X5.5	
+%R	903	8602	4001			1.55	
+%R	905	8602	4001			Zone-39 Priority-03	
+%R	901	8610	4001			1429	
+%R	903	8610	4001			1.55	
+%R	905	8610	4001			Zone-39 Priority-03 length 1.55 Km; peak 2 machines 12 manpower; 6 machine-weeks	
+%R	901	8701	4001			618	
+%R	902	8701	4001			7.2X606X3.75	
+%R	903	8701	4001			4.07	
+%R	905	8701	4001			Zone-25 Priority-04	
+%R	901	8702	4001			329	
+%R	902	8702	4001			10.4X735X4.75	
+%R	903	8702	4001			4.07	
+%R	905	8702	4001			Zone-25 Priority-04	
+%R	901	8703	4001			378	
+%R	902	8703	4001			10.4X735X3.75	
+%R	903	8703	4001			4.07	
+%R	905	8703	4001			Zone-25 Priority-04	
+%R	901	8704	4001			618	
+%R	902	8704	4001			7.2X606X3.5	
+%R	903	8704	4001			4.07	
+%R	905	8704	4001			Zone-25 Priority-04	
+%R	901	8710	4001			1943	
+%R	903	8710	4001			4.07	
+%R	905	8710	4001			Zone-25 Priority-04 length 4.07 Km; peak 2 machines 12 manpower; 6 machine-weeks	
+%R	901	8801	4001			3733	
+%R	902	8801	4001			7.2X606X4.5	
+%R	903	8801	4001			3.14	
+%R	905	8801	4001			Zone-38 Priority-05	
+%R	901	8802	4001			512	
+%R	902	8802	4001			7.2X606X4.75	
+%R	903	8802	4001			3.14	
+%R	905	8802	4001			Zone-38 Priority-05	
+%R	901	8803	4001			923	
+%R	902	8803	4001			10.4X735X4.75	
+%R	903	8803	4001			3.14	
+%R	905	8803	4001			Zone-38 Priority-05	
+%R	901	8810	4001			5168	
+%R	903	8810	4001			3.14	
+%R	905	8810	4001			Zone-38 Priority-05 length 3.14 Km; peak 4 machines 24 manpower; 14 machine-weeks	
+%R	901	8901	4001			3135	
+%R	902	8901	4001			7.2X606X4.5	
+%R	903	8901	4001			3.07	
+%R	905	8901	4001			Zone-24 Priority-06	
+%R	901	8902	4001			1032	
+%R	902	8902	4001			10.4X735X4.75	
+%R	903	8902	4001			3.07	
+%R	905	8902	4001			Zone-24 Priority-06	
+%R	901	8910	4001			4167	
+%R	903	8910	4001			3.07	
+%R	905	8910	4001			Zone-24 Priority-06 length 3.07 Km; peak 4 machines 24 manpower; 15 machine-weeks	
+%R	901	9001	4001			5876	
+%R	902	9001	4001			7.2X606X4.5	
+%R	903	9001	4001			3.56	
+%R	905	9001	4001			Zone-37 Priority-07	
+%R	901	9010	4001			5876	
+%R	903	9010	4001			3.56	
+%R	905	9010	4001			Zone-37 Priority-07 length 3.56 Km; peak 9 machines 54 manpower; 27 machine-weeks	
+%R	901	9101	4001			615	
+%R	902	9101	4001			7.2X606X4.5	
+%R	903	9101	4001			4.59	
+%R	905	9101	4001			Zone-36 Priority-08	
+%R	901	9110	4001			615	
+%R	903	9110	4001			4.59	
+%R	905	9110	4001			Zone-36 Priority-08 length 4.59 Km; peak 1 machine 6 manpower; 3 machine-weeks	
+%R	901	9201	4001			4586	
+%R	902	9201	4001			7.2X606X4.5	
+%R	903	9201	4001			1.74	
+%R	905	9201	4001			Zone-31 Priority-09 length 1.74 Km; dates inferred from weekly numbers	
+%R	901	9210	4001			4586	
+%R	903	9210	4001			1.74	
+%R	905	9210	4001			Zone-31 Priority-09 length 1.74 Km; dates inferred from source weekly numbers	
+%R	902	9301	4001			7.2X606X4.5	
+%R	903	9301	4001			3.96	
+%R	905	9301	4001			Zone-26 Priority-10 length 3.96 Km; not scheduled in source	
+%R	903	9310	4001			3.96	
+%R	905	9310	4001			Zone-26 Priority-10 length 3.96 Km; not scheduled in source	
+%E

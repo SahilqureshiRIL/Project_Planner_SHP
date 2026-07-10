@@ -53,6 +53,7 @@
       const layout = document.querySelector(".layout");
       setSidebarCollapsed(!(layout && layout.classList.contains("is-collapsed")));
     });
+    $("#exportXerBtn").addEventListener("click", onExportXer);
     U.$$("#ganttColorMode .seg__btn").forEach((b) =>
       b.addEventListener("click", () => { state.ganttColor = b.dataset.mode; U.$$("#ganttColorMode .seg__btn").forEach((x) => x.classList.toggle("is-active", x === b)); if (state.result) renderGantt(); }));
     $("#tableGroup").addEventListener("change", () => { if (state.result) renderTable(); });
@@ -473,6 +474,7 @@
     $("#resultsEmpty").hidden = true;
     $("#viewToggle").hidden = false;
     $("#validationCard").hidden = false;
+    $("#exportXerBtn").hidden = false;
 
     const periodLbl = r.params.periodWeeks + " weeks";
     $("#planMeta").innerHTML =
@@ -500,6 +502,31 @@
       const ico = '<svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="9" y1="4" x2="9" y2="20"/></svg>';
       btn.innerHTML = ico + "<span>" + (collapsed ? "Show inputs" : "Hide inputs") + "</span>";
     }
+  }
+
+  // Export the current plan as a Primavera P6 .xer for the taskmapper system.
+  function onExportXer() {
+    if (!state.result) { U.toast("Generate a plan first.", "bad"); return; }
+    if (!SPP.xer) { U.toast("Exporter not loaded.", "bad"); return; }
+    if (!state.result.worked || !state.result.worked.length) {
+      U.toast("No scheduled chainages in this plan to export.", "bad"); return;
+    }
+    try {
+      const text = SPP.xer.build(state.result, state.store);
+      const name = ("SHP_" + state.result.params.priority + "_" + U.fmtISO(state.result.planStart))
+        .replace(/[^A-Za-z0-9_\-]/g, "_") + ".xer";
+      downloadText(name, text);
+      U.toast("Exported " + name + " (" + state.result.worked.length + " activities)", "ok");
+    } catch (e) {
+      U.toast("Export failed: " + e.message, "bad");
+    }
+  }
+  function downloadText(filename, text) {
+    const blob = new Blob([text], { type: "application/octet-stream" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = filename;
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 0);
   }
 
   /* Plan summary: a plain-language headline plus KPI tiles surfacing what a
