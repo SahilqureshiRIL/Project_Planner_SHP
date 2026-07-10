@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Sheet Pile Installation Planner</title>
-  <link rel="stylesheet" href="styles.css?v=27" />
+  <link rel="stylesheet" href="styles.css?v=28" />
   <!--
     SheetJS (xlsx) is vendored locally in ./vendor so the app works fully offline.
     If you prefer the CDN, replace the src below with:
@@ -253,8 +253,9 @@
             </div>
             <div class="table-scroll" id="materialScroll"></div>
             <p class="field__hint" style="margin-top:8px">
-              <strong>Available</strong> = <strong>Accepted at Site</strong> stock plus any inbound already received. Inbound arriving today rolls into Available the next day.
-              <strong>Inbound</strong> = qty arriving that day (its Expected Arrival date). Inbound is shown on hindrance / off days too, since material still arrives.
+              <strong>Available</strong> = net <strong>Accepted at Site</strong> stock (already-installed piles deducted) carried into the day, before that day's use.
+              <strong>Inbound</strong> = qty arriving that day (Expected Arrival); it rolls into Available the next day.
+              <strong>Used</strong> = piles the plan installs that day; the balance carries to the next day. Inbound shows on off days too, since material still arrives.
             </p>
           </div>
 
@@ -328,11 +329,11 @@
   <!-- Scripts (load order matters: util -> data -> engine -> ui).
        The ?v= query string is a cache-buster: bump it whenever js/ changes so
        browsers don't run a stale copy. -->
-  <script src="js/chainage_data.js?v=27"></script>
-  <script src="js/util.js?v=27"></script>
-  <script src="js/data.js?v=27"></script>
-  <script src="js/engine.js?v=27"></script>
-  <script src="js/ui.js?v=27"></script>
+  <script src="js/chainage_data.js?v=28"></script>
+  <script src="js/util.js?v=28"></script>
+  <script src="js/data.js?v=28"></script>
+  <script src="js/engine.js?v=28"></script>
+  <script src="js/ui.js?v=28"></script>
 </body>
 </html>
 

@@ -277,8 +277,10 @@
     const sh = readSheet(ws);
     const [cSub, cDate, cVal] = requireCols(sh, ["Sub Activity", "Date", "Value"], "Progress history");
     const cName = sh.col[norm("Name")];
+    const cReset = sh.col[norm("Reset")];
 
-    const installedByDate = {};   // ISO -> piles installed that day
+    const installedByDate = {};       // ISO -> piles installed that day (current rows only)
+    const installedByChainage = {};   // chainage Name -> total piles already installed
     let maxDate = null;
     let installedRowCount = 0;
 
@@ -288,13 +290,19 @@
       if (sub == null || !d) return;        // §3.4: skip trailing null row
       if (d && (!maxDate || d > maxDate)) maxDate = d;
       if (String(sub).trim() === "Sheet Pile Installed") {
+        // The file keeps superseded historical duplicates flagged Reset = TRUE
+        // (from a "clear_history" reset). Only the current (Reset = FALSE) rows are
+        // authoritative — they sum exactly to a chainage's MTO when complete.
+        if (cReset != null && String(r[cReset]).trim().toLowerCase() === "true") return;
         const v = U.toNum(r[cVal]) || 0;
         const iso = U.fmtISO(d);
         installedByDate[iso] = (installedByDate[iso] || 0) + v;
         installedRowCount++;
+        const nm = (cName != null && r[cName] != null) ? String(r[cName]).trim() : "";
+        if (nm) installedByChainage[nm] = (installedByChainage[nm] || 0) + v;
       }
     });
-    return { installedByDate, maxDate, installedRowCount };
+    return { installedByDate, installedByChainage, maxDate, installedRowCount };
   }
 
   function deriveAdaptiveRamp(windowDays, mp, pr) {

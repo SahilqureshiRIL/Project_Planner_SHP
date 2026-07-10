@@ -17,7 +17,7 @@
   const EPS = 1e-6;
 
   E.generate = function (store, p) {
-    const chainage = store.chainage, material = store.material;
+    const chainage = store.chainage, material = store.material, progress = store.progress;
     const planStart = p.planStart;
     const totalDays = p.periodWeeks * 7;
     const planEnd = U.addDays(planStart, totalDays - 1);
@@ -27,10 +27,39 @@
     const maxMachines = Math.max(0, Math.min(p.machinesInput, cap));
     const capApplied = p.machinesInput > cap;
 
-    /* ---- 2. candidate chainages + blocked detection (§5.2 / §5.3) ---------- */
+    /* ---- 2. candidate chainages + prior progress + blocked detection ------- */
     const candidates = chainage.features.filter((f) => f.priority === p.priority);
 
+    // Piles already installed per chainage (from progress history, current rows).
+    const installedByChainage = (progress && progress.installedByChainage) || {};
+    function priorInstalled(f) { return installedByChainage[f.name] || 0; }
+    // Remaining scope per chainage = full MTO minus what's already installed.
+    const remainingById = {}, priorById = {};
+    candidates.forEach((f) => {
+      const prior = priorInstalled(f);
+      priorById[f.id] = prior;
+      remainingById[f.id] = Math.max(0, f.mto - prior);
+    });
+    // Completed chainages drop out of the plan entirely; only "active" (remaining > 0)
+    // chainages are planned.
+    const completed = candidates.filter((f) => f.mto > 0 && remainingById[f.id] <= 0);
+    const active = candidates.filter((f) => remainingById[f.id] > 0);
+
     function codeMaterial(code) { return material.byCode[code] || null; }
+    // Material already consumed per item code = piles already installed across ALL
+    // chainages (any priority) that use this code — they drew from the same pool.
+    const codeConsumedPrior = {};
+    chainage.features.forEach((f) => {
+      const prior = installedByChainage[f.name] || 0;
+      if (f.code && prior > 0) codeConsumedPrior[f.code] = (codeConsumedPrior[f.code] || 0) + prior;
+    });
+    // "Accepted at Site" is gross received, so on-site stock still available now =
+    // accepted-at-site minus what's already been consumed by installed piles.
+    function netOnsite(code) {
+      const m = codeMaterial(code);
+      if (!m) return 0;
+      return Math.max(0, m.onsite - (codeConsumedPrior[code] || 0));
+    }
     // An inbound delivery is only usable if it actually arrives on/after the plan
     // start. Overdue on-hold material (Expected Arrival already past, not yet
     // delivered) is NOT on site, so it does not count as available for this plan.
@@ -38,17 +67,18 @@
     function totalMaterialQty(code) {
       const m = codeMaterial(code);
       if (!m) return 0;
-      return m.onsite + m.inbound.reduce((s, i) => s + (arrivesInPlan(i) ? i.qty : 0), 0);
+      return netOnsite(code) + m.inbound.reduce((s, i) => s + (arrivesInPlan(i) ? i.qty : 0), 0);
     }
     const workable = [], blocked = [];
-    candidates.forEach((f) => {
+    active.forEach((f) => {
       if (!f.code || totalMaterialQty(f.code) <= 0) blocked.push(f);
       else workable.push(f);
     });
-    const blockedMTO = blocked.reduce((s, f) => s + f.mto, 0);
-    // Plan scope MTO is ALWAYS the full priority scope. Blocked chainages (no material)
-    // remain in the MTO; because they cannot be installed they surface as carry-over.
+    const blockedMTO = blocked.reduce((s, f) => s + remainingById[f.id], 0);   // remaining piles blocked
+    // Full priority scope (all chainages, full MTO) — for reporting completion %.
     const totalMTO = candidates.reduce((s, f) => s + f.mto, 0);
+    const installedPriorTotal = candidates.reduce((s, f) => s + priorById[f.id], 0);
+    const remainingMTO = candidates.reduce((s, f) => s + remainingById[f.id], 0);
 
     /* ---- 3. per-code material state at plan start (§5.3) -------------------- */
     // startingStock = Accepted-at-Site on-site stock only.
@@ -59,7 +89,7 @@
     const usedCodes = Array.from(new Set(workable.map((f) => f.code)));
     usedCodes.forEach((code) => {
       const m = codeMaterial(code);
-      startStock[code] = m.onsite;           // only what's physically on site at start
+      startStock[code] = netOnsite(code);    // accepted-at-site minus already-consumed
       m.inbound.forEach((inb) => {
         // Arrives within the plan → replenishes stock on its usable date (arrival + 1).
         // Overdue pre-window on-hold material is skipped entirely (not on site).
@@ -100,7 +130,7 @@
         // Only queue chainages whose cumulative MTO fits the window material for this
         // profile, so no profile is started beyond what it can cover (clears shortfall).
         let cum = 0; const avail = availWindow(code);
-        sorted.forEach((f) => { if (cum + f.mto <= avail + EPS) { queue.push(f); cum += f.mto; } });
+        sorted.forEach((f) => { if (cum + remainingById[f.id] <= avail + EPS) { queue.push(f); cum += remainingById[f.id]; } });
       } else {
         sorted.forEach((f) => queue.push(f));
       }
@@ -191,7 +221,8 @@
           const factor = isNew ? rampFactor(workingOrdinal) : 1.0;
           const capacity = p.productivity * factor * day.hours;
           const avail = stock[ch.code] || 0;
-          const remaining = ch.mto - s.done;
+          const prior = priorById[id] || 0;
+          const remaining = remainingById[id] - s.done;   // piles left to install this plan
           let install = Math.min(capacity, remaining, avail);
           if (install < 0) install = 0;
           s.done += install; stock[ch.code] = avail - install; s.lastDate = day.date;
@@ -199,11 +230,12 @@
           consumedByCode[ch.code] = (consumedByCode[ch.code] || 0) + install;
           schedule.push({
             date: day.date, dayNum: day.dayNum, machine: i + 1, chId: id,
-            profile: ch.profile, code: ch.code, install: install, cum: s.done, mto: ch.mto,
+            profile: ch.profile, code: ch.code, install: install,
+            cum: prior + s.done, mto: ch.mto, priorInstalled: prior,   // cum/mto are TOTALS
             stockEnd: stock[ch.code], capacity: capacity,
             waiting: install <= EPS && capacity > EPS    // assigned but starved of material
           });
-          if (s.done >= ch.mto - EPS) { s.completed = true; s.completedDate = day.date; assign[i] = null; }
+          if (s.done >= remainingById[id] - EPS) { s.completed = true; s.completedDate = day.date; assign[i] = null; }
         }
       });
       return { totalInstalled, schedule, state: st, stockEnd: stock, consumedByCode, idleMachineDays };
@@ -224,7 +256,9 @@
       .map((f) => {
         const s = plan.state[f.id];
         return { id: f.id, profile: f.profile, code: f.code, mto: f.mto,
-                 done: s.done, machine: s.machine, startDate: s.startDate,
+                 done: (priorById[f.id] || 0) + s.done,          // total installed (prior + this plan)
+                 thisPlan: s.done, priorInstalled: priorById[f.id] || 0,
+                 machine: s.machine, startDate: s.startDate,
                  lastDate: s.lastDate, completed: s.completed, completedDate: s.completedDate };
       })
       .sort((a, b) => a.machine - b.machine || a.startDate - b.startDate || U.chainageSortKey(a.id) - U.chainageSortKey(b.id));
@@ -238,10 +272,10 @@
       const available = startStock[code] + inboundWindow;
       const consumed = plan.consumedByCode[code] || 0;
       const startedHere = worked.filter((w) => w.code === code);
-      const requiredStarted = startedHere.reduce((s, w) => s + w.mto, 0);
+      const requiredStarted = startedHere.reduce((s, w) => s + (w.mto - w.priorInstalled), 0);   // remaining piles
       return {
         code, profile: profileForCode(code),
-        onsite: m.onsite, starting: startStock[code], inboundWindow, available,
+        onsite: netOnsite(code), starting: startStock[code], inboundWindow, available,
         consumed, endStock: plan.stockEnd[code] != null ? plan.stockEnd[code] : startStock[code],
         candidateCount: cands.length, startedCount: startedHere.length,
         requiredStarted, shortfall: Math.max(0, requiredStarted - available)
@@ -253,44 +287,55 @@
        inbound can still arrive for a blocked profile even if no work happens),
        one column per calendar day in the plan window (hindrance days included).
        Per day we expose:
-         available = Accepted-at-Site on-site stock (m.onsite, see data.js) PLUS
+         available = net on-site stock (Accepted-at-Site minus already-consumed) PLUS
                      inbound that actually ARRIVES WITHIN this plan window and is
-                     usable by that day (usable = arrival + 1). So a delivery shown
-                     as Inbound on its arrival day rolls into Available the NEXT day.
-                     Expected material whose arrival date is BEFORE the window
-                     (e.g. on-hold deliveries whose date has passed) is not on site,
-                     so it never inflates Available.
-         inbound   = qty ARRIVING on that day (its Expected Arrival date). This is
-                     the not-yet-on-site quantity; it is not counted in Available
-                     until the following day.
+                     usable by that day (usable = arrival + 1), MINUS what the plan has
+                     already consumed on earlier days. So it is the balance carried
+                     into the day, before that day's consumption. Overdue pre-window
+                     expected material is excluded (it is not physically on site).
+         inbound   = qty ARRIVING on that day (its Expected Arrival date), not counted
+                     in Available until the following day.
+         consumed  = piles the plan installs of this code on that day; the balance
+                     (available - consumed) carries into the next day.
        Availability is tracked on the real calendar so the 1-day arrival buffer and
        weekly-off/hindrance days line up with the rest of the plan. */
+    // Plan consumption per item code per day (from the chosen plan's schedule).
+    const consumedByCodeDay = {};
+    plan.schedule.forEach((e) => {
+      const iso = U.fmtISO(e.date);
+      const byDay = consumedByCodeDay[e.code] || (consumedByCodeDay[e.code] = {});
+      byDay[iso] = (byDay[iso] || 0) + e.install;
+    });
     const pivotCodes = Array.from(new Set(candidates.map((f) => f.code).filter(Boolean)));
     const materialPivot = {
       days: cal.map((c) => ({ date: c.date, dayNum: c.dayNum, isWorking: c.isWorking, nonWorkReason: c.nonWorkReason })),
       rows: pivotCodes.map((code) => {
+        const base = netOnsite(code);            // net on-site (accepted-at-site − already-consumed)
         const m = codeMaterial(code);
-        const base = m ? m.onsite : 0;           // Accepted-at-Site on-site stock only
         const inbList = m ? m.inbound : [];
+        const cd = consumedByCodeDay[code] || {};
+        let consumedCum = 0;
         const cells = cal.map((c) => {
+          const iso = U.fmtISO(c.date);
           // Inbound column = qty arriving on this day (Expected Arrival date).
           const inbound = inbList.reduce((s, inb) => s + (U.sameDay(inb.arrival, c.date) ? inb.qty : 0), 0);
-          // Available = Accepted-at-Site + inbound that ARRIVES within the window
-          // (arrival on/after plan start) and is already usable by this day. Overdue
-          // pre-window expected material is excluded — it is not physically on site.
+          // Received = in-window arrivals already usable by this day (arrival + 1).
           const received = inbList.reduce((s, inb) =>
             s + (U.cmpDate(inb.arrival, planStart) >= 0 && U.cmpDate(inb.usable, c.date) <= 0 ? inb.qty : 0), 0);
-          const available = base + received;
-          return { available, inbound };
+          const available = base + received - consumedCum;   // balance carried in, before today's use
+          const consumed = cd[iso] || 0;
+          consumedCum += consumed;
+          return { available, inbound, consumed };
         });
         return { code, profile: profileForCode(code), onsite: base, cells };
       }).sort((a, b) => a.profile.localeCompare(b.profile))
     };
 
     /* ---- 10. feasibility + warnings (§6.3) --------------------------------- */
-    const installable = plan.totalInstalled;
-    const pctComplete = totalMTO > 0 ? (installable / totalMTO) * 100 : 0;
-    const carryOver = Math.max(0, totalMTO - installable);
+    const installable = plan.totalInstalled;                       // installed THIS window
+    const totalComplete = installedPriorTotal + installable;       // prior + this window
+    const pctComplete = totalMTO > 0 ? (totalComplete / totalMTO) * 100 : 0;
+    const carryOver = Math.max(0, totalMTO - totalComplete);       // remaining beyond this window
     const idleMachines = maxMachines - deployed;
     const steadyDaily = p.productivity * p.workhours;
 
@@ -317,7 +362,8 @@
     return {
       params: p, planStart, planEnd, totalDays, cap, maxMachines, deployed, idleMachines, capApplied,
       manpowerCapped: maxMachines, calendar: cal, workingDayCount,
-      queue, worked, blocked, candidates, totalMTO, blockedMTO,
+      queue, worked, blocked, completed, candidates, totalMTO, blockedMTO,
+      installedPriorTotal, remainingMTO, totalComplete, completedCount: completed.length,
       startStock, windowArrivals, profileRows, materialPivot,
       perM, schedule: plan.schedule, totalInstalled: installable, idleMachineDays: plan.idleMachineDays,
       steadyDaily, effectiveDailyCapacity: steadyDaily * deployed,
