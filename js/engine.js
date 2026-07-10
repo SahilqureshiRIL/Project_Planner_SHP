@@ -193,24 +193,30 @@
     const rampProfile = (p.rampProfile && p.rampProfile.length) ? p.rampProfile : [1];
     function rampFactor(k) { return rampProfile[Math.min(k, rampProfile.length - 1)]; }
 
-    function simulate(M) {
+    // The window plan runs over `cal` with the (optionally material-capped) `queue`.
+    // The finish projection (§11) reuses this over a longer calendar with the full
+    // uncapped queue — hence the optional calDays / queueArr parameters.
+    function simulate(M, calDays, queueArr) {
+      const days = calDays || cal;
+      const q = queueArr || queue;
       const stock = Object.assign({}, startStock);
       const repl = replen.map((r) => ({ usable: r.usable, code: r.code, qty: r.qty }));
       const st = {};
       workable.forEach((f) => { st[f.id] = { done: 0, started: false, startDate: null, lastDate: null, completed: false, completedDate: null, machine: null }; });
       const assign = new Array(M).fill(null);
       let qptr = 0, totalInstalled = 0, idleMachineDays = 0, workingOrdinal = -1;
+      let lastInstallDate = null;
       const schedule = [];
       const consumedByCode = {};
 
-      cal.forEach((day) => {
+      days.forEach((day) => {
         // material arrives on its calendar date regardless of working status
         for (let r = 0; r < repl.length; r++) {
           if (repl[r].qty > 0 && U.sameDay(repl[r].usable, day.date)) { stock[repl[r].code] += repl[r].qty; repl[r].qty = 0; }
         }
         if (!day.isWorking) return;
         workingOrdinal++;
-        for (let i = 0; i < M; i++) if (assign[i] == null && qptr < queue.length) assign[i] = queue[qptr++].id;
+        for (let i = 0; i < M; i++) if (assign[i] == null && qptr < q.length) assign[i] = q[qptr++].id;
 
         for (let i = 0; i < M; i++) {
           const id = assign[i];
@@ -227,6 +233,7 @@
           if (install < 0) install = 0;
           s.done += install; stock[ch.code] = avail - install; s.lastDate = day.date;
           totalInstalled += install;
+          if (install > EPS) lastInstallDate = day.date;
           consumedByCode[ch.code] = (consumedByCode[ch.code] || 0) + install;
           schedule.push({
             date: day.date, dayNum: day.dayNum, machine: i + 1, chId: id,
@@ -238,7 +245,8 @@
           if (s.done >= remainingById[id] - EPS) { s.completed = true; s.completedDate = day.date; assign[i] = null; }
         }
       });
-      return { totalInstalled, schedule, state: st, stockEnd: stock, consumedByCode, idleMachineDays };
+      const allWorkableDone = workable.every((f) => st[f.id].completed);
+      return { totalInstalled, schedule, state: st, stockEnd: stock, consumedByCode, idleMachineDays, lastInstallDate, allWorkableDone };
     }
 
     /* ---- 7. cost-optimization: fewest machines for max installs ------------ */
@@ -331,6 +339,40 @@
       }).sort((a, b) => a.profile.localeCompare(b.profile))
     };
 
+    /* ---- 9c. estimated finish date for the ENTIRE selected priority --------
+       Logic: project the SAME crew (recommended `deployed` machines), the same
+       productivity, work-week and hindrance schedule, and the same material-arrival
+       timeline forward — past the plan window — until every workable chainage's
+       remaining scope is installed. Material that lands in the future unlocks its
+       chainages on its usable date, so the estimate waits for slow deliveries.
+       Blocked chainages (no usable material at all) can never be installed, so a
+       date that covers 100% of the priority only exists when nothing is blocked. */
+    let projectedFinish = null, finishCoversAll = false, projFinishWorkingDays = null,
+        unachievablePiles = 0, projTimeLimited = false;
+    if (deployed > 0 && remainingMTO > EPS) {
+      // Full, uncapped queue = every workable chainage, all its remaining piles.
+      const fullQueue = [];
+      orderedCodes.forEach((code) => {
+        byCode[code].slice().sort((x, y) => x.sortKey - y.sortKey).forEach((f) => fullQueue.push(f));
+      });
+      // Extend the working calendar past the window (cap ~2 years) so large scopes
+      // and slow material arrivals still resolve. Window days keep their hindrances.
+      const HORIZON = 730;
+      const projCal = cal.slice();
+      for (let i = totalDays; i < HORIZON; i++) {
+        const d = U.addDays(planStart, i);
+        projCal.push({ date: d, dayNum: i + 1, isWorking: U.isoDow(d) <= p.workDaysPerWeek, hours: p.workhours, nonWorkReason: null });
+      }
+      const proj = simulate(deployed, projCal, fullQueue);
+      projectedFinish = proj.lastInstallDate;                                   // last achievable install
+      unachievablePiles = Math.max(0, Math.round(remainingMTO - proj.totalInstalled));  // blocked + material-short
+      finishCoversAll = unachievablePiles <= 0;                                 // whole remaining priority done
+      if (projectedFinish) projFinishWorkingDays = projCal.filter((c) => c.isWorking && U.cmpDate(c.date, projectedFinish) <= 0).length;
+      // If work was still running at the horizon edge, the true finish is beyond it.
+      const horizonEnd = projCal[projCal.length - 1].date;
+      projTimeLimited = !finishCoversAll && !!projectedFinish && U.cmpDate(projectedFinish, U.addDays(horizonEnd, -7)) >= 0;
+    }
+
     /* ---- 10. feasibility + warnings (§6.3) --------------------------------- */
     const installable = plan.totalInstalled;                       // installed THIS window
     const totalComplete = installedPriorTotal + installable;       // prior + this window
@@ -338,6 +380,22 @@
     const carryOver = Math.max(0, totalMTO - totalComplete);       // remaining beyond this window
     const idleMachines = maxMachines - deployed;
     const steadyDaily = p.productivity * p.workhours;
+    const effectiveDailyCapacity = steadyDaily * deployed;
+
+    /* ---- 11. rate-only finish (ASSUME ALL MATERIAL ARRIVES) ----------------
+       Ignoring material constraints entirely, how long to install the whole
+       remaining priority purely at the steady daily capacity
+       (productivity × workhours × deployed machines), respecting work-days/week? */
+    let fullMaterialFinish = null, fullMaterialWorkingDays = null;
+    if (deployed > 0 && effectiveDailyCapacity > EPS && remainingMTO > EPS) {
+      fullMaterialWorkingDays = Math.ceil(remainingMTO / effectiveDailyCapacity);
+      let count = 0, d = U.addDays(planStart, -1), guard = 0;
+      while (count < fullMaterialWorkingDays && guard < 3650) {
+        d = U.addDays(d, 1); guard++;
+        if (U.isoDow(d) <= p.workDaysPerWeek) count++;   // count only working days
+      }
+      fullMaterialFinish = d;
+    }
 
     // Each warning carries a `code` so the per-warning confirmation flow knows how a
     // "decline" should adjust the plan to clear it (see ui.js applyAdjustment).
@@ -364,9 +422,11 @@
       manpowerCapped: maxMachines, calendar: cal, workingDayCount,
       queue, worked, blocked, completed, candidates, totalMTO, blockedMTO,
       installedPriorTotal, remainingMTO, totalComplete, completedCount: completed.length,
+      projectedFinish, finishCoversAll, projFinishWorkingDays, unachievablePiles, projTimeLimited,
+      fullMaterialFinish, fullMaterialWorkingDays,
       startStock, windowArrivals, profileRows, materialPivot,
       perM, schedule: plan.schedule, totalInstalled: installable, idleMachineDays: plan.idleMachineDays,
-      steadyDaily, effectiveDailyCapacity: steadyDaily * deployed,
+      steadyDaily, effectiveDailyCapacity,
       pctComplete, carryOver, hindDays: lostDays.length, hindHours, lostDays, trimmedDays,
       rampProfile, warnings
     };

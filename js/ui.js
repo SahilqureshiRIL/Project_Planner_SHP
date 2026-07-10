@@ -526,7 +526,19 @@
       U.fmtInt(r.totalMTO) + "</strong>-pile scope, across <strong>" + U.fmtInt(covered) + "</strong> of " + U.fmtInt(totalCh) +
       " chainages over <strong>" + r.workingDayCount + "</strong> working day" + (r.workingDayCount === 1 ? "" : "s") +
       ", using <strong>" + r.deployed + "</strong> machine" + (r.deployed === 1 ? "" : "s") + " and <strong>" + U.fmtInt(people) + "</strong> people" +
-      (r.carryOver > 0 ? ", leaving <strong>" + U.fmtInt(r.carryOver) + "</strong> piles to carry over." : ".")
+      (r.carryOver > 0 ? ", leaving <strong>" + U.fmtInt(r.carryOver) + "</strong> piles to carry over." : ".") +
+      (function () {
+        let out = "";
+        if (r.finishCoversAll && r.projectedFinish) {
+          out = " At this pace the full priority is estimated to finish by <strong>" + U.fmtFriendly(r.projectedFinish) + "</strong>.";
+        } else if (r.projectedFinish && !r.projTimeLimited) {
+          out = " As per current material availability the priority reaches <strong>" + U.fmtFriendly(r.projectedFinish) + "</strong>, with <strong>" + U.fmtInt(r.unachievablePiles) + "</strong> more piles awaiting material.";
+        }
+        if (!r.finishCoversAll && r.fullMaterialFinish) {
+          out += " If all material comes through, the entire priority would finish by <strong>" + U.fmtFriendly(r.fullMaterialFinish) + "</strong>.";
+        }
+        return out;
+      })()
     }));
 
     host.appendChild(statGrid([
@@ -537,7 +549,9 @@
       { label: "Machines deployed", value: r.deployed, sub: r.params.machinesInput !== r.deployed ? "of " + r.params.machinesInput + " chosen" : "matches input", kind: "" },
       { label: "Manpower engaged", value: U.fmtInt(people), sub: U.fmtNum(r.params.manpower ? people / r.params.manpower * 100 : 0, 0) + "% of " + U.fmtInt(r.params.manpower) + " available", kind: "" },
       { label: "Avg piles / working day", value: U.fmtInt(Math.round(avgPerDay)), sub: r.workingDayCount + " of " + r.totalDays + " calendar days", kind: "" },
-      { label: "Carry-over", value: U.fmtInt(r.carryOver), sub: r.carryOver > 0 ? "piles beyond window" : "scope fits window", kind: r.carryOver > 0 ? "warn" : "ok" }
+      { label: "Carry-over", value: U.fmtInt(r.carryOver), sub: r.carryOver > 0 ? "piles beyond window" : "scope fits window", kind: r.carryOver > 0 ? "warn" : "ok" },
+      planFinishStat(r),
+      fullFinishStat(r)
     ]));
   }
 
@@ -1148,7 +1162,9 @@
       { label: "Installable this window", value: U.fmtInt(Math.round(r.totalInstalled)), sub: "piles added by this plan", kind: "" },
       { label: "Total MTO (" + r.params.priority + ")", value: U.fmtInt(r.totalMTO), sub: r.candidates.length + " chainages", kind: "" },
       { label: "Carry-over beyond window", value: U.fmtInt(r.carryOver), sub: "piles still remaining", kind: r.carryOver > 0 ? "warn" : "ok" },
-      { label: "Working days", value: r.workingDayCount, sub: r.totalDays + " calendar days", kind: "" }
+      { label: "Working days", value: r.workingDayCount, sub: r.totalDays + " calendar days", kind: "" },
+      planFinishStat(r),
+      fullFinishStat(r)
     ]));
     feas.appendChild(el("div", { class: "kv", html: "Completion of selected priority scope (prior + this plan):" }));
     feas.appendChild(bigBar(r.pctComplete));
@@ -1246,6 +1262,28 @@
       dec.appendChild(dl);
       body.appendChild(dec);
     }
+  }
+
+  // Estimated finish date for the whole priority (projected past the plan window),
+  // constrained by the actual material-arrival timeline.
+  function planFinishStat(r) {
+    if (r.remainingMTO <= 0) return { label: "Priority finish", value: "Complete", sub: "already fully installed", kind: "ok" };
+    if (r.finishCoversAll && r.projectedFinish)
+      return { label: "Est. finish (as per material availability)", value: U.fmtDate(r.projectedFinish), sub: (r.projFinishWorkingDays || 0) + " working days at " + r.deployed + " machine(s)", kind: "" };
+    if (r.projTimeLimited)
+      return { label: "Est. finish (as per material availability)", value: "beyond ~2 yr", sub: "scope exceeds a 2-year horizon", kind: "warn" };
+    if (r.projectedFinish)
+      return { label: "Est. finish (as per material availability)", value: U.fmtDate(r.projectedFinish), sub: U.fmtInt(r.unachievablePiles) + " more piles await material", kind: "warn" };
+    return { label: "Est. finish (as per material availability)", value: "—", sub: r.deployed <= 0 ? "no machines deployed" : "no installable material", kind: "warn" };
+  }
+
+  // Estimated finish assuming ALL material arrives — rate-limited only
+  // (steady daily capacity × remaining scope), ignoring supply constraints.
+  function fullFinishStat(r) {
+    if (r.remainingMTO <= 0) return { label: "Est. finish (all material available)", value: "Complete", sub: "already fully installed", kind: "ok" };
+    if (r.fullMaterialFinish)
+      return { label: "Est. finish (all material available)", value: U.fmtDate(r.fullMaterialFinish), sub: (r.fullMaterialWorkingDays || 0) + " working days at " + U.fmtNum(r.effectiveDailyCapacity, 0) + " piles/day", kind: "ok" };
+    return { label: "Est. finish (all material available)", value: "—", sub: "no machines deployed", kind: "warn" };
   }
 
   function section(title) { const s = el("div", { class: "vsection" }); s.appendChild(el("div", { class: "vsection__title", text: title })); return s; }

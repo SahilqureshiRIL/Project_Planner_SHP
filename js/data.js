@@ -356,10 +356,41 @@
   /* =====================================================================
      4.  Defaults (the "last 7 days" methodology)
      ===================================================================== */
+  // Impute a missing shift entry from the recent norm: the average of the last N
+  // available data points (dates present in `srcMap`) on/before `iso`.
+  function avgLastN(srcMap, iso, n) {
+    const ds = Object.keys(srcMap).filter((k) => k <= iso).sort();  // ISO dates sort chronologically
+    const last = ds.slice(-n);
+    if (!last.length) return null;
+    return last.reduce((s, k) => s + (srcMap[k] || 0), 0) / last.length;
+  }
+
   D.computeDefaults = function (store) {
     const mp = store.manpower, mat = store.material, pr = store.progress;
     const anchor = mp.latestShift;
     if (!anchor) throw new Error("No shift dates found in manpower file.");
+
+    /* Human-input-error correction: on a day where piles WERE installed but the shift
+       record (machines / manpower / manhours) is missing, treat it as a forgotten
+       entry rather than a real zero. Fill each series from the average of the last 15
+       available data points on/before that day, so the baseline reflects reality. */
+    const machineMap = Object.assign({}, mp.machineMap);
+    const manpowerMap = Object.assign({}, mp.manpowerMap);
+    const hourMap = Object.assign({}, mp.hourMap);
+    const imputedDays = [];
+    Object.keys(pr.installedByDate || {}).forEach((iso) => {
+      if ((pr.installedByDate[iso] || 0) > 0 && !mp.machineMap[iso]) {   // installs but no machine entry
+        const im = avgLastN(mp.machineMap, iso, 15);
+        const ip = avgLastN(mp.manpowerMap, iso, 15);
+        const ih = avgLastN(mp.hourMap, iso, 15);
+        if (im != null) machineMap[iso] = im;
+        if (ip != null) manpowerMap[iso] = ip;
+        if (ih != null) hourMap[iso] = ih;
+        if (im != null || ip != null || ih != null) imputedDays.push(iso);
+      }
+    });
+    // Imputed-series view of the manpower model, used for every average/ramp below.
+    const mpI = Object.assign({}, mp, { machineMap, manpowerMap, hourMap });
 
     // 7-day window = anchor and the 6 prior calendar days.
     const windowEnd = anchor;
@@ -370,10 +401,10 @@
     let sumMachine = 0, sumMan = 0, sumHour = 0, machineHours = 0, pilesWindow = 0;
     windowDays.forEach((d) => {
       const iso = U.fmtISO(d);
-      const m = mp.machineMap[iso] || 0;
-      const h = mp.hourMap[iso] || 0;
+      const m = machineMap[iso] || 0;
+      const h = hourMap[iso] || 0;
       sumMachine += m;
-      sumMan += (mp.manpowerMap[iso] || 0);
+      sumMan += (manpowerMap[iso] || 0);
       sumHour += h;
       machineHours += m * h;                 // Σ daily machines × workhours
       pilesWindow += (pr.installedByDate[iso] || 0);
@@ -383,7 +414,7 @@
     const manpower = Math.round(sumMan / 7);
     const workhours = Math.round(sumHour / 7);
     const productivity = machineHours > 0 ? U.round(pilesWindow / machineHours, 3) : 0;
-    const ramp = deriveAdaptiveRamp(windowDays, mp, pr);
+    const ramp = deriveAdaptiveRamp(windowDays, mpI, pr);
 
     // Latest *actual* dated record across inputs (EXCLUDES future inbound forecasts).
     const candidates = [anchor];
@@ -396,14 +427,14 @@
       windowStart, windowEnd, windowDays,
       machines, manpower, workhours, productivity,
       sumMachine, sumMan, sumHour, machineHours, pilesWindow,
-      latestDataDate, planStartDefault,
+      latestDataDate, planStartDefault, imputedDays,
       rampProfile: ramp.profile,
       rampN: ramp.rampN,
       rampSource: ramp.source,
       rampExplanation: ramp.explanation,
       prodDerivation:
-        pilesWindow + " piles ÷ (" + sumMachine + " machine-days × " + (workhours) +
-        " h) = " + pilesWindow + " ÷ " + machineHours + " machine-hours = " + U.fmtNum(productivity, 3)
+        pilesWindow + " piles ÷ " + U.fmtNum(machineHours, 0) + " machine-hours = " + U.fmtNum(productivity, 3) +
+        (imputedDays.length ? " (shift data imputed for " + imputedDays.length + " day(s) with installs but no machine/manpower entry, using the last-15-point average)" : "")
     };
   };
 })();

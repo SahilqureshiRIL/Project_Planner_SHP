@@ -82,6 +82,8 @@
   };
   // "29 Jun" (compact, for axis)
   U.fmtShort = function (d) { return d.getDate() + " " + MONTHS[d.getMonth()]; };
+  // "29 Jun 2026" (compact but with the year)
+  U.fmtDate = function (d) { return d ? d.getDate() + " " + MONTHS[d.getMonth()] + " " + d.getFullYear() : "—"; };
   U.weekdayShort = function (d) { return WEEKDAYS[d.getDay()]; };
 
   /* -------------------------------------------------------------- numbers --- */
