@@ -1,356 +1,295 @@
-# Build Prompt — Sheet Pile Installation Planner (Phase 1)
+# Sheet Pile Installation Planner — Logic & Spec Reference
 
-> Paste this entire file into Claude Code as the task. It is self-contained: it
-> describes the objective, the exact data schemas, the input screen, the planning
-> engine, the output views, and the design. Build it as a single local web app.
+> **Living document.** Originally a build prompt; now the maintained reference for the
+> app's logic. The `§`-numbers here are referenced from comments in `js/engine.js`,
+> `js/data.js`, and `js/ui.js` — keep them in sync when the logic changes.
+>
+> Numbers/examples reflect the current sample data (P-1a, 952 chainages, mid-2026).
 
 ---
 
 ## 1. Objective
 
-Build a **chainage-wise project planning tool** for sheet-pile installation on a
-construction site. A planner sets a few parameters on an input screen, clicks
-**Generate Plan**, and the app produces a **day-by-day installation plan** for the
-selected window, viewable as both a **Gantt chart** and a **table** (toggle between
-them), plus a **validation panel** that checks material availability, productivity,
-and resource usage.
+A **chainage-wise planning tool** for sheet-pile installation. The planner picks a
+priority + a few parameters, clicks **Generate Plan**, and the app produces a
+**day-by-day plan** for a 2/3-week window, shown as **Gantt** (default), **Material**,
+**Table**, and **Map** views, plus a **Validation** panel and forecast completion
+dates. The plan can be **exported as a Primavera P6 `.xer`** for the taskmapper system.
 
-This is **Phase 1 / a prototype**. Favor correctness of the logic and clarity of the
-UI over completeness. Keep all parameters editable so the planner can override the
-data-derived defaults.
+Phase-1 prototype: correctness of logic + clear UI. All data-derived defaults stay
+editable.
 
 ---
 
 ## 2. Tech constraints
 
-- **A single, self-contained web app** — plain **HTML + CSS + vanilla JavaScript**.
-  No build step, no backend, no framework required. One `index.html` is ideal; a
-  small number of co-located `.js`/`.css` files is fine.
-- Parse inputs **client-side**:
-  - `.xlsx` → use **SheetJS (xlsx)** from a CDN (e.g. cdnjs).
-  - `.geojson`/`.json` → native `JSON.parse`.
-- The four input files are loaded through **file-upload inputs** on the page (one per
-  file). On load, the app parses them, computes the defaults, and pre-fills the input
-  screen. Validate that each uploaded file has the expected sheets/keys and show a
-  clear error if not.
-- The Gantt can be drawn with **plain SVG or CSS** (no heavy charting dependency
-  required); a tiny library is acceptable if it keeps the code simple.
-- **localStorage** is used for the small piece of cross-plan persistence described in
-  §5.6 (remembering the machine count from the previous plan). This is a real local
-  web page, so localStorage is fine here.
-- All currency/number formatting and dates should be unambiguous (use ISO dates
-  `YYYY-MM-DD` in data, friendly dates in the UI).
+- Single self-contained web app: **HTML + CSS + vanilla JS**, no build step/backend.
+  Files: `index.html`, `styles.css`, and `js/{util,chainage_data,data,engine,xer,ui}.js`
+  (load order: util → chainage_data → data → engine → xer → ui).
+- **Fully offline-vendored** (works behind a firewall): `vendor/xlsx.full.min.js`
+  (SheetJS), `vendor/three.min.js` (Map WebGL), `assets/fonts/*` (Inter + Sora webfonts).
+- Data is **auto-loaded** from `./data/` on startup over http; the manual upload card is
+  a fallback (e.g. when opened via `file://`).
+- **localStorage** for the small cross-plan persistence in §5.6.
+- ISO dates `YYYY-MM-DD` in data; friendly dates in the UI. `?v=NN` cache-buster on all
+  `js`/`css` links — bump it whenever those files change.
 
 ---
 
-## 3. Input data — exact schemas
+## 3. Input data
 
-There are four input files. **Use these exact field names.** Notes below are derived
-from the real sample data and must be handled.
+Four inputs. The **chainage data is frozen** into `js/chainage_data.js`; the other three
+are read live from `./data/`.
 
-### 3.1 `chainage_data.json` — GeoJSON FeatureCollection (873 features)
+### 3.1 Chainage data — frozen in `js/chainage_data.js` (952 chainages)
 
-Each `feature.properties` carries many fields; the planner cares about these:
+`window.SPP_CHAINAGE_DATA = { fields, rows, geo }` — compact rows + a `geo` entry per row
+(`[lngA,latA,lngB,latB]`, the two most-distant footprint vertices = the boundary segment
+for the Map). Regenerated from `data/chainage_data.json` when that source changes. Fields
+used (see `D.buildChainageModel`):
 
-| Field | Example | Meaning |
-|---|---|---|
-| `Chainage_Id` | `"32+800"` | Unique chainage id (1 feature = 1 chainage; ids are unique). |
-| `Priority` | `"P-2"` | One of **`P-1a`, `P-1b`, `P-1c`, `P-2`**. |
-| `Profile Name` | `"ZU735-300-12-5500"` | The single sheet-pile profile for this chainage (19 distinct profiles). |
-| `No of Profiles` | `"141"` | MTO scope = number of individual pile sections to install at this chainage. **String → parse to int.** |
-| `New SAP Code` | `"5000090951"` | **Join key to material** (`Item Code`). |
+| Field | Meaning |
+|---|---|
+| `Chainage_Id` | unique chainage id (e.g. `75+750`) |
+| `Priority` | `P-1a` / `P-1b` / `P-1c` / `P-2` |
+| `Profile Name` | short profile code (e.g. `ZU735-300-12-5500`) — kept as `profileCode` |
+| `Item Description` | full description (e.g. `VINYL SHEET PILE 735X300X12X5500`) → **this is the displayed `profile`** (falls back to `Profile Name`) |
+| `No of Profiles` | MTO = pile count for the chainage |
+| `New SAP Code` | **join key to material** (`Item Code`) |
+| `name` | e.g. `SHP-ZN-01-32+800` — **join key to progress history** |
+| `Zone_Id` | e.g. `ZONE_35` — WBS zone level (§6.6) + Map |
+| `Length (mm)`, `Area (sqm)` | per-chainage dims → xer UDFs + "length covered" |
 
-- Every chainage has **exactly one** `Profile Name`.
-- Priority counts in the sample: P-1a = 138, P-1b = 105, P-1c = 150, P-2 = 480.
-- All property values are **strings** — coerce numerics as needed.
-- The polygon `geometry` is **not needed** for Phase 1 (no map). Ignore it.
+`geo` → each feature's `seg`/`mid` (boundary line + midpoint) for the Map.
 
-### 3.2 `manpower_resources.xlsx` — 3 sheets
+### 3.2 `data/manpower_resources.xlsx` — 3 sheets
 
-Each sheet is one row per **shift-date**. Header is row 1.
+One row per **shift-date**. Sheets: `Machine Status` (`Shift Date`, `Machine Type`,
+`Machines Available`), `Manpower Status` (`Shift Date`, `Manpower Available`),
+and `Shifthour Status` **or** `Manhour Status` (`Shift Date`, `Manhour` = shift hours).
+Dates like `12-Jun-2026`. A small `fixDuplicateShiftDate` normalization shifts the first
+of any duplicated shift date back one day (removable once source data is clean).
 
-- **`Machine Status`**: `Shift Date` | `Machine Type` (all `"Hammer"`) | `Machines Available` (int)
-- **`Manpower Status`**: `Shift Date` | `Manpower Available` (int)
-- **`Shifthour Status`**: `Shift Date` | `Manhour` (int) — this is the **shift length in hours** ("workhours").
+### 3.3 `data/material_avalibility.xlsx` — sheet `Planner tool Input`
 
-Dates are formatted like `"12-Jun-2026"`.
+Two-row header: row 1 top-level names, row 2 the sub-headers under
+`Actual Arrived Quantity` → `Accepted at site` / `Damaged`. Columns used:
+`Item Code`, `Item Name`, `Quantity`, `Expected Arrival`, `Actual Arrived Date`,
+`Actual Arrived Quantity` (= **Accepted at Site**), `Status`.
 
-**IMPORTANT data fix:** in the sample, two rows in each sheet are dated `15-Jun-2026`.
-This is a typo — **the *first* `15-Jun-2026` row in each sheet should be treated as
-`14-Jun-2026`.** After this fix there is exactly one row per day for 12–18 Jun 2026
-(7 consecutive days). Apply this correction when parsing. (Build it as a small,
-clearly-commented normalization step so it can be removed once the source data is
-fixed.)
+Per row, keyed by `Item Code` (→ chainage `New SAP Code`):
 
-### 3.3 `material_logistics.xlsx` — 1 sheet `Material Logistics`
+- **`Status == "Delivered"`** → material is **on site now**. Usable = **Accepted at Site**
+  quantity (**Damaged excluded**); if that cell is blank, fall back to the ordered
+  `Quantity`. `maxReceipt` tracks the latest `Actual Arrived Date` among delivered rows.
+- **Any other status** (on-hold, under-dispatch, blank, …) → **inbound**: expect the
+  ordered `Quantity` to land on the `Expected Arrival` date, usable on **arrival + 1 day**.
+  Inbound rows with no `Expected Arrival` are skipped (can't be placed on the calendar).
 
-Header row 1: `Item Code` | `Item Name` | `Quantity` | `Receipt date` | `Expected Arrival`
+"Accepted at Site" = **gross received** (not remaining), so consumption is netted off in
+§5.3.
 
-- **On-site stock** = rows where `Receipt date` is set and `Expected Arrival` is empty.
-- **Inbound stock** = rows where `Expected Arrival` is set and `Receipt date` is empty.
-- `Item Code` joins to chainage `New SAP Code`. (One sample `Item Code` `5000090945`
-  has no matching chainage — such items are simply never needed and can be ignored.
-  Some chainage profiles have **no** material row at all — see §5.3.)
-- Dates parse as datetimes.
+### 3.4 `data/progress_history.xlsx` — sheet `Progress history`
 
-### 3.4 `progress_history.xlsx` — 1 sheet `Progress history`
+Rows where `Sub Activity == "Sheet Pile Installed"` give `Value` = piles installed on
+`Date`, per chainage `Name`. **Only current rows count: skip `Reset == TRUE`** (those are
+superseded "clear_history" duplicates; the `Reset == FALSE` rows sum exactly to a
+chainage's MTO when complete — counting both roughly double-counts). The parser produces:
 
-Header row 1 includes: `Name`, `Sub Activity`, `Activity`, `Date`, `Value`, `Sub Layer`, `Layer` (and others).
-
-- The relevant metric is rows where **`Sub Activity` == `"Sheet Pile Installed"`**;
-  for those rows **`Value` = number of piles installed** that `Date` (other
-  sub-activities like `"Length Covered"` and `"Bunds Installed"` are **not** used for
-  productivity).
-- `Date` is `YYYY-MM-DD`. **Skip the one trailing row that has a null `Date`/`Sub Activity`.**
-- `Name` (e.g. `"SHP-ZN-01-32+800"`) corresponds to a chainage; not needed for the
-  Phase-1 calculations below, but keep it available.
-
----
-
-## 4. Input screen
-
-Compute every default from the data using the **methodology below**, then let the
-planner edit it. Show each field's default value and a short "(auto from last 7 days)"
-hint where applicable. **All numeric defaults round to the nearest integer except
-Productivity, which is a decimal.**
-
-### The "last 7 days" window
-
-- Anchor on the **latest `Shift Date` in `manpower_resources.xlsx`** (after the 14-Jun
-  fix this is **18-Jun-2026**). The window is that date and the **6 prior calendar
-  days → 12–18 Jun 2026 (7 days)**.
-- Averages divide by **7** (the full window length), not by the number of populated
-  rows.
-
-### Parameters
-
-1. **Chainage Priority** — single-select dropdown. Options = the distinct `Priority`
-   values in the data (`P-1a`, `P-1b`, `P-1c`, `P-2`). No default selection forced
-   (planner must choose). *Phase 1 plans a **single** priority only.*
-
-2. **Plan Period** — radio buttons: **2 weeks** / **3 weeks**.
-
-3. **Plan Start Date** — **date picker restricted to Mondays only** (disable / reject
-   non-Mondays). Default = **the first Monday after the latest date present across the
-   input data** (sample → **Monday 29-Jun-2026**). The plan window spans 2 or 3
-   calendar weeks from this Monday.
-
-4. **Machines Deployable** — editable integer. Default = `round(mean of daily
-   "Machines Available" over the 7-day window)`. **Sample default = 4** (sum 27 ÷ 7 =
-   3.857 → 4).
-
-5. **Manpower** — editable integer. Default = `round(mean of daily "Manpower
-   Available" over the 7-day window)`. **Sample default = 24** (sum 169 ÷ 7 = 24.14).
-
-6. **Work Days per week** — select **5 / 6 / 7**, **default 6**. (Work week starts
-   Monday: 5 = Mon–Fri, 6 = Mon–Sat, 7 = all 7 days. Non-work days are skipped in the
-   daily plan.)
-
-7. **Workhours** (shift hours/day) — editable integer. Default = `round(mean of daily
-   "Manhour" over the 7-day window)`. **Sample default = 9.**
-
-8. **Hindrances** — a small editable list; planner can **add multiple**. Each entry:
-   - **Type**: `Political` / `Weather` / `Other`.
-   - **Amount affected**: a number plus a unit toggle **days** or **hours**.
-   - Hindrances are **plan-wide** (not chainage-specific). See §5.5 for how they reduce
-     capacity. Default = empty list.
-
-9. **Productivity** — editable decimal, **piles installed per machine per hour**.
-   Default =
-   `total "Sheet Pile Installed" piles in the 7-day window ÷ (Σ daily machines × workhours over the window)`.
-   With the window machine-hours = `27 × 9 = 243` and piles = `113`, **sample default =
-   0.465**. Show the derivation as a tooltip.
-
-10. **Ramp-up settings** (prototype assumptions — clearly label as editable/assumed; see
-    §5.6):
-    - **Days to steady-state (n)** — integer, **default 7**.
-    - **Ramp profile** — per-day productivity multipliers for day 0…n applied to a
-      *newly introduced* machine, then 1.0 thereafter. Default (assumed realistic
-      learning curve): `[0.45, 0.58, 0.70, 0.80, 0.88, 0.94, 0.98, 1.00]`.
-    - **Machines from previous plan** — integer; machines up to this count start at
-      steady-state, machines beyond it are "new" and ramp. Default = value persisted
-      from the last generated plan (localStorage), or, on first run, equal to the
-      chosen **Machines Deployable** (so the first plan shows no ramp, matching the
-      agreed behavior).
-
-### Input validation (block / warn)
-
-- **6 people per machine, exactly.** Effective machines are **auto-capped** to
-  `floor(Manpower ÷ 6)`. Do **not** block input; if the planner's chosen machines
-  exceed the cap, show a visible notice ("Capped to N machines — manpower supports
-  N×6 = … people") and use the capped number downstream.
-- Plan Start must be a Monday (enforced by the picker).
-- Numeric fields must be positive; Productivity > 0.
+- `installedByDate` — piles/day (feeds the productivity baseline, §4);
+- `installedByChainage` — total piles already installed per chainage `Name` (§5.2 netting);
+- `lastInstallByChainage` — **latest install date** per chainage (the work-front anchor, §5.2).
 
 ---
 
-## 5. Planning engine
+## 4. Input screen & defaults
 
-Run when the planner clicks **Generate Plan**. Produce a deterministic day-by-day
-schedule for the plan window. Below is the required algorithm.
+The **7-day window** ends on the latest `Shift Date` (anchor) and covers that day + the 6
+prior calendar days. Averages divide by 7.
 
-### 5.1 Build the working calendar
+**Human-input-error correction (imputation):** if a day has piles installed but **no**
+machine/manpower/manhour shift entry, it's treated as a forgotten shift, not a real zero
+— each series is filled from the **average of the last 15 available data points** on/before
+that day. This keeps the machine/manpower/workhour averages and the productivity ratio
+honest (otherwise weekend catch-up entries deflate hours and inflate productivity).
 
-- Working days = days within the 2-or-3-week span from the Monday start that match
-  **Work Days per week** (skip the rest). Hours per working day = **Workhours**.
-- Apply **hindrances** to this calendar per §5.5.
+Defaults (all editable): **Machines / Manpower / Workhours** = window averages (rounded);
+**Productivity** = `piles in window ÷ Σ(daily machines × workhours)`; **Plan Start** =
+first Monday after the latest dated record across inputs (Mondays only). **Plan Period**
+2 / 3 weeks (segmented toggle). **Work Days/week** 5 / 6 / 7 (default 6). **Ramp-up**
+settings (n, per-day multipliers, machines-from-previous-plan). **Hindrances** list
+(plan-wide; per-day picker).
 
-### 5.2 Candidate chainages & sequencing
+**Greyed computed defaults:** auto-computed fields (Machines, Manpower, Workhours,
+Productivity, Start) render **greyed/italic** with an "Auto (…)" hint. When the planner
+edits one, it turns **solid navy with a gold edge** and the hint switches to
+**"Edited · auto was X"** so the original value stays visible.
 
-- Candidates = all chainages whose `Priority` == the selected priority.
-- Each chainage's required work = `No of Profiles` piles of its `Profile Name`.
-- **Material drives ordering.** Among the **profiles** needed by the candidate
-  chainages, rank profiles by **available on-site quantity, descending** — the profile
-  with the **highest on-site stock is worked first**. When a profile's stock is
-  exhausted and plan time remains, move to the **next-highest-stock** profile.
-  Account for inbound replenishment over time (§5.3).
-- Within a profile, sequence its chainages in **ascending `Chainage_Id`** order
-  (natural site progression) as the default tie-break.
-- **One machine per chainage**: a chainage is worked by exactly one machine at a time,
-  so up to *(effective deployed machines)* chainages progress in parallel. A machine
-  that finishes a chainage moves to the next chainage in sequence.
+**Cap:** 6 people per machine — effective machines auto-capped to `floor(Manpower ÷ 6)`
+(notice shown, not blocked).
+
+---
+
+## 5. Planning engine (`js/engine.js`, run on Generate Plan)
+
+### 5.1 Working calendar
+Days in the 2/3-week span matching Work-Days/week; hours = Workhours; hindrances applied
+per §5.5.
+
+### 5.2 Candidates, prior-progress netting & sequencing
+- Candidates = chainages of the selected priority.
+- **Prior progress netting:** per chainage, `remaining = MTO − alreadyInstalled`
+  (from §3.4). **Completed** (remaining ≤ 0) chainages **drop out** of the plan;
+  **active** (remaining > 0) are planned for their *remaining* piles only; **partial** =
+  had progress but not finished.
+- **Blocked** = active chainages whose profile has **no usable material** (§5.3).
+- **Sequencing (queue order):**
+  1. **Profiles ranked by material availability** — net on-site (Accepted-at-Site)
+     descending;
+  2. within a profile, **partially-installed chainages first** (finish started work);
+  3. then **untouched chainages nearest to the work-front anchor** — the chainage with the
+     **most recent progress date** (`lastInstallByChainage`); so the crew advances
+     contiguously from where it last worked;
+  4. ties broken by `Chainage_Id`.
+- **One machine per chainage**; up to *deployed* chainages progress in parallel.
 
 ### 5.3 Material model
+- **"Accepted at Site" is gross received**, so **net on-site** for a code =
+  `Accepted-at-Site − already-consumed`, where already-consumed = piles already installed
+  across **all** chainages (any priority) using that code (shared pool).
+- **Starting stock** = net on-site. **Replenishments** = inbound that **arrives on/after
+  the plan start** (`arrival ≥ planStart`), applied on its usable date (arrival + 1 day).
+  **Overdue on-hold material** (arrival before the window, not delivered) is **excluded
+  entirely** — it isn't physically on site.
+- Installation consumes stock (1 pile = 1 unit); a chainage progresses each day only up to
+  that day's available stock. No usable material ⇒ **blocked**.
 
-- For each profile (`Item Code`/`New SAP Code`):
-  - **Starting stock** (available from plan day 1) =
-    Σ `Quantity` of **on-site** rows for that code
-    **plus** Σ `Quantity` of **inbound** rows whose **(Expected Arrival + 1 day) ≤ plan
-    start** (i.e. already arrived and usable).
-  - **Future inbound**: each remaining inbound row adds its `Quantity` on date
-    **(Expected Arrival + 1 day)** if that date is after the plan start. Track these as
-    dated replenishments during the plan.
-- Installation **consumes** stock of the chainage's profile (1 pile installed = 1 unit
-  consumed). A chainage/profile can only progress on a given day up to the stock
-  available **that day**.
-- **Chainages whose profile has zero starting stock and zero relevant inbound** cannot
-  be planned — exclude them from the schedule and **flag them** in the validation panel
-  ("No material available"). (In the sample, 6 chainage profiles have no material row.)
-
-### 5.4 Productivity, ramp-up & machine cost-optimization
-
-- Steady-state per-machine daily capacity = `Productivity × Workhours` piles/day
-  (sample: `0.465 × 9 ≈ 4.19`).
-- **Ramp-up (per machine, from its own day 0):** machines counted as "from previous
-  plan" run at steady-state from day 1. Any machine **beyond** that count is **new**
-  and uses `Productivity × ramp[k] × Workhours` on its k-th day of operation (k = 0…n),
-  then steady-state. Persist the deployed count for next time (§5.6).
-- **Daily install capacity** = Σ over deployed machines of their per-day capacity, then
-  **bounded by** (a) the day's available material per profile and (b) remaining MTO of
-  the chainages in progress.
-- **Cost-optimization (suggest fewer machines):** the **effective deployed machine
-  count** = the **smallest** number of machines (≤ the manpower-capped maximum) that
-  still installs as many piles as the plan can otherwise absorb in the window given
-  material and available work. If extra machines would sit idle (material- or
-  work-limited), **recommend the lower count** and surface both the planner's input and
-  the recommended/deployed number in the output. Optimize for fewest machines, not
-  fastest completion.
+### 5.4 Productivity, ramp-up & cost-optimization
+- Steady per-machine daily capacity = `Productivity × Workhours`.
+- New machines (beyond "machines from previous plan") ramp via the per-day profile; the
+  rest run at steady-state.
+- Daily capacity = Σ deployed machines, bounded by per-day material and remaining MTO.
+- **Cost-optimization:** deployed = the **fewest** machines (≤ manpower cap) that still
+  install as many piles as the window can absorb; idle extras are recommended away.
 
 ### 5.5 Hindrances
-
-- Hindrances are plan-wide and reduce capacity:
-  - **Day-type** hindrances remove that many **working days** — represent them as
-    explicit non-working days applied to the **earliest** working days of the plan
-    (shifting installation later; any work pushed past the window is reported as
-    carry-over).
-  - **Hour-type** hindrances subtract from total available hours — apply by trimming
-    hours from the earliest working day(s).
-  - Multiple hindrances are summed.
-- Mark hindrance impact clearly in both the plan view and the validation panel. (This
-  earliest-days placement is a deterministic Phase-1 simplification; date-specific
-  placement can come later.)
+Plan-wide. Day-type removes working days (selected days, else earliest); hour-type trims
+hours. Impact surfaced in the plan + a "Hindrance impact" note in Validation.
 
 ### 5.6 Cross-plan persistence
+On Generate, store the deployed machine count (localStorage); default
+"machines from previous plan" to it next run. "Reset stored history" control provided.
 
-- On a successful **Generate Plan**, store the **effective deployed machine count** (and
-  optionally a timestamp/selected priority) in **localStorage**.
-- On the next run, default **"Machines from previous plan"** to that stored value so
-  machines added beyond it are treated as newly introduced and ramp accordingly.
-- Provide a small **"Reset stored history"** control.
+### 5.7 Forecast completion for the whole priority
+Two dates, both projecting the **recommended crew + productivity + work-week**:
+- **Est. finish (as per material availability):** replay the plan forward past the window
+  (cap ~2 years), honoring the real **material-arrival timeline**, until nothing more can
+  be installed. The last install date = **reachable finish**; report how many piles still
+  **need more material** (blocked / not-yet-arrived) and whether it exceeds the horizon.
+- **Est. finish (all material available):** rate-only —
+  `ceil(remaining piles ÷ (Productivity × Workhours × deployed))` working days from the
+  plan start (respecting Work-Days/week). This is *later* than the material date when
+  supply is the bottleneck, because it completes **everything**.
 
 ---
 
 ## 6. Output
 
-Two synchronized views with a **toggle button (Gantt ⇄ Table)**, plus a validation
-panel. The plan is at **daily granularity**.
+Header **view toggle**: **Gantt (default)** ⇄ Material ⇄ Table ⇄ Map. The inputs sidebar
+**auto-collapses** on Generate (toggle with "Show/Hide inputs"); Gantt & Map re-render to
+the available width when it toggles. The header **"Export plan"** button (shown once a
+plan exists) exports the `.xer` (§6.6).
+
+**Plan summary** (top of the Plan card): a one-line headline, then **KPI tiles** —
+*Piles this window*, *Scope complete %*, **Length covered** (km of wall, proportional to
+piles installed incl. prior; replaces the old "chainages complete" count), *Chainages
+covered*, *Carry-over* — then a **Forecast completion** group with the two §5.7 dates
+(gold = current material, green = all material).
 
 ### 6.1 Table view
+One row per (working day × chainage worked). `Cum.` and `MTO`/`%` are **totals**
+(prior + this plan), so per-day installs start from the chainage's prior progress.
+Group by date / chainage / machine; hindrance days marked.
 
-One row per **(working day × chainage worked that day)**. Suggested columns:
-
-`Date` · `Day #` · `Machine` (Machine 1…k) · `Chainage_Id` · `Profile Name` · `Piles
-Planned (this day)` · `Cumulative Piles (chainage)` · `Chainage MTO (No of Profiles)` ·
-`% Complete` · `Status` (In progress / Completed) · `Material Remaining (profile, end
-of day)`.
-
-Allow grouping/sorting by date, by chainage, and by machine. Show hindrance days as
-clearly-marked non-working rows.
-
-### 6.2 Gantt view
-
-- Rows = **chainages** (group/color by `Profile Name`, or offer a "color by machine"
-  toggle). X-axis = the plan's calendar dates.
-- Each chainage bar spans its **start → finish** day with a **% fill** for progress.
-- Mark **inbound material arrival dates** and **hindrance days** on the timeline.
-- Keep it legible for a few dozen chainages (scroll/zoom is fine).
+### 6.2 Gantt view (default)
+Rows = worked chainages (color by profile or machine). Columns **size to the panel width**
+and re-flow on sidebar toggle. Inbound-arrival markers + hindrance days on the timeline;
+per-bar % fill (total completion).
 
 ### 6.3 Validation panel
+- **Resources** — machines chosen vs manpower-capped vs deployed; utilization; idle.
+- **Productivity & ramp-up** — steady value, ramp, effective daily capacity.
+- **Material** — inbound-arrival chips; a **"View blocked on map"** button (→ Map with the
+  *blocked* filter). *(The old per-profile material table was removed — see the Material
+  tab §6.4.)*
+- **Hindrance impact** (only if hindrances set).
+- **Warnings** — cap applied, shortfalls, blocked (no usable material), hindrance loss, etc.
+- *(The "Plan feasibility" section was removed — its figures live in the plan summary.)*
 
-A clear summary the planner reads alongside the plan:
+### 6.4 Material tab
+Pivot: rows = profiles (item codes), columns = plan days, each day split into
+**Avail / In / Used**:
+- **Available** = net Accepted-at-Site stock **+ inbound already received**, **− what the
+  plan has consumed on earlier days** (balance carried into the day). Overdue pre-window
+  material is excluded.
+- **In** = qty **arriving** that day (its Expected Arrival); it rolls into Available the
+  **next** day (arrival + 1).
+- **Used** = piles the plan installs that day; balance carries to the next day.
 
-- **Material:** per profile — required (for planned chainages) vs available (on-site +
-  inbound within window) vs consumed vs shortfall; a small inbound-arrival timeline;
-  and the **list of chainages blocked by "No material."**
-- **Productivity:** the steady-state value used, the ramp assumptions (n + profile),
-  and the resulting effective daily capacity.
-- **Resources:** machines **chosen** vs **manpower-capped** vs **deployed
-  (cost-optimized)**; manpower utilization (`deployed × 6` vs available); any idle
-  machines.
-- **Plan feasibility:** total piles installable in the window vs total MTO of the
-  selected priority; overall **% completion**; **carry-over** (work not fitting in the
-  window); and the impact of hindrances.
-- **Warnings** (collect prominently): machine cap applied, material shortfalls, blocked
-  chainages, hindrance time lost, plan start not Monday (should be prevented), etc.
+### 6.5 Map view
+WebGL (three.js) with an SVG fallback. Chainages coloured by category, drawn over the full
+grey site boundary:
+- **Completed (from progress)** — fully done per progress history (no machine/date shown);
+- **Partially done (from progress)** — started but unfinished, not scheduled this plan;
+- **Scheduled this plan** — worked this window (carries machine + dates);
+- **In scope (not scheduled)**; **Blocked (no material)**; **Other priorities** (boundary).
+
+Legend entries are a **multi-select filter** (toggle several on/off; none = show all).
+
+### 6.6 Export plan → Primavera P6 `.xer` (`js/xer.js`)
+Tab-delimited P6 XER matching the taskmapper sample: `ERMHDR` line, then
+`%T`/`%F`/`%R` table blocks, ending `%E`. **CRLF, ASCII, no BOM.**
+
+- **WBS hierarchy:** Root `Kutch RE Z2 - Sheet Pile` → **Priority** → **Zone** (`Zone_Id`)
+  → **Profile** (Item Description); chainages are the **TASK** activities under each profile.
+- **One task per scheduled chainage** (window); `target/early/late/rem_late/restart/reend`
+  dates all = its planned start/finish; status `TK_NotStart`.
+- **Resources:** one `RT_Equip` per deployed machine + one `RT_Labor` crew; assigned per
+  task with `target_qty` = piles. **FS links** chain each machine's chainages in order.
+- **UDFs** on each task: `Quantity Nos`, `Pile Type`, `Length Km`, `Area SqMtr`, `Notes`.
+- **Validity rules:** empty **date** fields break P6 parsers (`datetime('')`), and empty
+  **numeric** fields break them (`float('')`) — so every date the sample populates is
+  filled, and numeric fields default to `0` (except `parent_wbs_id`, which stays empty on
+  the root or the WBS tree orphans).
 
 ---
 
 ## 7. Design
 
-Professional, corporate look — this is a **placeholder design system** to be replaced
-later, so keep styling centralized and swappable (CSS custom properties / design
-tokens at `:root`).
-
-- Clean, restrained palette: neutral slate/gray surfaces, a single calm accent (navy or
-  teal), clear semantic colors for warning/success. Subtle borders and shadows; ample
-  whitespace.
-- A readable UI typeface (system font stack or Inter). Tabular numerals for data.
-- Card-based layout: an **Inputs** panel/section, a **Results** area with the view
-  toggle, and the **Validation** panel. Sticky header with the app title and the
-  Generate / view-toggle controls.
-- Dense but legible data tables (zebra rows, sticky header, right-aligned numbers).
-- Responsive down to a laptop width; graceful on smaller screens.
-- Keep all colors, radii, spacing, and font choices in CSS variables so a real design
-  system can drop in.
+Reliance identity — deep **navy** (`#040F52`) + **gold** (`#D2AB67`), a touch of New-Energy
+**green**. Current look:
+- **Deep-blue colourful canvas** (navy/indigo with soft green/gold/blue glows); white/light
+  cards float on it.
+- **Cards** = deep-navy header band (white title, gold tick + gold underline) over a softly
+  tinted body.
+- **Glassy navy taskbar** with a glowing gold accent line; gold active view-tab; gold CTAs.
+- **Fonts:** Sora (display: headings, hero numbers), Inter (body/tables, tabular figures).
+- Segmented toggles, pill tags, greyed→gold "edited" inputs. All tokens in CSS `:root`.
 
 ---
 
 ## 8. Acceptance / self-check
 
-With the four sample files loaded and **priority not yet chosen**, the input screen
-should show: **Machines = 4, Manpower = 24, Workhours = 9, Productivity = 0.465,
-Work Days/week = 6, Plan Start = Monday 2026-06-29**, ramp n = 7. Verify:
+With the bundled data auto-loaded and no priority chosen, inputs show the **greyed**
+7-day defaults (Machines/Manpower/Workhours/Productivity/Start), with imputation applied to
+install-days that lack a shift entry. Then:
 
-- Changing **Manpower** below `6 × chosen machines` triggers the auto-cap notice and the
-  engine uses the capped machine count.
-- Selecting a priority + **2 weeks** generates a daily plan whose installs never exceed
-  available material per profile per day, and where chainages with no material are
-  listed as blocked.
-- Inbound quantities become available on **Expected Arrival + 1 day** and show on the
-  Gantt timeline.
-- The **Gantt ⇄ Table** toggle shows the same plan both ways.
-- If the chosen machines would sit idle (material/work limited), the validation panel
-  recommends a **lower deployed machine count**, and that count is what gets stored to
-  localStorage for the next run.
-
-Build it now. Ask before introducing any heavy dependency; otherwise proceed.
+- Manpower `< 6 × machines` shows the cap notice; the engine uses the capped count.
+- Generating a priority nets off already-installed piles (completed chainages excluded),
+  installs against **net Accepted-at-Site + in-window arrivals only**, sequences
+  **partials → nearest-to-latest-worked → Chainage_Id** within material-ranked profiles,
+  and never exceeds per-day material.
+- Blocked chainages are reachable via **View blocked on map**; the Map shows completed /
+  partial / scheduled categories with multi-select filters.
+- Summary shows the 4 KPIs + **length covered** + the two **forecast** dates.
+- **Export plan** produces a P6-parseable `.xer` with the Root→Priority→Zone→Profile WBS.

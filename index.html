@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Sheet Pile Installation Planner</title>
-  <link rel="stylesheet" href="styles.css?v=42" />
+  <link rel="stylesheet" href="styles.css?v=47" />
   <!--
     SheetJS (xlsx) is vendored locally in ./vendor so the app works fully offline.
     If you prefer the CDN, replace the src below with:
@@ -207,13 +207,13 @@
               </div>
             </details>
 
-            <div class="field">
-              <button type="button" id="generateBtn2" class="btn btn--primary btn--block">
-                <svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg><span>Generate Plan</span>
-              </button>
-            </div>
           </div>
         </div>
+        <footer class="card__foot" id="paramsFoot" hidden>
+          <button type="button" id="generateBtn2" class="btn btn--primary btn--block">
+            <svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg><span>Generate Plan</span>
+          </button>
+        </footer>
       </section>
     </aside>
 
@@ -329,12 +329,12 @@
   <!-- Scripts (load order matters: util -> data -> engine -> xer -> ui).
        The ?v= query string is a cache-buster: bump it whenever js/ changes so
        browsers don't run a stale copy. -->
-  <script src="js/chainage_data.js?v=42"></script>
-  <script src="js/util.js?v=42"></script>
-  <script src="js/data.js?v=42"></script>
-  <script src="js/engine.js?v=42"></script>
-  <script src="js/xer.js?v=42"></script>
-  <script src="js/ui.js?v=42"></script>
+  <script src="js/chainage_data.js?v=47"></script>
+  <script src="js/util.js?v=47"></script>
+  <script src="js/data.js?v=47"></script>
+  <script src="js/engine.js?v=47"></script>
+  <script src="js/xer.js?v=47"></script>
+  <script src="js/ui.js?v=47"></script>
 </body>
 </html>
 

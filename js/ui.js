@@ -8,7 +8,7 @@
   const U = SPP.util;
   const $ = U.$, el = U.el;
   const LS_KEY = "spp_machines_prev";
-  const MACHINE_COLORS = ["#0f6e78", "#b6791f", "#2f5fb0", "#8a3ffc", "#1f8f5f", "#c2412f", "#5b6877", "#0aa2c0"];
+  const MACHINE_COLORS = ["#4f46e5", "#0d9488", "#e11d48", "#d97706", "#7c3aed", "#0284c7", "#059669", "#db2777"];
 
   const state = {
     parsed: { chainage: null, manpower: null, material: null, progress: null },
@@ -226,6 +226,7 @@
 
     $("#paramsPlaceholder").hidden = true;
     $("#paramsForm").hidden = false;
+    $("#paramsFoot").hidden = false;
     refreshCapNotice();
     renderRampChart();
     refreshHindranceCalendars();
@@ -581,11 +582,11 @@
 
     // Four core KPIs (the rest is in the headline / forecast, keeping this uncluttered).
     host.appendChild(statGrid([
-      { label: "Piles this window", value: U.fmtInt(Math.round(r.totalInstalled)), sub: U.fmtInt(Math.round(avgPerDay)) + "/day avg", kind: "" },
-      { label: "Scope complete", value: U.fmtNum(r.pctComplete, 1) + "%", sub: U.fmtInt(r.totalComplete) + " of " + U.fmtInt(r.totalMTO) + " piles", kind: "" },
-      { label: "Length covered", value: U.fmtNum(r.lengthCoveredKm || 0, 2) + " km", sub: "of " + U.fmtNum(r.totalScopeLengthKm || 0, 1) + " km scope (+" + U.fmtNum(r.lengthThisWindowKm || 0, 2) + " km this window)", kind: "" },
-      { label: "Chainages covered", value: U.fmtInt(covered) + " / " + U.fmtInt(totalCh), sub: r.blocked.length ? r.blocked.length + " blocked (no material)" : "all reachable", kind: r.blocked.length ? "warn" : "ok" },
-      { label: "Carry-over", value: U.fmtInt(r.carryOver), sub: r.carryOver > 0 ? "piles beyond window" : "scope fits window", kind: r.carryOver > 0 ? "warn" : "ok" }
+      { label: "Piles this window", value: U.fmtInt(Math.round(r.totalInstalled)), sub: U.fmtInt(Math.round(avgPerDay)) + "/day avg", tone: "indigo" },
+      { label: "Scope complete", value: U.fmtNum(r.pctComplete, 1) + "%", sub: U.fmtInt(r.totalComplete) + " of " + U.fmtInt(r.totalMTO) + " piles", tone: "violet" },
+      { label: "Length covered", value: U.fmtNum(r.lengthCoveredKm || 0, 2) + " km", sub: "of " + U.fmtNum(r.totalScopeLengthKm || 0, 1) + " km scope (+" + U.fmtNum(r.lengthThisWindowKm || 0, 2) + " km this window)", tone: "teal" },
+      { label: "Chainages covered", value: U.fmtInt(covered) + " / " + U.fmtInt(totalCh), sub: r.blocked.length ? r.blocked.length + " blocked (no material)" : "all reachable", tone: r.blocked.length ? "amber" : "emerald" },
+      { label: "Carry-over", value: U.fmtInt(r.carryOver), sub: r.carryOver > 0 ? "piles beyond window" : "scope fits window", tone: r.carryOver > 0 ? "rose" : "sky" }
     ]));
 
     // Forecast completion for the whole priority — two dates as distinct callouts.
@@ -1338,7 +1339,7 @@
   function statGrid(stats) {
     const g = el("div", { class: "statgrid" });
     stats.forEach((s) => {
-      const c = el("div", { class: "stat" + (s.kind ? " stat--" + s.kind : "") });
+      const c = el("div", { class: "stat" + (s.kind ? " stat--" + s.kind : "") + (s.tone ? " stat--t-" + s.tone : "") });
       c.appendChild(el("div", { class: "stat__label", text: s.label }));
       c.appendChild(el("div", { class: "stat__value", text: s.value }));
       if (s.sub) c.appendChild(el("div", { class: "stat__sub", text: s.sub }));
