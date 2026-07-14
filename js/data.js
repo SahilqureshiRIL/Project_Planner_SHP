@@ -55,6 +55,7 @@
         profileCode: profileCode,  // short code kept for reference
         code: String(p["New SAP Code"] == null ? "" : p["New SAP Code"]).trim(),
         mto: isFinite(mto) ? mto : 0,
+        zone: String(p["Zone_Id"] || "").trim(),     // WBS zone level in the .xer export
         lengthMm: U.toNum(p["Length (mm)"]) || 0,   // for the .xer "Length Km" UDF
         areaSqm: U.toNum(p["Area (sqm)"]) || 0,      // for the .xer "Area SqMtr" UDF
         name: p["name"] || null,

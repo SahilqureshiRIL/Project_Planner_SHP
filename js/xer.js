@@ -21,6 +21,9 @@
   const U = SPP.util;
   const X = (SPP.xer = {});
 
+  // Top-level WBS (project root) name. Edit here to change the export title.
+  const PROJECT_TITLE = "Kutch RE Z2 - Sheet Pile";
+
   // Exact field order per table (from the sample; do not reorder).
   const F = {
     CURRTYPE: ["curr_id", "decimal_digit_cnt", "curr_symbol", "decimal_symbol", "digit_group_symbol", "pos_curr_fmt_type", "neg_curr_fmt_type", "curr_type", "curr_short_name", "group_digit_cnt", "base_exch_rate"],
@@ -182,25 +185,40 @@
       use_total_float_multiple_longest_paths: "Y", LevelPriorityList: "priority_type,ASC_BY_FIELD/ASC"
     }]);
 
-    // ---- WBS: project root + one node per profile (Item Description) ----
-    const wbsRows = [{
-      wbs_id: ROOT_WBS, proj_id: PROJ, obs_id: OBSID, seq_num: 0, est_wt: 1, proj_node_flag: "Y",
-      sum_data_flag: "Y", status_code: "WS_Open", wbs_short_name: projShort,
-      wbs_name: "Sheet Piling - " + (p.priority || "Plan"), ev_compute_type: "EC_Cmp_pct",
-      ev_etc_compute_type: "EE_Etc_pct", guid: guid()
-    }];
-    const wbsIdByProfile = {};
-    let wseq = 1, wid = ROOT_WBS + 1;
+    // ---- WBS hierarchy: Root -> Priority -> Zone -> Profile (tasks hang off Profile).
+    const zoneOf = (w) => ((featById[w.id] || {}).zone) || "(zone n/a)";
+    let wid = ROOT_WBS;
+    function wbsNode(id, parent, seq, code, name, isRoot) {
+      return {
+        wbs_id: id, proj_id: PROJ, obs_id: OBSID, seq_num: seq, est_wt: 1,
+        proj_node_flag: isRoot ? "Y" : "N", sum_data_flag: "Y", status_code: "WS_Open",
+        wbs_short_name: code, wbs_name: name, parent_wbs_id: isRoot ? "" : parent,
+        ev_compute_type: "EC_Cmp_pct", ev_etc_compute_type: "EE_Etc_pct", guid: guid()
+      };
+    }
+    const wbsRows = [];
+    // L1 project root
+    const rootId = wid++;
+    wbsRows.push(wbsNode(rootId, "", 0, projShort, PROJECT_TITLE, true));
+    // L2 priority (single)
+    const priId = wid++;
+    wbsRows.push(wbsNode(priId, rootId, 1, "1", (p.priority || "Priority"), false));
+    // Build unique zones (sorted) and their profiles (sorted) from worked chainages.
+    const zoneProfiles = {};   // zone -> [profiles...]
     worked.forEach((w) => {
-      if (wbsIdByProfile[w.profile] == null) {
-        wbsIdByProfile[w.profile] = wid;
-        wbsRows.push({
-          wbs_id: wid, proj_id: PROJ, obs_id: OBSID, seq_num: wseq, est_wt: 1, proj_node_flag: "N",
-          sum_data_flag: "Y", status_code: "WS_Open", wbs_short_name: "WBS" + wseq, wbs_name: w.profile,
-          parent_wbs_id: ROOT_WBS, ev_compute_type: "EC_Cmp_pct", ev_etc_compute_type: "EE_Etc_pct", guid: guid()
-        });
-        wid++; wseq++;
-      }
+      const z = zoneOf(w);
+      (zoneProfiles[z] || (zoneProfiles[z] = []));
+      if (zoneProfiles[z].indexOf(w.profile) < 0) zoneProfiles[z].push(w.profile);
+    });
+    const wbsIdByZoneProfile = {};   // "zone||profile" -> wbs_id
+    Object.keys(zoneProfiles).sort().forEach((zone, zi) => {
+      const zoneWid = wid++;
+      wbsRows.push(wbsNode(zoneWid, priId, zi + 1, String(zi + 1), zone, false));   // L3 zone
+      zoneProfiles[zone].sort().forEach((prof, pi) => {
+        const profWid = wid++;
+        wbsRows.push(wbsNode(profWid, zoneWid, pi + 1, String(pi + 1), prof, false)); // L4 profile
+        wbsIdByZoneProfile[zone + "||" + prof] = profWid;
+      });
     });
     out += emit("PROJWBS", wbsRows);
 
@@ -234,7 +252,7 @@
       const durHr = workingDaysBetween(w.startDate, w.lastDate, wd) * wh;
       taskIdById[w.id] = tid;
       taskRows.push({
-        task_id: tid, proj_id: PROJ, wbs_id: wbsIdByProfile[w.profile], clndr_id: CLNDR,
+        task_id: tid, proj_id: PROJ, wbs_id: wbsIdByZoneProfile[zoneOf(w) + "||" + w.profile], clndr_id: CLNDR,
         phys_complete_pct: 0, rev_fdbk_flag: "N", est_wt: 1, lock_plan_flag: "N", auto_compute_act_flag: "Y",
         complete_pct_type: "CP_Drtn", task_type: "TT_Task", duration_type: "DT_FixedDUR2",
         status_code: "TK_NotStart", task_code: String(tcode), task_name: w.id + " - " + w.profile,
