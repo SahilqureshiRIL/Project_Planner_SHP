@@ -284,6 +284,7 @@
 
     const installedByDate = {};       // ISO -> piles installed that day (current rows only)
     const installedByChainage = {};   // chainage Name -> total piles already installed
+    const lastInstallByChainage = {}; // chainage Name -> latest install date (for the work front)
     let maxDate = null;
     let installedRowCount = 0;
 
@@ -302,10 +303,13 @@
         installedByDate[iso] = (installedByDate[iso] || 0) + v;
         installedRowCount++;
         const nm = (cName != null && r[cName] != null) ? String(r[cName]).trim() : "";
-        if (nm) installedByChainage[nm] = (installedByChainage[nm] || 0) + v;
+        if (nm) {
+          installedByChainage[nm] = (installedByChainage[nm] || 0) + v;
+          if (!lastInstallByChainage[nm] || d > lastInstallByChainage[nm]) lastInstallByChainage[nm] = d;
+        }
       }
     });
-    return { installedByDate, installedByChainage, maxDate, installedRowCount };
+    return { installedByDate, installedByChainage, lastInstallByChainage, maxDate, installedRowCount };
   }
 
   function deriveAdaptiveRamp(windowDays, mp, pr) {

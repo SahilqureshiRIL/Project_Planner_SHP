@@ -13,7 +13,7 @@
   const state = {
     parsed: { chainage: null, manpower: null, material: null, progress: null },
     store: null, defaults: null, result: null,
-    view: "table", ganttColor: "profile", mapZoom: 1, mapSelected: null, mapFilter: null
+    view: "gantt", ganttColor: "profile", mapZoom: 1, mapSelected: null, mapFilters: new Set()
   };
 
   document.addEventListener("DOMContentLoaded", init);
@@ -31,7 +31,7 @@
       inp.addEventListener("change", (e) => { if (e.target.files[0]) handleFile(inp.dataset.input, e.target.files[0]); });
     });
     $("#tryBundledBtn").addEventListener("click", tryBundled);
-    $("#generateBtn").addEventListener("click", onGenerate);
+    $("#exportPlanBtn").addEventListener("click", onExportXer);
     $("#generateBtn2").addEventListener("click", onGenerate);
     $("#addHindranceBtn").addEventListener("click", () => addHindranceRow());
     $("#resetHistoryBtn").addEventListener("click", resetHistory);
@@ -53,7 +53,6 @@
       const layout = document.querySelector(".layout");
       setSidebarCollapsed(!(layout && layout.classList.contains("is-collapsed")));
     });
-    $("#exportXerBtn").addEventListener("click", onExportXer);
     U.$$("#ganttColorMode .seg__btn").forEach((b) =>
       b.addEventListener("click", () => { state.ganttColor = b.dataset.mode; U.$$("#ganttColorMode .seg__btn").forEach((x) => x.classList.toggle("is-active", x === b)); if (state.result) renderGantt(); }));
     $("#tableGroup").addEventListener("change", () => { if (state.result) renderTable(); });
@@ -160,13 +159,13 @@
         state.defaults = SPP.data.computeDefaults(state.store);
         populateDefaults();
         $("#paramsCard").setAttribute("aria-disabled", "false");
-        $("#generateBtn").disabled = false;
+        $("#generateBtn2").disabled = false;
       } catch (err) {
         U.toast("Defaults error: " + err.message, "bad");
       }
     } else {
       $("#paramsCard").setAttribute("aria-disabled", "true");
-      $("#generateBtn").disabled = true;
+      $("#generateBtn2").disabled = true;
     }
   }
 
@@ -208,20 +207,16 @@
     sel.appendChild(el("option", { value: "", disabled: "", selected: cur ? null : "" , text: "Select priority…" }));
     ch.priorities.forEach((p) => sel.appendChild(el("option", { value: p, text: p + "  (" + U.fmtInt(ch.priorityCounts[p]) + " chainages)", selected: p === cur ? "" : null })));
 
-    $("#pStart").value = U.fmtISO(d.planStartDefault);
-    $("#pStartHint").textContent = "Default " + U.fmtFriendly(d.planStartDefault) + " (first Monday after latest record " + U.fmtShort(d.latestDataDate) + ").";
-
-    setVal("#pMachines", d.machines);
-    setVal("#pManpower", d.manpower);
-    setVal("#pWorkhours", d.workhours);
-    setVal("#pProductivity", U.fmtNum(d.productivity, 3));
+    // Auto-computed fields show greyed (as defaults); once edited they turn solid and
+    // the hint reveals the original auto value.
+    markComputed("#pStart", "#pStartHint", U.fmtISO(d.planStartDefault),
+      "Auto: " + U.fmtFriendly(d.planStartDefault) + " (first Monday after latest record " + U.fmtShort(d.latestDataDate) + ")");
+    markComputed("#pMachines", "#pMachinesHint", d.machines, "Auto (7-day onsite avg " + U.fmtNum(d.sumMachine / 7, 2) + "/day → " + d.machines + ")");
+    markComputed("#pManpower", "#pManpowerHint", d.manpower, "Auto (7-day onsite avg " + U.fmtNum(d.sumMan / 7, 2) + "/day → " + d.manpower + ")");
+    markComputed("#pWorkhours", "#pWorkhoursHint", d.workhours, "Auto (7-day onsite avg " + U.fmtNum(d.sumHour / 7, 2) + "/day → " + d.workhours + ")");
+    markComputed("#pProductivity", "#pProductivityHint", U.fmtNum(d.productivity, 3), "Auto (adaptive, last 7-day actual window)");
     setVal("#pRampN", d.rampN != null ? d.rampN : 7);
     setVal("#pRampProfile", (d.rampProfile || [1]).join(", "));
-
-    $("#pMachinesHint").textContent = "Onsite Avg: " + U.fmtNum(d.sumMachine / 7, 2) + "/day → " + d.machines;
-    $("#pManpowerHint").textContent = "Onsite Avg: " + U.fmtNum(d.sumMan / 7, 2) + "/day → " + d.manpower;
-    $("#pWorkhoursHint").textContent = "Onsite Avg: " + U.fmtNum(d.sumHour / 7, 2) + "/day → " + d.workhours;
-    $("#pProductivityHint").textContent = "Adaptive from the last 7-day actual window";
     $("#prodInfoPop").textContent = d.prodDerivation + " · " + (d.rampExplanation || "");
 
     // Machines from previous plan: stored value, else equal to machines (no ramp on first plan).
@@ -236,6 +231,31 @@
     refreshHindranceCalendars();
   }
   function setVal(sel, v) { const n = $(sel); if (n) n.value = v; }
+
+  // Show an auto-computed field greyed; when the planner edits it, turn it solid and
+  // surface the original computed value in the hint below.
+  function markComputed(inputSel, hintSel, autoVal, baseHint) {
+    const input = $(inputSel), hint = $(hintSel);
+    if (!input) return;
+    input.value = autoVal;
+    input.dataset.computed = String(autoVal);
+    input.classList.add("is-computed"); input.classList.remove("is-edited");
+    if (hint) { hint.dataset.base = baseHint; hint.textContent = baseHint; }
+    if (!input.dataset.compBound) {
+      input.dataset.compBound = "1";
+      const onEdit = () => {
+        const edited = String(input.value) !== input.dataset.computed;
+        input.classList.toggle("is-computed", !edited);
+        input.classList.toggle("is-edited", edited);
+        if (hint) {
+          if (edited) hint.innerHTML = "<span class='hint-auto'>Edited · auto was " + U.esc(input.dataset.computed) + "</span>";
+          else hint.textContent = hint.dataset.base || "";
+        }
+      };
+      input.addEventListener("input", onEdit);
+      input.addEventListener("change", onEdit);
+    }
+  }
 
   /* ============================ PARAM HELPERS ============================ */
   function enforceMonday(e) {
@@ -474,7 +494,7 @@
     $("#resultsEmpty").hidden = true;
     $("#viewToggle").hidden = false;
     $("#validationCard").hidden = false;
-    $("#exportXerBtn").hidden = false;
+    $("#exportPlanBtn").hidden = false;
 
     const periodLbl = r.params.periodWeeks + " weeks";
     $("#planMeta").innerHTML =
@@ -502,6 +522,12 @@
       const ico = '<svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="9" y1="4" x2="9" y2="20"/></svg>';
       btn.innerHTML = ico + "<span>" + (collapsed ? "Show inputs" : "Hide inputs") + "</span>";
     }
+    // The Gantt & Map size to the content width, so re-render them once the grid
+    // has reflowed to the new width (prevents the chart being cut off).
+    if (state.result) requestAnimationFrame(() => {
+      if (state.view === "gantt") renderGantt();
+      else if (state.view === "map") renderMap();
+    });
   }
 
   // Export the current plan as a Primavera P6 .xer for the taskmapper system.
@@ -543,43 +569,38 @@
     const inboundWindow = r.windowArrivals.reduce((s, a) => s + a.qty, 0);
 
     const prior = r.installedPriorTotal || 0;
-    const priorTxt = prior > 0
-      ? " (<strong>" + U.fmtInt(prior) + "</strong> already installed" + (r.completedCount ? ", " + r.completedCount + " chainage" + (r.completedCount === 1 ? "" : "s") + " complete" : "") + ")"
-      : "";
+    const priorTxt = prior > 0 ? " (<strong>" + U.fmtInt(prior) + "</strong> already installed)" : "";
+    // One concise headline — the numbers live in the tiles below, so no finish clauses here.
     host.appendChild(el("p", { class: "plan-summary__lead", html:
-      "This <strong>" + r.params.periodWeeks + "-week</strong> plan for Priority <strong>" + U.esc(r.params.priority) +
+      "This <strong>" + r.params.periodWeeks + "-week</strong> plan for <strong>" + U.esc(r.params.priority) +
       "</strong> installs <strong>" + U.fmtInt(Math.round(r.totalInstalled)) + "</strong> more piles" + priorTxt +
-      ", bringing <strong>" + U.esc(r.params.priority) + "</strong> to <strong>" + U.fmtNum(r.pctComplete, 1) + "%</strong> of its <strong>" +
-      U.fmtInt(r.totalMTO) + "</strong>-pile scope, across <strong>" + U.fmtInt(covered) + "</strong> of " + U.fmtInt(totalCh) +
-      " chainages over <strong>" + r.workingDayCount + "</strong> working day" + (r.workingDayCount === 1 ? "" : "s") +
-      ", using <strong>" + r.deployed + "</strong> machine" + (r.deployed === 1 ? "" : "s") + " and <strong>" + U.fmtInt(people) + "</strong> people" +
-      (r.carryOver > 0 ? ", leaving <strong>" + U.fmtInt(r.carryOver) + "</strong> piles to carry over." : ".") +
-      (function () {
-        let out = "";
-        if (r.finishCoversAll && r.projectedFinish) {
-          out = " At this pace the full priority is estimated to finish by <strong>" + U.fmtFriendly(r.projectedFinish) + "</strong>.";
-        } else if (r.projectedFinish && !r.projTimeLimited) {
-          out = " As per current material availability the priority reaches <strong>" + U.fmtFriendly(r.projectedFinish) + "</strong>, with <strong>" + U.fmtInt(r.unachievablePiles) + "</strong> more piles awaiting material.";
-        }
-        if (!r.finishCoversAll && r.fullMaterialFinish) {
-          out += " If all material comes through, the entire priority would finish by <strong>" + U.fmtFriendly(r.fullMaterialFinish) + "</strong>.";
-        }
-        return out;
-      })()
-    }));
+      ", bringing it to <strong>" + U.fmtNum(r.pctComplete, 1) + "%</strong> of the <strong>" + U.fmtInt(r.totalMTO) +
+      "</strong>-pile scope — across <strong>" + U.fmtInt(covered) + "</strong> of " + U.fmtInt(totalCh) +
+      " chainages, using <strong>" + r.deployed + "</strong> machine" + (r.deployed === 1 ? "" : "s") +
+      " &amp; <strong>" + U.fmtInt(people) + "</strong> people over <strong>" + r.workingDayCount + "</strong> working days." }));
 
+    // Four core KPIs (the rest is in the headline / forecast, keeping this uncluttered).
     host.appendChild(statGrid([
-      { label: "Piles this window", value: U.fmtInt(Math.round(r.totalInstalled)), sub: "installed in the plan window", kind: "" },
-      { label: "Already installed", value: U.fmtInt(prior), sub: r.completedCount ? r.completedCount + " chainage(s) complete" : "from progress history", kind: "" },
+      { label: "Piles this window", value: U.fmtInt(Math.round(r.totalInstalled)), sub: U.fmtInt(Math.round(avgPerDay)) + "/day avg", kind: "" },
       { label: "Scope complete", value: U.fmtNum(r.pctComplete, 1) + "%", sub: U.fmtInt(r.totalComplete) + " of " + U.fmtInt(r.totalMTO) + " piles", kind: "" },
-      { label: "Chainages covered", value: U.fmtInt(covered) + " / " + U.fmtInt(totalCh), sub: r.blocked.length ? r.blocked.length + " blocked (no usable material)" : "all in scope reachable", kind: r.blocked.length ? "warn" : "ok" },
-      { label: "Machines deployed", value: r.deployed, sub: r.params.machinesInput !== r.deployed ? "of " + r.params.machinesInput + " chosen" : "matches input", kind: "" },
-      { label: "Manpower engaged", value: U.fmtInt(people), sub: U.fmtNum(r.params.manpower ? people / r.params.manpower * 100 : 0, 0) + "% of " + U.fmtInt(r.params.manpower) + " available", kind: "" },
-      { label: "Avg piles / working day", value: U.fmtInt(Math.round(avgPerDay)), sub: r.workingDayCount + " of " + r.totalDays + " calendar days", kind: "" },
-      { label: "Carry-over", value: U.fmtInt(r.carryOver), sub: r.carryOver > 0 ? "piles beyond window" : "scope fits window", kind: r.carryOver > 0 ? "warn" : "ok" },
-      planFinishStat(r),
-      fullFinishStat(r)
+      { label: "Length covered", value: U.fmtNum(r.lengthCoveredKm || 0, 2) + " km", sub: "of " + U.fmtNum(r.totalScopeLengthKm || 0, 1) + " km scope (+" + U.fmtNum(r.lengthThisWindowKm || 0, 2) + " km this window)", kind: "" },
+      { label: "Chainages covered", value: U.fmtInt(covered) + " / " + U.fmtInt(totalCh), sub: r.blocked.length ? r.blocked.length + " blocked (no material)" : "all reachable", kind: r.blocked.length ? "warn" : "ok" },
+      { label: "Carry-over", value: U.fmtInt(r.carryOver), sub: r.carryOver > 0 ? "piles beyond window" : "scope fits window", kind: r.carryOver > 0 ? "warn" : "ok" }
     ]));
+
+    // Forecast completion for the whole priority — two dates as distinct callouts.
+    const fc = el("div", { class: "forecast" });
+    fc.appendChild(el("div", { class: "forecast__title", text: "Forecast completion · whole priority" }));
+    const grid = el("div", { class: "forecast__grid" });
+    [{ s: planFinishStat(r), cls: "" }, { s: fullFinishStat(r), cls: "forecast__card--all" }].forEach(({ s, cls }) => {
+      const c = el("div", { class: "forecast__card " + cls });
+      c.appendChild(el("div", { class: "forecast__lbl", text: s.label }));
+      c.appendChild(el("div", { class: "forecast__val", text: s.value }));
+      c.appendChild(el("div", { class: "forecast__sub", text: s.sub }));
+      grid.appendChild(c);
+    });
+    fc.appendChild(grid);
+    host.appendChild(fc);
   }
 
   function setView(v) {
@@ -589,8 +610,8 @@
     $("#tableView").hidden = v !== "table";
     $("#mapView").hidden = v !== "map";
     U.$$("#viewToggle .view-toggle__btn").forEach((b) => b.classList.toggle("is-active", b.dataset.view === v));
-    // Render the map only when visible so the WebGL canvas gets correct dimensions.
-    if (v === "map" && state.result) renderMap();
+    // Render Gantt & Map only once visible, so they size to real container dimensions.
+    if (state.result && (v === "gantt" || v === "map")) requestAnimationFrame(() => { if (v === "gantt") renderGantt(); else renderMap(); });
   }
 
   /* ============================ TABLE VIEW (§6.1) ============================ */
@@ -764,7 +785,11 @@
     U.clear(host);
     if (!r.worked.length) { host.appendChild(el("div", { class: "emptystate", html: "<p>No chainages were scheduled (no workable material, or 0 machines).</p>" })); renderLegend(); return; }
 
-    const labelW = 250, colW = Math.max(30, Math.min(46, Math.floor(760 / r.totalDays))), rowH = 28, headH = 46;
+    // Size columns to the available width so the chart fills the panel (and reflows
+    // when inputs are hidden/shown); falls back to a sensible width if not yet visible.
+    const labelW = 250, rowH = 28, headH = 46;
+    const avail = Math.max(560, (host.clientWidth || 900));
+    const colW = Math.max(34, Math.min(72, Math.floor((avail - labelW) / r.totalDays)));
     const days = r.calendar;
     const W = labelW + colW * r.totalDays, H = headH + rowH * r.worked.length + 8;
     const arrivalsByISO = {};
@@ -855,12 +880,16 @@
 
   /* ============================ MAP VIEW (Change 8) ============================ */
   const MAP_STATUS = {
-    complete:   { c: "#2bb673", label: "Complete" },
-    inprogress: { c: "#19b8c9", label: "Planned Chainages" },
-    planned:    { c: "#e3a82b", label: "Priority Scope" },
-    blocked:    { c: "#e0563c", label: "Blocked (no usable material)" }
+    complete:   { c: "#2bb673", label: "Completed (from progress)" },
+    partial:    { c: "#a78bfa", label: "Partially done (from progress)" },
+    inprogress: { c: "#19b8c9", label: "Scheduled this plan" },
+    planned:    { c: "#e3a82b", label: "In scope (not scheduled)" },
+    blocked:    { c: "#e0563c", label: "Blocked (no material)" }
   };
   const MAP_CONTEXT = "#8593a3";   // boundary / other-priority lines (visible on dark map)
+  // Multi-select filter: a chainage's category shows when no filter is set, or when
+  // its category is among the selected ones.
+  function mapVisible(cat) { return !state.mapFilters.size || state.mapFilters.has(cat); }
   let mapTipEl = null, mapGL = null, _ptTex = null;
 
   function mapTipText(f, st, info) {
@@ -888,10 +917,14 @@
     const geoFeats = feats.filter((f) => f.seg);
     const statusById = {}, infoById = {}, inPriority = {};
     if (r) {
+      // Later assignments win. Order: base scope → blocked → partial → complete →
+      // scheduled-this-plan. So worked chainages always show as "scheduled", partials
+      // (progress but not finished, not scheduled) stay visible, complete = fully done.
       r.candidates.forEach((c) => { statusById[c.id] = "planned"; inPriority[c.id] = true; });
-      (r.completed || []).forEach((c) => { statusById[c.id] = "complete"; });   // already done before this plan
       r.blocked.forEach((b) => { statusById[b.id] = "blocked"; });
-      r.worked.forEach((w) => { statusById[w.id] = w.completed ? "complete" : "inprogress"; infoById[w.id] = w; });
+      (r.partial || []).forEach((c) => { statusById[c.id] = "partial"; });      // started per progress, not finished
+      (r.completed || []).forEach((c) => { statusById[c.id] = "complete"; });   // fully done per progress history
+      r.worked.forEach((w) => { statusById[w.id] = "inprogress"; infoById[w.id] = w; });
     }
     let minLng = Infinity, maxLng = -Infinity, minLat = Infinity, maxLat = -Infinity;
     geoFeats.forEach((f) => f.seg.forEach((p) => {
@@ -947,8 +980,8 @@
     // Full site boundary = EVERY chainage segment, drawn once in grey and kept
     // always-visible so the outline shows no matter which legend filter is active.
     const boundaryPos = [];
-    const segByCat = { inprogress: [], planned: [], complete: [], blocked: [] };
-    const mkByCat = { inprogress: [], planned: [], complete: [], blocked: [] };
+    const segByCat = { inprogress: [], planned: [], complete: [], partial: [], blocked: [] };
+    const mkByCat = { inprogress: [], planned: [], complete: [], partial: [], blocked: [] };
     const pickables = [];
     geoFeats.forEach((f) => {
       const a = f.seg[0], b = f.seg[1];
@@ -1006,7 +1039,7 @@
     function pick(mx, my) {
       let best = null, bd = 144;
       for (const p of pickables) {
-        if (state.mapFilter && state.mapFilter !== p.cat) continue;
+        if (!mapVisible(p.cat)) continue;
         const sc = w2s(p.wx, p.wy), d = (sc[0] - mx) * (sc[0] - mx) + (sc[1] - my) * (sc[1] - my);
         if (d < bd) { bd = d; best = p; }
       }
@@ -1016,7 +1049,7 @@
       if (!p) { selObj.visible = false; return; }
       selObj.geometry.attributes.position.setXYZ(0, p.wx, p.wy, 0);
       selObj.geometry.attributes.position.needsUpdate = true;
-      selObj.visible = !state.mapFilter || state.mapFilter === p.cat;
+      selObj.visible = mapVisible(p.cat);
     }
 
     const cv = renderer.domElement; cv.style.cursor = "grab"; cv.style.touchAction = "none";
@@ -1052,12 +1085,12 @@
     });
     cv.addEventListener("pointerleave", hideTip);
 
-    function applyFilter(f) {
+    function applyFilter() {
       Object.keys(objs).forEach((cat) => {
-        const vis = cat === "boundary" ? true : (!f || f === cat);   // boundary is always shown
+        const vis = cat === "boundary" ? true : mapVisible(cat);   // boundary is always shown
         objs[cat].forEach((o) => (o.visible = vis));
       });
-      if (state.mapSelected) { const ps = pickables.find((p) => p.id === state.mapSelected); selObj.visible = !!ps && (!f || f === ps.cat); }
+      if (state.mapSelected) { const ps = pickables.find((p) => p.id === state.mapSelected); selObj.visible = !!ps && mapVisible(ps.cat); }
       draw();
     }
     function onResize() { if ((host.clientWidth || 880) !== W) renderMap(); }
@@ -1065,7 +1098,7 @@
 
     // restore prior selection (e.g. after a filter change re-render)
     if (state.mapSelected) { const ps = pickables.find((p) => p.id === state.mapSelected); if (ps) placeSel(ps); }
-    applyFilter(state.mapFilter);
+    applyFilter();
 
     mapGL = {
       zoomBy: (fac) => { zoom = U.clamp(zoom * fac, 1, 6000); applyCam(); draw(); },
@@ -1084,7 +1117,6 @@
   function renderMapSVG(data) {
     const host = $("#mapScroll");
     const { geoFeats, statusById, infoById, inPriority, minLng, maxLng, minLat, maxLat, kx } = data;
-    const flt = state.mapFilter;
     const dataW = (maxLng - minLng) * kx || 1e-6, dataH = (maxLat - minLat) || 1e-6;
     const pad = 26, targetW = 880;
     const S = ((targetW - 2 * pad) / dataW) * state.mapZoom;
@@ -1097,12 +1129,12 @@
       s += '<line x1="' + X(a[0]).toFixed(1) + '" y1="' + Y(a[1]).toFixed(1) + '" x2="' + X(b[0]).toFixed(1) + '" y2="' + Y(b[1]).toFixed(1) + '" stroke="' + MAP_CONTEXT + '" stroke-width="1.5" stroke-linecap="round"/>';
     });
     geoFeats.forEach((f) => {
-      if (!inPriority[f.id]) return; const st = statusById[f.id] || "planned"; if (flt && flt !== st) return;
+      if (!inPriority[f.id]) return; const st = statusById[f.id] || "planned"; if (!mapVisible(st)) return;
       const col = (MAP_STATUS[st] || {}).c, a = f.seg[0], b = f.seg[1], sel = state.mapSelected === f.id ? " is-sel" : "";
       s += '<line class="map-seg' + sel + '" data-id="' + U.esc(f.id) + '" data-tip="' + mapTipText(f, st, infoById[f.id]) + '" x1="' + X(a[0]).toFixed(1) + '" y1="' + Y(a[1]).toFixed(1) + '" x2="' + X(b[0]).toFixed(1) + '" y2="' + Y(b[1]).toFixed(1) + '" stroke="' + col + '" stroke-width="' + (sel ? 6 : 3.5) + '" stroke-linecap="round"/>';
     });
     geoFeats.forEach((f) => {
-      if (!inPriority[f.id] || !f.mid) return; const st = statusById[f.id] || "planned"; if (flt && flt !== st) return;
+      if (!inPriority[f.id] || !f.mid) return; const st = statusById[f.id] || "planned"; if (!mapVisible(st)) return;
       const col = (MAP_STATUS[st] || {}).c;
       s += '<circle class="map-marker" data-id="' + U.esc(f.id) + '" data-tip="' + mapTipText(f, st, infoById[f.id]) + '" cx="' + X(f.mid[0]).toFixed(1) + '" cy="' + Y(f.mid[1]).toFixed(1) + '" r="' + (state.mapSelected === f.id ? 5.5 : 3.5) + '" fill="' + col + '" stroke="#fff" stroke-width="1"/>';
     });
@@ -1137,39 +1169,47 @@
 
   function showMapInfo(f, st, info) {
     const box = $("#mapInfo");
-    if (!f) { box.textContent = "Drag to pan, scroll to zoom. Hover a chainage for details; click to pin. Click a legend entry to filter."; return; }
+    if (!f) { box.textContent = "Drag to pan, scroll to zoom. Hover a chainage for details; click to pin. Click legend entries to filter (multiple allowed)."; return; }
     const lbl = (MAP_STATUS[st] || {}).label || "Other priority";
     let html = "<strong>" + U.esc(f.id) + "</strong> · " + U.esc(f.profile) + " · <strong>" + lbl + "</strong> · MTO " + U.fmtInt(f.mto);
     if (info) html += " · Machine " + info.machine + " · " + U.fmtFriendly(info.startDate) + " → " + U.fmtShort(info.lastDate) +
       " · " + Math.round(info.done) + "/" + U.fmtInt(info.mto) + " piles (" + U.fmtNum(info.done / info.mto * 100, 1) + "%)";
+    else if (st === "complete") html += " · installed per progress history";
     box.innerHTML = html;
   }
 
-  // Clickable legend = isolate filter (click a category to show only it; click again to clear).
+  // Clickable legend = multi-select filter (toggle categories on/off; none = show all).
   function renderMapLegend(data) {
     const host = $("#mapLegend"); U.clear(host);
-    const counts = { inprogress: 0, planned: 0, complete: 0, blocked: 0, context: 0 };
+    const counts = { inprogress: 0, planned: 0, complete: 0, partial: 0, blocked: 0, context: 0 };
     data.geoFeats.forEach((f) => { const cat = data.catOf(f); if (counts[cat] != null) counts[cat]++; });
     const items = [];
-    ["inprogress", "planned", "complete", "blocked"].forEach((k) => { if (counts[k]) items.push({ cat: k, c: MAP_STATUS[k].c, label: MAP_STATUS[k].label, n: counts[k] }); });
+    ["inprogress", "partial", "complete", "planned", "blocked"].forEach((k) => { if (counts[k]) items.push({ cat: k, c: MAP_STATUS[k].c, label: MAP_STATUS[k].label, n: counts[k] }); });
     items.push({ cat: "context", c: MAP_CONTEXT, label: "Other priorities", n: counts.context });
     items.forEach((it) => {
-      const node = el("span", { class: "legend-item", title: "Click to show only: " + it.label, dataset: { cat: it.cat } },
+      const node = el("span", { class: "legend-item", title: "Toggle: " + it.label, dataset: { cat: it.cat } },
         [el("span", { class: "legend-swatch", style: "background:" + it.c }), document.createTextNode(it.label + " (" + U.fmtInt(it.n) + ")")]);
-      node.addEventListener("click", () => setMapFilter(it.cat));
+      node.addEventListener("click", () => toggleMapFilter(it.cat));
       host.appendChild(node);
     });
   }
-  function setMapFilter(cat) {
-    state.mapFilter = state.mapFilter === cat ? null : cat;
-    if (mapGL) mapGL.applyFilter(state.mapFilter); else renderMap();
-    updateLegendActive();
+  function reapplyMapFilter() { if (mapGL) mapGL.applyFilter(); else renderMap(); updateLegendActive(); }
+  function toggleMapFilter(cat) {
+    if (state.mapFilters.has(cat)) state.mapFilters.delete(cat); else state.mapFilters.add(cat);
+    reapplyMapFilter();
+  }
+  // Set the filter explicitly (e.g. the "view blocked on map" button) and show the map;
+  // setView() re-renders the map, which reads state.mapFilters and marks the legend.
+  function setMapFilters(cats) {
+    state.mapFilters = new Set(cats || []);
+    setView("map");
   }
   function updateLegendActive() {
-    const f = state.mapFilter;
+    const any = state.mapFilters.size > 0;
     U.$$("#mapLegend .legend-item").forEach((it) => {
-      it.classList.toggle("is-active", !!f && it.dataset.cat === f);
-      it.classList.toggle("is-dim", !!f && it.dataset.cat !== f);
+      const on = state.mapFilters.has(it.dataset.cat);
+      it.classList.toggle("is-active", on);
+      it.classList.toggle("is-dim", any && !on);
     });
   }
 
@@ -1182,21 +1222,14 @@
     badge.textContent = U.fmtNum(r.pctComplete, 1) + "% of " + r.params.priority + " scope";
     badge.className = "badge " + (r.blocked.length ? "badge--warn" : "badge--ok");
 
-    /* ---- Plan feasibility ---- */
-    const feas = section("Plan feasibility");
-    feas.appendChild(statGrid([
-      { label: "Already installed", value: U.fmtInt(r.installedPriorTotal || 0), sub: (r.completedCount || 0) + " chainage(s) complete", kind: "" },
-      { label: "Installable this window", value: U.fmtInt(Math.round(r.totalInstalled)), sub: "piles added by this plan", kind: "" },
-      { label: "Total MTO (" + r.params.priority + ")", value: U.fmtInt(r.totalMTO), sub: r.candidates.length + " chainages", kind: "" },
-      { label: "Carry-over beyond window", value: U.fmtInt(r.carryOver), sub: "piles still remaining", kind: r.carryOver > 0 ? "warn" : "ok" },
-      { label: "Working days", value: r.workingDayCount, sub: r.totalDays + " calendar days", kind: "" },
-      planFinishStat(r),
-      fullFinishStat(r)
-    ]));
-    feas.appendChild(el("div", { class: "kv", html: "Completion of selected priority scope (prior + this plan):" }));
-    feas.appendChild(bigBar(r.pctComplete));
-    if (r.hindDays || r.hindHours) feas.appendChild(el("div", { class: "kv", html: "Hindrance impact: <strong>" + r.hindDays + "</strong> day(s) removed, <strong>" + U.fmtNum(r.hindHours, 1) + "</strong> hour(s) trimmed (applied to the selected day(s))." }));
-    body.appendChild(feas);
+    /* ---- Plan feasibility ---- (removed: its figures now live in the plan summary
+       at the top — installable, scope %, carry-over, working days, finish dates.
+       Only the hindrance-impact note, which is NOT in the summary, is kept below.) */
+    if (r.hindDays || r.hindHours) {
+      const hind = section("Hindrance impact");
+      hind.appendChild(el("div", { class: "kv", html: "<strong>" + r.hindDays + "</strong> working day(s) removed, <strong>" + U.fmtNum(r.hindHours, 1) + "</strong> hour(s) trimmed (applied to the selected day(s))." }));
+      body.appendChild(hind);
+    }
 
     /* ---- Resources ---- */
     // "Surplus" = chosen machines that never install a pile, whether blocked by the
@@ -1228,39 +1261,27 @@
     prod.appendChild(el("div", { class: "kv", html: "Ramp: <strong>n = " + r.params.rampN + "</strong> · profile [" + r.rampProfile.map((x) => U.fmtNum(x, 2)).join(", ") + "] · machines 1–" + r.params.prevMachines + " start at steady-state; machines beyond ramp up." }));
     body.appendChild(prod);
 
-    /* ---- Material ---- */
+    /* ---- Material ---- (per-profile table removed; see the Material tab for the
+       day-by-day breakdown. Here we keep just the inbound chips + a blocked shortcut.) */
     const mat = section("Material");
-    const mt = el("table", { class: "data" });
-    mt.innerHTML = "<thead><tr><th>Profile</th><th>Item Code</th><th class='num'>On-site</th><th class='num'>Start stock</th><th class='num'>Inbound (window)</th><th class='num'>Available</th><th class='num'>Consumed</th><th class='num'>End stock</th><th class='num'>Shortfall</th></tr></thead>";
-    const mtb = el("tbody");
-    r.profileRows.forEach((p) => {
-      const tr = el("tr");
-      tr.innerHTML =
-        "<td>" + U.esc(p.profile) + "</td>" +
-        "<td>" + U.esc(p.code || "—") + "</td>" +
-        "<td class='num'>" + U.fmtInt(p.onsite) + "</td>" +
-        "<td class='num'>" + U.fmtInt(Math.round(p.starting)) + "</td>" +
-        "<td class='num'>" + U.fmtInt(p.inboundWindow) + "</td>" +
-        "<td class='num'>" + U.fmtInt(Math.round(p.available)) + "</td>" +
-        "<td class='num'>" + U.fmtInt(Math.round(p.consumed)) + "</td>" +
-        "<td class='num'>" + U.fmtInt(Math.round(p.endStock)) + "</td>" +
-        "<td class='num'>" + (p.shortfall > 0 ? "<span style='color:var(--danger)'>" + U.fmtInt(Math.round(p.shortfall)) + "</span>" : "0") + "</td>";
-      mtb.appendChild(tr);
-    });
-    mt.appendChild(mtb);
-    mat.appendChild(mt);
-
     if (r.windowArrivals.length) {
-      mat.appendChild(el("div", { class: "kv", style: "margin-top:12px", html: "Inbound arrivals within window (usable on arrival + 1 day):" }));
+      mat.appendChild(el("div", { class: "kv", html: "Inbound arrivals within window (usable on arrival + 1 day):" }));
       const chips = el("div", { class: "inbound-time" });
       r.windowArrivals.forEach((a) => chips.appendChild(el("span", { class: "inbound-chip", text: U.fmtShort(a.date) + ": +" + U.fmtInt(a.qty) + " " + a.profile })));
       mat.appendChild(chips);
     }
     if (r.blocked.length) {
-      const bl = el("div", { class: "blocked-list" });
-      bl.innerHTML = "<strong>Blocked — no usable material (" + r.blocked.length + " chainages, " + U.fmtInt(r.blockedMTO) + " piles):</strong> " +
-        r.blocked.slice(0, 40).map((b) => "<code>" + U.esc(b.id) + "</code>").join(" ") + (r.blocked.length > 40 ? " …" : "");
+      const bl = el("div", { class: "blocked-note" });
+      bl.appendChild(el("span", { class: "blocked-note__txt", html: "<strong>" + r.blocked.length + "</strong> chainage(s) blocked — no usable material (" + U.fmtInt(r.blockedMTO) + " piles)." }));
+      const btn = el("button", { type: "button", class: "btn btn--ghost btn--sm" },
+        [el("span", { html: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:5px"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2z"/><line x1="9" y1="4" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="20"/></svg>' }),
+         document.createTextNode("View blocked on map")]);
+      btn.addEventListener("click", () => setMapFilters(["blocked"]));
+      bl.appendChild(btn);
       mat.appendChild(bl);
+    }
+    if (!r.windowArrivals.length && !r.blocked.length) {
+      mat.appendChild(el("div", { class: "kv", text: "No inbound within the window and nothing blocked." }));
     }
     body.appendChild(mat);
 

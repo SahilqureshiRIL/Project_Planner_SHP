@@ -41,9 +41,10 @@
       remainingById[f.id] = Math.max(0, f.mto - prior);
     });
     // Completed chainages drop out of the plan entirely; only "active" (remaining > 0)
-    // chainages are planned.
+    // chainages are planned. "partial" = already started (has progress) but not finished.
     const completed = candidates.filter((f) => f.mto > 0 && remainingById[f.id] <= 0);
     const active = candidates.filter((f) => remainingById[f.id] > 0);
+    const partial = candidates.filter((f) => (priorById[f.id] || 0) > 0 && remainingById[f.id] > 0);
 
     function codeMaterial(code) { return material.byCode[code] || null; }
     // Material already consumed per item code = piles already installed across ALL
@@ -111,12 +112,43 @@
     }
 
     /* ---- 4. ordered work queue (§5.2) -------------------------------------- */
-    // Profiles ranked by starting on-site stock available at plan start (desc);
-    // within a profile, chainages ascend by Chainage_Id.
+    // Profiles ranked by starting on-site stock available at plan start (desc) — i.e.
+    // by MATERIAL AVAILABILITY. Within a profile the order is:
+    //   (1) partially-installed chainages first (finish work already started), then
+    //   (2) untouched chainages nearest to the already-worked "frontier" (so work
+    //       continues contiguously from the latest completed/started chainage),
+    //   (3) ties broken by Chainage_Id.
     const byCode = {};
     workable.forEach((f) => { (byCode[f.code] || (byCode[f.code] = [])).push(f); });
     const orderedCodes = Object.keys(byCode).sort((a, b) =>
       (startStock[b] - startStock[a]) || profileForCode(a).localeCompare(profileForCode(b)));
+    // Per profile, the "work front" = the chainage with the MOST RECENT progress date.
+    // Untouched chainages then continue outward from that anchor (nearest first), so
+    // the crew keeps advancing from wherever it last worked.
+    const lastInstallByChainage = (progress && progress.lastInstallByChainage) || {};
+    const anchorByCode = {}, anchorTime = {};
+    candidates.forEach((f) => {
+      if (!f.code || (priorById[f.id] || 0) <= 0) return;
+      const dt = lastInstallByChainage[f.name];
+      const t = dt ? dt.getTime() : 0;
+      // latest date wins; on a tie take the further-along chainage (higher sortKey)
+      if (anchorByCode[f.code] == null || t > anchorTime[f.code] ||
+         (t === anchorTime[f.code] && f.sortKey > anchorByCode[f.code])) {
+        anchorByCode[f.code] = f.sortKey; anchorTime[f.code] = t;
+      }
+    });
+    function isPartial(f) { return (priorById[f.id] || 0) > 0 && remainingById[f.id] > 0; }
+    function distToAnchor(f) {
+      const a = anchorByCode[f.code];
+      if (a == null) return Infinity;          // fresh profile → fall back to Chainage_Id order
+      return Math.abs(f.sortKey - a);
+    }
+    function queueCmp(x, y) {
+      const px = isPartial(x) ? 0 : 1, py = isPartial(y) ? 0 : 1;
+      if (px !== py) return px - py;                       // (1) partials first
+      if (px === 1) { const dx = distToAnchor(x), dy = distToAnchor(y); if (dx !== dy) return dx - dy; }  // (2) untouched: nearest to the latest-worked chainage
+      return x.sortKey - y.sortKey;                        // (3) then by Chainage_Id
+    }
     // Material available within the window per code (for the capToMaterial adjustment).
     function availWindow(code) {
       const m = codeMaterial(code);
@@ -125,7 +157,7 @@
     }
     const queue = [];
     orderedCodes.forEach((code) => {
-      const sorted = byCode[code].slice().sort((x, y) => x.sortKey - y.sortKey);
+      const sorted = byCode[code].slice().sort(queueCmp);
       if (p.capToMaterial) {
         // Only queue chainages whose cumulative MTO fits the window material for this
         // profile, so no profile is started beyond what it can cover (clears shortfall).
@@ -270,6 +302,24 @@
                  lastDate: s.lastDate, completed: s.completed, completedDate: s.completedDate };
       })
       .sort((a, b) => a.machine - b.machine || a.startDate - b.startDate || U.chainageSortKey(a.id) - U.chainageSortKey(b.id));
+
+    /* ---- 8b. length covered (km) — wall length proportional to piles installed
+       (prior + this plan) per chainage, summed over the priority. */
+    const thisPlanById = {};
+    worked.forEach((w) => { thisPlanById[w.id] = w.thisPlan || 0; });
+    let lengthScopeMm = 0, lengthCoveredMm = 0, lengthThisWindowMm = 0;
+    candidates.forEach((f) => {
+      const L = f.lengthMm || 0;
+      lengthScopeMm += L;
+      if (f.mto > 0) {
+        const done = (priorById[f.id] || 0) + (thisPlanById[f.id] || 0);
+        lengthCoveredMm += L * Math.min(1, done / f.mto);
+        lengthThisWindowMm += L * Math.min(1, (thisPlanById[f.id] || 0) / f.mto);
+      }
+    });
+    const totalScopeLengthKm = lengthScopeMm / 1e6;
+    const lengthCoveredKm = lengthCoveredMm / 1e6;
+    const lengthThisWindowKm = lengthThisWindowMm / 1e6;
 
     /* ---- 9. per-profile material accounting (§6.3) ------------------------- */
     const profileRows = orderedCodes.map((code) => {
@@ -420,8 +470,9 @@
     return {
       params: p, planStart, planEnd, totalDays, cap, maxMachines, deployed, idleMachines, capApplied,
       manpowerCapped: maxMachines, calendar: cal, workingDayCount,
-      queue, worked, blocked, completed, candidates, totalMTO, blockedMTO,
+      queue, worked, blocked, completed, partial, candidates, totalMTO, blockedMTO,
       installedPriorTotal, remainingMTO, totalComplete, completedCount: completed.length,
+      totalScopeLengthKm, lengthCoveredKm, lengthThisWindowKm,
       projectedFinish, finishCoversAll, projFinishWorkingDays, unachievablePiles, projTimeLimited,
       fullMaterialFinish, fullMaterialWorkingDays,
       startStock, windowArrivals, profileRows, materialPivot,
