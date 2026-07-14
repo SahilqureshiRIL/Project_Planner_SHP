@@ -826,9 +826,15 @@
       const bw = (endIdx - startIdx + 1) * colW - 4;
       const pct = w.mto > 0 ? Math.min(1, w.done / w.mto) : 0;
       const col = colorOf(w);
-      s += '<rect x="2" y="' + (y + 4) + '" width="' + (labelW - 8) + '" height="' + (rowH - 8) + '" fill="' + (ri % 2 ? "#f6f8fb" : "#ffffff") + '"/>';
-      s += '<text x="10" y="' + (y + rowH / 2 + 4) + '" fill="#1c2733">' + U.esc(w.id) + '</text>';
-      s += '<text x="110" y="' + (y + rowH / 2 + 4) + '" fill="#8a96a5" font-size="10">' + U.esc(w.profile) + '</text>';
+      // Label = chainage id (line 1) + full profile as a subtitle (line 2), so long
+      // profile names are never clipped by / painted over by the bars. Truncate
+      // defensively to the label column width as a final safety.
+      const prof = w.profile || "";
+      const maxCh = Math.max(6, Math.floor((labelW - 20) / 5.6));
+      const profTxt = prof.length > maxCh ? prof.slice(0, maxCh - 1) + "…" : prof;
+      s += '<rect x="2" y="' + (y + 3) + '" width="' + (labelW - 8) + '" height="' + (rowH - 6) + '" fill="' + (ri % 2 ? "#f6f8fb" : "#ffffff") + '"/>';
+      s += '<text x="10" y="' + (y + 12) + '" fill="#1c2733" font-weight="600">' + U.esc(w.id) + '</text>';
+      s += '<text x="10" y="' + (y + 23) + '" fill="#6b7690" font-size="9.5">' + U.esc(profTxt) + '<title>' + U.esc(prof) + '</title></text>';
       // bar background (full span) + progress fill
       s += '<rect data-tip="' + tipFor(w) + '" x="' + bx + '" y="' + (y + 5) + '" width="' + Math.max(bw, 3) + '" height="' + (rowH - 10) + '" rx="3" fill="' + col + '" opacity="0.28"/>';
       s += '<rect data-tip="' + tipFor(w) + '" x="' + bx + '" y="' + (y + 5) + '" width="' + Math.max(bw * pct, pct > 0 ? 2 : 0) + '" height="' + (rowH - 10) + '" rx="3" fill="' + col + '"/>';

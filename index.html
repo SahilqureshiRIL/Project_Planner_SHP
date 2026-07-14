@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Sheet Pile Installation Planner</title>
-  <link rel="stylesheet" href="styles.css?v=47" />
+  <link rel="stylesheet" href="styles.css?v=49" />
   <!--
     SheetJS (xlsx) is vendored locally in ./vendor so the app works fully offline.
     If you prefer the CDN, replace the src below with:
@@ -23,7 +23,7 @@
       </span>
       <div>
         <h1>Sheet Pile Installation Planner</h1>
-        <p class="app-header__sub"><span class="live-dot" aria-hidden="true"></span>Chainage-wise day-by-day planning &middot; Phase&nbsp;1 prototype</p>
+        <p class="app-header__sub"><span class="live-dot" aria-hidden="true"></span>Chainage-wise day-by-day planning &middot; Phase&nbsp;1 </p>
       </div>
     </div>
     <div class="app-header__actions">
@@ -294,7 +294,7 @@
       <!-- Validation -->
       <section class="card" id="validationCard" hidden>
         <div class="card__head">
-          <h2 class="card__title">Validation</h2>
+          <h2 class="card__title">Manpower resources and productivity</h2>
           <span class="badge" id="feasibilityBadge"></span>
         </div>
         <div class="card__body" id="validationBody"></div>
@@ -329,12 +329,12 @@
   <!-- Scripts (load order matters: util -> data -> engine -> xer -> ui).
        The ?v= query string is a cache-buster: bump it whenever js/ changes so
        browsers don't run a stale copy. -->
-  <script src="js/chainage_data.js?v=47"></script>
-  <script src="js/util.js?v=47"></script>
-  <script src="js/data.js?v=47"></script>
-  <script src="js/engine.js?v=47"></script>
-  <script src="js/xer.js?v=47"></script>
-  <script src="js/ui.js?v=47"></script>
+  <script src="js/chainage_data.js?v=49"></script>
+  <script src="js/util.js?v=49"></script>
+  <script src="js/data.js?v=49"></script>
+  <script src="js/engine.js?v=49"></script>
+  <script src="js/xer.js?v=49"></script>
+  <script src="js/ui.js?v=49"></script>
 </body>
 </html>
 

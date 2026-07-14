@@ -316,6 +316,20 @@ button { font-family: inherit; }
 .sidebar .ramp-chart { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.12); }
 .sidebar .hindrance { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.12); }
 .sidebar .info { color: #9fb4e6; }
+/* Hindrance mini-calendar on the dark console: translucent cells with LIGHT
+   numbers (they were inheriting light text on a white cell = invisible). */
+.sidebar .hindrance__days-label { color: rgba(219,226,244,0.66); }
+.sidebar .hindrance__hint { color: rgba(219,226,244,0.5); }
+.sidebar .hcal__hd { color: rgba(219,226,244,0.55); }
+.sidebar .hcal__day {
+  background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.16); color: #eaf0ff;
+}
+.sidebar .hcal__day:hover { border-color: var(--gold); background: rgba(255,255,255,0.14); }
+.sidebar .hcal__day.is-weekoff { background: rgba(255,255,255,0.03); color: rgba(219,226,244,0.4); }
+.sidebar .hcal__day.is-sel {
+  background: linear-gradient(180deg, #f0d28c, #d9b36e); color: var(--navy);
+  border-color: var(--gold); font-weight: 700;
+}
 
 /* Generate button lives in a solid footer bar OUTSIDE the scroll region, so it
    is always visible and never overlaps the scrolling fields. */
