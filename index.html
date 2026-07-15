@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Sheet Pile Installation Planner</title>
-  <link rel="stylesheet" href="styles.css?v=49" />
+  <link rel="stylesheet" href="styles.css?v=56" />
   <!--
     SheetJS (xlsx) is vendored locally in ./vendor so the app works fully offline.
     If you prefer the CDN, replace the src below with:
@@ -16,7 +16,9 @@
   <!-- ============================ HEADER ============================ -->
   <header class="app-header">
     <div class="app-header__title">
-      <img class="app-header__logo" src="assets/logo.jpg" alt="Reliance New Energy" />
+      <button type="button" id="homeLogoBtn" class="app-header__home" title="Back to home (reset the planner)" aria-label="Back to home">
+        <img class="app-header__logo" src="assets/logo1.jpg" alt="Reliance New Energy" />
+      </button>
       <span class="app-header__divider" aria-hidden="true"></span>
       <span class="app-header__mark" aria-hidden="true">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="4" x2="6" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/><line x1="18" y1="4" x2="18" y2="20"/></svg>
@@ -253,8 +255,8 @@
             </div>
             <div class="table-scroll" id="materialScroll"></div>
             <p class="field__hint" style="margin-top:8px">
-              <strong>Available</strong> = net <strong>Accepted at Site</strong> stock (already-installed piles deducted) carried into the day, before that day's use.
-              <strong>Inbound</strong> = qty arriving that day (Expected Arrival); it rolls into Available the next day.
+              <strong>(AVAIL) Available</strong> = net <strong>Accepted at Site</strong> stock (already-installed piles deducted) carried into the day, before that day's use.
+              <strong>(IN) Inbound</strong> = qty arriving that day (Expected Arrival); it rolls into Available the next day.
               <strong>Used</strong> = piles the plan installs that day; the balance carries to the next day. Inbound shows on off days too, since material still arrives.
             </p>
           </div>
@@ -329,12 +331,12 @@
   <!-- Scripts (load order matters: util -> data -> engine -> xer -> ui).
        The ?v= query string is a cache-buster: bump it whenever js/ changes so
        browsers don't run a stale copy. -->
-  <script src="js/chainage_data.js?v=49"></script>
-  <script src="js/util.js?v=49"></script>
-  <script src="js/data.js?v=49"></script>
-  <script src="js/engine.js?v=49"></script>
-  <script src="js/xer.js?v=49"></script>
-  <script src="js/ui.js?v=49"></script>
+  <script src="js/chainage_data.js?v=56"></script>
+  <script src="js/util.js?v=56"></script>
+  <script src="js/data.js?v=56"></script>
+  <script src="js/engine.js?v=56"></script>
+  <script src="js/xer.js?v=56"></script>
+  <script src="js/ui.js?v=56"></script>
 </body>
 </html>
 

@@ -30,6 +30,7 @@
     U.$$('input[type="file"]').forEach((inp) => {
       inp.addEventListener("change", (e) => { if (e.target.files[0]) handleFile(inp.dataset.input, e.target.files[0]); });
     });
+    { const hb = $("#homeLogoBtn"); if (hb) hb.addEventListener("click", () => location.reload()); }
     $("#tryBundledBtn").addEventListener("click", tryBundled);
     $("#exportPlanBtn").addEventListener("click", onExportXer);
     $("#generateBtn2").addEventListener("click", onGenerate);
