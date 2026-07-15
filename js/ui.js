@@ -510,6 +510,8 @@
     renderMaterial();
     renderTable();
     renderValidation();
+    $("#progressCard").hidden = false;
+    renderProgressChart();
     setView(state.view);   // the Map is rendered lazily when its view is shown
     setSidebarCollapsed(true);   // collapse inputs on generate for a full-width plan view
   }
@@ -603,6 +605,77 @@
     });
     fc.appendChild(grid);
     host.appendChild(fc);
+  }
+
+  /* Recent progress — a compact bar chart of sheet piles installed on each of the
+     last 7 recorded work days (from progress history's installedByDate). Rendered
+     at true pixel size (fixed height, no upscaling) and re-drawn on width change. */
+  function renderProgressChart() {
+    const host = $("#progressChart"); if (!host) return;
+    drawProgressChart();
+    if (!host._ro && window.ResizeObserver) {
+      host._ro = new ResizeObserver(() => { clearTimeout(host._rt); host._rt = setTimeout(drawProgressChart, 60); });
+      host._ro.observe(host);
+    }
+  }
+  function drawProgressChart() {
+    const host = $("#progressChart"); if (!host) return;
+    const meta = $("#progressCardMeta");
+    const pr = state.store && state.store.progress;
+    const map = (pr && pr.installedByDate) || {};
+    const parseISO = (iso) => { const p = iso.split("-"); return new Date(+p[0], (+p[1]) - 1, +p[2]); };
+    const last = Object.keys(map).filter((iso) => (map[iso] || 0) > 0).sort().slice(-7);
+    U.clear(host);
+    if (!last.length) {
+      host.appendChild(el("div", { class: "emptystate", html: "<p>No dated installs in the progress history.</p>" }));
+      if (meta) meta.textContent = "";
+      return;
+    }
+    const vals = last.map((iso) => Math.round(map[iso] || 0));
+    const total = vals.reduce((a, b) => a + b, 0), avg = total / vals.length, dataMax = Math.max(1, Math.max.apply(null, vals));
+    if (meta) meta.textContent = U.fmtInt(total) + " piles · " + last.length + " days · " + U.fmtInt(Math.round(avg)) + "/day avg";
+
+    // "nice" y-axis: round tick step so labels read 0/50/100… not 30/59/89.
+    const rough = dataMax / 4, pw = Math.pow(10, Math.floor(Math.log10(rough))), rf = rough / pw;
+    const nf = rf <= 1 ? 1 : rf <= 2 ? 2 : rf <= 2.5 ? 2.5 : rf <= 5 ? 5 : 10, step = nf * pw;
+    const yMax = Math.max(step, Math.ceil(dataMax / step) * step);
+    const ticks = []; for (let t = 0; t <= yMax + 1e-9; t += step) ticks.push(Math.round(t));
+
+    // fixed height, natural pixel width (NO viewBox upscaling)
+    const W = Math.max(360, Math.floor(host.clientWidth || 760)), H = 208;
+    const padL = 40, padR = 58, padT = 18, padB = 38;
+    const plotW = W - padL - padR, plotH = H - padT - padB, n = last.length, slot = plotW / n, barW = Math.min(36, slot * 0.5);
+    const yOf = (v) => padT + plotH - (v / yMax) * plotH;
+
+    let s = '<svg class="daychart__svg" width="' + W + '" height="' + H + '" font-family="inherit">';
+    s += '<defs><linearGradient id="barGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5b52ec"/><stop offset="1" stop-color="#2a3aa0"/></linearGradient></defs>';
+    // gridlines + y ticks (round values)
+    ticks.forEach((tv) => {
+      const gy = yOf(tv);
+      s += '<line x1="' + padL + '" y1="' + gy.toFixed(1) + '" x2="' + (W - padR) + '" y2="' + gy.toFixed(1) + '" stroke="#eaeef7"/>';
+      s += '<text x="' + (padL - 8) + '" y="' + (gy + 3.5).toFixed(1) + '" text-anchor="end" font-size="10" fill="#9aa3bd">' + U.fmtInt(tv) + '</text>';
+    });
+    // bars + value + date labels
+    last.forEach((iso, i) => {
+      const v = vals[i], cxp = padL + slot * i + slot / 2, bx = cxp - barW / 2, by = yOf(v), bh = Math.max(0, padT + plotH - by), d = parseISO(iso);
+      const tip = U.fmtFriendly(d) + " — <strong>" + U.fmtInt(v) + "</strong> pile" + (v === 1 ? "" : "s") + " installed";
+      s += '<g class="daybar" data-tip="' + U.esc(tip) + '">';
+      s += '<rect class="daybar__hit" x="' + (cxp - slot / 2).toFixed(1) + '" y="' + padT + '" width="' + slot.toFixed(1) + '" height="' + plotH + '" fill="transparent"/>';
+      s += '<rect class="daybar__bar" x="' + bx.toFixed(1) + '" y="' + by.toFixed(1) + '" width="' + barW.toFixed(1) + '" height="' + bh.toFixed(1) + '" rx="4" fill="url(#barGrad)"/>';
+      s += '<text class="daybar__val" x="' + cxp.toFixed(1) + '" y="' + (by - 6).toFixed(1) + '" text-anchor="middle" font-size="10.5" font-weight="700" fill="#3a4780">' + U.fmtInt(v) + '</text>';
+      s += '<text x="' + cxp.toFixed(1) + '" y="' + (H - 20) + '" text-anchor="middle" font-size="10.5" font-weight="600" fill="#5b6690">' + U.weekdayShort(d) + '</text>';
+      s += '<text x="' + cxp.toFixed(1) + '" y="' + (H - 7) + '" text-anchor="middle" font-size="9.5" fill="#9aa3bd">' + U.fmtShort(d) + '</text>';
+      s += '</g>';
+    });
+    // average line drawn ON TOP of bars (was hidden behind), with a label chip in the right gutter
+    const ay = yOf(avg);
+    s += '<line x1="' + padL + '" y1="' + ay.toFixed(1) + '" x2="' + (W - padR) + '" y2="' + ay.toFixed(1) + '" stroke="#c99a4f" stroke-width="1.5" stroke-dasharray="4 3"/>';
+    s += '<rect x="' + (W - padR + 5) + '" y="' + (ay - 9).toFixed(1) + '" width="' + (padR - 9) + '" height="18" rx="9" fill="#f6edda" stroke="#e4cea1"/>';
+    s += '<text x="' + (W - padR / 2 + 0.5).toFixed(1) + '" y="' + (ay + 3.5).toFixed(1) + '" text-anchor="middle" font-size="10" font-weight="700" fill="#8a6d2f">Avg ' + U.fmtInt(Math.round(avg)) + '</text>';
+    s += '</svg>';
+    host.innerHTML = s;
+    host.onmousemove = (ev) => { const g = ev.target.closest ? ev.target.closest(".daybar") : null; const t = g && g.getAttribute("data-tip"); if (t) showTip(ev.clientX, ev.clientY, t); else hideTip(); };
+    host.onmouseleave = hideTip;
   }
 
   function setView(v) {

@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Sheet Pile Installation Planner</title>
-  <link rel="stylesheet" href="styles.css?v=56" />
+  <link rel="stylesheet" href="styles.css?v=58" />
   <!--
     SheetJS (xlsx) is vendored locally in ./vendor so the app works fully offline.
     If you prefer the CDN, replace the src below with:
@@ -301,6 +301,18 @@
         </div>
         <div class="card__body" id="validationBody"></div>
       </section>
+
+      <!-- Recent progress: sheet piles installed per day (from progress history) -->
+      <section class="card" id="progressCard" hidden>
+        <div class="card__head">
+          <h2 class="card__title">Recent progress &middot; piles installed per day</h2>
+          <span class="badge badge--muted" id="progressCardMeta"></span>
+        </div>
+        <div class="card__body">
+          <p class="hint" style="margin-bottom:12px">Sheet piles installed on each of the last 7 recorded work days.</p>
+          <div class="daychart" id="progressChart"></div>
+        </div>
+      </section>
     </div>
   </main>
 
@@ -331,12 +343,12 @@
   <!-- Scripts (load order matters: util -> data -> engine -> xer -> ui).
        The ?v= query string is a cache-buster: bump it whenever js/ changes so
        browsers don't run a stale copy. -->
-  <script src="js/chainage_data.js?v=56"></script>
-  <script src="js/util.js?v=56"></script>
-  <script src="js/data.js?v=56"></script>
-  <script src="js/engine.js?v=56"></script>
-  <script src="js/xer.js?v=56"></script>
-  <script src="js/ui.js?v=56"></script>
+  <script src="js/chainage_data.js?v=58"></script>
+  <script src="js/util.js?v=58"></script>
+  <script src="js/data.js?v=58"></script>
+  <script src="js/engine.js?v=58"></script>
+  <script src="js/xer.js?v=58"></script>
+  <script src="js/ui.js?v=58"></script>
 </body>
 </html>
 
