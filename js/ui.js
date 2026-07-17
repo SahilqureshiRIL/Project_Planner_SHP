@@ -577,7 +577,7 @@
     // One concise headline — the numbers live in the tiles below, so no finish clauses here.
     host.appendChild(el("p", { class: "plan-summary__lead", html:
       "This <strong>" + r.params.periodWeeks + "-week</strong> plan for <strong>" + U.esc(r.params.priority) +
-      "</strong> installs <strong>" + U.fmtInt(Math.round(r.totalInstalled)) + "</strong> more piles" + priorTxt +
+      "</strong> installs <strong>" + U.fmtInt(Math.round(r.totalInstalled)) + "</strong> piles" + priorTxt +
       ", bringing it to <strong>" + U.fmtNum(r.pctComplete, 1) + "%</strong> of the <strong>" + U.fmtInt(r.totalMTO) +
       "</strong>-pile scope — across <strong>" + U.fmtInt(covered) + "</strong> of " + U.fmtInt(totalCh) +
       " chainages, using <strong>" + r.deployed + "</strong> machine" + (r.deployed === 1 ? "" : "s") +
@@ -585,8 +585,8 @@
 
     // Four core KPIs (the rest is in the headline / forecast, keeping this uncluttered).
     host.appendChild(statGrid([
-      { label: "Piles this window", value: U.fmtInt(Math.round(r.totalInstalled)), sub: U.fmtInt(Math.round(avgPerDay)) + "/day avg", tone: "indigo" },
-      { label: "Scope complete", value: U.fmtNum(r.pctComplete, 1) + "%", sub: U.fmtInt(r.totalComplete) + " of " + U.fmtInt(r.totalMTO) + " piles", tone: "violet" },
+      { label: "Piles Planned", value: U.fmtInt(Math.round(r.totalInstalled)), sub: U.fmtInt(Math.round(avgPerDay)) + "/day avg", tone: "indigo" },
+      { label: "% Work Planned", value: U.fmtNum(r.pctComplete, 1) + "%", sub: U.fmtInt(r.totalComplete) + " of " + U.fmtInt(r.totalMTO) + " piles", tone: "violet" },
       { label: "Length covered", value: U.fmtNum(r.lengthCoveredKm || 0, 2) + " km", sub: "of " + U.fmtNum(r.totalScopeLengthKm || 0, 1) + " km scope (+" + U.fmtNum(r.lengthThisWindowKm || 0, 2) + " km this window)", tone: "teal" },
       { label: "Chainages covered", value: U.fmtInt(covered) + " / " + U.fmtInt(totalCh), sub: r.blocked.length ? r.blocked.length + " blocked (no material)" : "all reachable", tone: r.blocked.length ? "amber" : "emerald" },
       { label: "Carry-over", value: U.fmtInt(r.carryOver), sub: r.carryOver > 0 ? "piles beyond window" : "scope fits window", tone: r.carryOver > 0 ? "rose" : "sky" }
@@ -594,7 +594,7 @@
 
     // Forecast completion for the whole priority — two dates as distinct callouts.
     const fc = el("div", { class: "forecast" });
-    fc.appendChild(el("div", { class: "forecast__title", text: "Forecast completion · whole priority" }));
+    fc.appendChild(el("div", { class: "forecast__title", text: "Forecast completion · Entire Selected priority" }));
     const grid = el("div", { class: "forecast__grid" });
     [{ s: planFinishStat(r), cls: "" }, { s: fullFinishStat(r), cls: "forecast__card--all" }].forEach(({ s, cls }) => {
       const c = el("div", { class: "forecast__card " + cls });
@@ -1402,7 +1402,7 @@
     if (r.projTimeLimited)
       return { label: "Est. finish (as per material availability)", value: "beyond ~2 yr", sub: "scope exceeds a 2-year horizon", kind: "warn" };
     if (r.projectedFinish)
-      return { label: "Est. finish (as per material availability)", value: U.fmtDate(r.projectedFinish), sub: U.fmtInt(r.unachievablePiles) + " more piles await material", kind: "warn" };
+      return { label: "Est. finish (as per material availability)", value: U.fmtDate(r.projectedFinish), sub: U.fmtInt(r.unachievablePiles) + " more material needed", kind: "warn" };
     return { label: "Est. finish (as per material availability)", value: "—", sub: r.deployed <= 0 ? "no machines deployed" : "no installable material", kind: "warn" };
   }
 

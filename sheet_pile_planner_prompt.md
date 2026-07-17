@@ -201,7 +201,7 @@ the available width when it toggles. The header **"Export plan"** button (shown 
 plan exists) exports the `.xer` (§6.6).
 
 **Plan summary** (top of the Plan card): a one-line headline, then **KPI tiles** —
-*Piles this window*, *Scope complete %*, **Length covered** (km of wall, proportional to
+*Piles planned*, *Scope complete %*, **Length covered** (km of wall, proportional to
 piles installed incl. prior; replaces the old "chainages complete" count), *Chainages
 covered*, *Carry-over* — then a **Forecast completion** group with the two §5.7 dates
 (gold = current material, green = all material).
