@@ -32,6 +32,7 @@
 
     // Piles already installed per chainage (from progress history, current rows).
     const installedByChainage = (progress && progress.installedByChainage) || {};
+    // Piles already installed on a chainage (from progress history).
     function priorInstalled(f) { return installedByChainage[f.name] || 0; }
     // Remaining scope per chainage = full MTO minus what's already installed.
     const remainingById = {}, priorById = {};
@@ -46,6 +47,7 @@
     const active = candidates.filter((f) => remainingById[f.id] > 0);
     const partial = candidates.filter((f) => (priorById[f.id] || 0) > 0 && remainingById[f.id] > 0);
 
+    // Material record for an item code (or null if absent).
     function codeMaterial(code) { return material.byCode[code] || null; }
     // Material already consumed per item code = piles already installed across ALL
     // chainages (any priority) that use this code — they drew from the same pool.
@@ -65,6 +67,7 @@
     // start. Overdue on-hold material (Expected Arrival already past, not yet
     // delivered) is NOT on site, so it does not count as available for this plan.
     function arrivesInPlan(inb) { return U.cmpDate(inb.arrival, planStart) >= 0; }
+    // Net on-site stock + in-window inbound available for a code.
     function totalMaterialQty(code) {
       const m = codeMaterial(code);
       if (!m) return 0;
@@ -106,6 +109,7 @@
                       profile: profileForCode(ev.code) }))
       .sort((a, b) => U.cmpDate(a.date, b.date));
 
+    // Display profile name (Item Description) for an item code.
     function profileForCode(code) {
       const f = workable.find((w) => w.code === code) || candidates.find((c) => c.code === code);
       return f ? f.profile : code;
@@ -137,12 +141,15 @@
         anchorByCode[f.code] = f.sortKey; anchorTime[f.code] = t;
       }
     });
+    // True if a chainage is started (has prior progress) but not finished.
     function isPartial(f) { return (priorById[f.id] || 0) > 0 && remainingById[f.id] > 0; }
+    // Distance in sort order from the profile's last-worked frontier chainage.
     function distToAnchor(f) {
       const a = anchorByCode[f.code];
       if (a == null) return Infinity;          // fresh profile → fall back to Chainage_Id order
       return Math.abs(f.sortKey - a);
     }
+    // Work-queue order: partials first, then nearest to the frontier, then Chainage_Id.
     function queueCmp(x, y) {
       const px = isPartial(x) ? 0 : 1, py = isPartial(y) ? 0 : 1;
       if (px !== py) return px - py;                       // (1) partials first
@@ -188,10 +195,12 @@
     // hours are trimmed from EACH selected day (not split across them).
     const lostDays = [], trimmedDays = [];
     let hindHours = 0;
+    // Mark a calendar day as fully lost to a hindrance.
     function markLost(c) {
       c.isWorking = false; c.hours = 0; c.nonWorkReason = "Hindrance — day lost"; c.hindrance = true;
       lostDays.push(c.date);
     }
+    // Trim hindrance hours from a day; mark it lost if hours hit zero.
     function trimHours(c, hrs) {
       const take = Math.min(c.hours, hrs);
       if (take <= 0) return 0;
@@ -223,6 +232,7 @@
 
     /* ---- 6. the daily simulation (§5.4) ------------------------------------ */
     const rampProfile = (p.rampProfile && p.rampProfile.length) ? p.rampProfile : [1];
+    // Ramp multiplier applied on a machine's k-th working day.
     function rampFactor(k) { return rampProfile[Math.min(k, rampProfile.length - 1)]; }
 
     // The window plan runs over `cal` with the (optionally material-capped) `queue`.

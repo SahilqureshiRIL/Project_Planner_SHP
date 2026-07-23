@@ -1,8 +1,29 @@
 /* =============================================================================
    bluesky_ui.js — inputs, wiring and rendering for the Bluesky target-date
-   back-planner. Reads the shared store/defaults exposed by ui.js (SPP.app) and
-   drives SPP.bluesky.compute. Uses the same design-token CSS classes as the
-   planner (statgrid / stat / data table) so the two modules look consistent.
+   back-planner (the "Bluesky" module on the home picker).
+
+   Responsibilities:
+     • collect the inputs (target date, multi-select priorities, work-days,
+       workhours, productivity),
+     • call SPP.bluesky.compute() (in bluesky.js) to back-calculate the crew,
+     • render the result: a KPI summary + verdict, a Priority/Profile-wise
+       material check table, and a chainage/machine day-by-day plan table.
+
+   Contracts with the rest of the app:
+     • data + defaults are OWNED by ui.js and exposed read-only via SPP.app
+       (getStore / getDefaults). This module never parses files itself.
+     • ui.js calls BUI.onDataReady() once the files finish loading and
+       BUI.onShow() whenever the module is opened, so we can (re)populate.
+     • BUI.runLoader() is exported and reused by the planner (ui.js) for its
+       own generate-time checklist loader.
+     • CSS reuses the shared design-token classes (statgrid / stat / data
+       table / notice) so Bluesky and the planner stay visually consistent.
+
+   Layout of this file:
+     1. state + init wiring        2. collapsible panel + priority dropdown
+     3. tab switch                 4. data → form (populate)
+     5. calculate                  6. checklist loader
+     7. render (summary / profile table / schedule table) + helpers
    ============================================================================= */
 (function () {
   "use strict";
@@ -11,12 +32,14 @@
   const $ = U.$, el = U.el;
   const BUI = (SPP.blueskyUI = {});
 
-  let populated = false;
-  let lastResult = null;   // kept so the table can re-render on a group-by change
-  let activeTab = "material";   // "material" | "plan" — defaults to the material check
-  const selected = new Set();   // selected priorities (multiselect state)
-  let scopeCache = null;        // per-priority scope, for pill/menu meta
+  /* ---- module state -------------------------------------------------------- */
+  let populated = false;        // guard so we only build the inputs form once
+  let lastResult = null;        // last compute() result — re-render the table on group-by change
+  let activeTab = "material";   // "material" | "plan" — result tab; defaults to the material check
+  const selected = new Set();   // currently-selected priorities (multiselect state)
+  let scopeCache = null;        // per-priority scope (km/piles/chainages) for pill + menu meta
 
+  /* ============================ 1. INIT / WIRING ============================ */
   document.addEventListener("DOMContentLoaded", () => {
     const btn = $("#bsCalcBtn");
     if (btn) btn.addEventListener("click", onCalculate);
@@ -37,31 +60,36 @@
     document.addEventListener("click", (e) => { if (!e.target.closest("#bsPriorityMS")) closeMenu(); });
   });
 
+  /* ============================ 2. PANEL + DROPDOWN ============================ */
+  // Collapse/expand the top input panel (CSS animates the max-height of .bs-panel__wrap).
   function setPanelCollapsed(collapsed) {
     const card = $("#bsParamsCard");
     card.classList.toggle("is-collapsed", collapsed);
     const t = $("#bsPanelToggle"); if (t) t.setAttribute("aria-expanded", String(!collapsed));
   }
 
-  /* ---- priority multiselect dropdown --------------------------------------- */
-  function toggleMenu() { $("#bsMsMenu").hidden ? openMenu() : closeMenu(); }
-  function openMenu() {
+  /* ---- priority multiselect dropdown ---------------------------------------
+     A custom control (not a native <select>) so we can show selected priorities
+     as removable pills and each option with its km/piles scope. `selected` holds
+     the state; syncMs() re-paints the pills + menu checkmarks from it. */
+  function toggleMenu() { $("#bsMsMenu").hidden ? openMenu() : closeMenu(); }   // control clicked
+  function openMenu() {   // show the options popover + set open state/aria
     $("#bsMsMenu").hidden = false;
     $("#bsMsControl").setAttribute("aria-expanded", "true");
     $("#bsPriorityMS").classList.add("is-open");
   }
-  function closeMenu() {
+  function closeMenu() {   // hide the popover (called on outside-click and after a pick)
     const m = $("#bsMsMenu"); if (!m) return;
     m.hidden = true;
     $("#bsMsControl").setAttribute("aria-expanded", "false");
     $("#bsPriorityMS").classList.remove("is-open");
   }
 
-  function toggleOption(prio) {
+  function toggleOption(prio) {   // menu row clicked → add/remove from selection
     if (selected.has(prio)) selected.delete(prio); else selected.add(prio);
     syncMs();
   }
-  function removeOption(prio) { selected.delete(prio); syncMs(); }
+  function removeOption(prio) { selected.delete(prio); syncMs(); }   // pill ✕ clicked
 
   // Re-render the pills (in the control) and the checked state in the menu.
   function syncMs() {
@@ -86,6 +114,7 @@
     updateScopeHint();
   }
 
+  // Sum the selected priorities' remaining scope and show it under the dropdown.
   function updateScopeHint() {
     const hint = $("#bsScopeHint"); if (!hint) return;
     if (!selected.size || !scopeCache) { hint.textContent = ""; return; }
@@ -96,9 +125,11 @@
     hint.textContent = "Scope: " + U.fmtNum(km, 2) + " km left · " + U.fmtInt(piles) + " piles · " + U.fmtInt(ch) + " chainages";
   }
 
+  // Priorities in the canonical order the chainage model exposes them.
   function st_priorities() { const st = store(); return st ? st.chainage.priorities : []; }
 
-  // Switch the visible result panel; the tab bar governs card visibility.
+  /* ============================ 3. RESULT TABS ============================ */
+  // Switch the visible result panel; the tab bar governs which card is shown.
   function setTab(tab) {
     activeTab = tab;
     U.$$(".bs-tab").forEach((b) => b.classList.toggle("is-active", b.dataset.bstab === tab));
@@ -106,10 +137,13 @@
     $("#bsTableCard").hidden = tab !== "plan";
   }
 
-  // Called by ui.js when the data files finish loading, and when the module opens.
+  /* ============================ 4. DATA → FORM ============================ */
+  // ui.js hooks: onDataReady fires once files load; onShow fires each time the
+  // module is opened (populate() is idempotent via the `populated` guard).
   BUI.onDataReady = function () { populate(); };
   BUI.onShow = function () { if (!populated) populate(); };
 
+  // Read-only accessors to the shared store/defaults owned by ui.js (SPP.app).
   function store() { return SPP.app && SPP.app.getStore ? SPP.app.getStore() : null; }
   function defaults() { return SPP.app && SPP.app.getDefaults ? SPP.app.getDefaults() : null; }
 
@@ -121,7 +155,9 @@
     return d;
   }
 
-  /* ---- fill inputs + build the priority picker from the loaded data -------- */
+  // Fill the input defaults (target date, workhours, productivity) and build the
+  // priority picker. Runs once — the `populated` guard keeps a re-open from
+  // wiping a selection the user already made.
   function populate() {
     const st = store(), d = defaults();
     if (!st || !d) return;
@@ -144,6 +180,8 @@
     buildPriorityMenu(st);
   }
 
+  // Build the dropdown menu options (one per priority, with its scope meta) and
+  // clear any prior selection. scopeCache is reused by the pills/scope hint.
   function buildPriorityMenu(st) {
     const menu = $("#bsMsMenu");
     U.clear(menu);
@@ -165,11 +203,14 @@
     syncMs();
   }
 
+  // Selected priorities returned in canonical order (not click order).
   function selectedPriorities() {
     return st_priorities().filter((p) => selected.has(p));
   }
 
-  /* ---- calculate + render -------------------------------------------------- */
+  /* ============================ 5. CALCULATE ============================ */
+  // Validate inputs, run the compute engine, then play the loader before showing
+  // the result. Validation happens BEFORE the loader so errors surface instantly.
   function onCalculate() {
     const st = store(), d = defaults();
     if (!st || !d) { U.toast("Data is still loading — try again in a moment.", "bad"); return; }
@@ -195,7 +236,7 @@
     } catch (err) { U.toast("Calculation failed: " + err.message, "bad"); console.error(err); return; }
 
     lastResult = res;
-    // Run the checklist loader (constant ~3s), then reveal the results and
+    // Run the checklist loader (constant ~5s), then reveal the results and
     // collapse the input panel so the plan gets the full screen.
     runLoader(() => {
       renderResult(res);
@@ -206,7 +247,11 @@
     });
   }
 
-  /* ---- checklist loader (fixed ~3s, sequential ticks) ---------------------- */
+  /* ============================ 6. CHECKLIST LOADER ============================
+     A purely cosmetic overlay: it always runs for a fixed ~5s regardless of how
+     fast compute() was, ticking each step in sequence, then calls `done`. The
+     step labels are just an array (edit freely); the planner passes its own set.
+     The duration is one constant (`total`) — change it in one place. */
   const LOADER_STEPS = [
     "Reading site actuals",
     "Netting installed progress",
@@ -215,7 +260,9 @@
     "Building chainage-wise schedule",
     "Computing plan"
   ];
-  BUI.runLoader = runLoader;   // shared with the planner module (ui.js)
+  BUI.runLoader = runLoader;   // exported so the planner (ui.js) reuses the same overlay
+  // done  = callback to run once the animation completes.
+  // steps = optional custom labels (defaults to LOADER_STEPS).
   function runLoader(done, steps) {
     const overlay = $("#bsLoader"), list = $("#bsLoaderList");
     U.clear(list);
@@ -238,8 +285,11 @@
     setTimeout(() => { overlay.hidden = true; done(); }, total + 180);
   }
 
+  /* ============================ 7. RENDER ============================ */
+  // Paint the whole result: meta strip, KPI summary + verdict, then the two
+  // tabbed tables. `r` is the object returned by SPP.bluesky.compute().
   function renderResult(r) {
-    // Meta strip
+    // Meta strip (priorities · target · start · working days)
     $("#bsMeta").innerHTML =
       "<span>" + U.esc(r.priorities.join(", ")) + "</span>" +
       "<span>Target " + U.fmtDate(r.target) + "</span>" +
@@ -260,6 +310,7 @@
       machinesTxt + "</strong> machine(s) and <strong>" + manpowerTxt + "</strong> people working " +
       r.params.workDaysPerWeek + " day(s)/week at " + r.params.workhours + " h/day." }));
 
+    // KPI tiles — probability tile tone tracks the score (green/amber/rose).
     const prob = r.probability || { percent: 0, factors: {} };
     const probTone = prob.percent >= 70 ? "emerald" : prob.percent >= 45 ? "amber" : "rose";
 
@@ -289,6 +340,8 @@
     setTab("material");   // default panel on every Process Plan
   }
 
+  // Tab 1 — Priority/Profile-wise material check. One row per (priority, profile)
+  // with At-site / In-transit / Gap and the per-profile material halt date.
   function renderProfileTable(r) {
     const badge = $("#bsProfileBadge");
     badge.textContent = r.gapTotal > 0 ? "Shortage" : "Covered";
@@ -323,8 +376,9 @@
     const scroll = $("#bsProfileScroll"); U.clear(scroll); scroll.appendChild(t);
   }
 
-  /* Chainage-wise / machine-wise day-by-day plan (material unlimited). Mirrors the
-     planner's Table view; grouped by Date / Chainage / Machine. */
+  // Per-chainage display prep: sort each chainage's entries by date and turn the
+  // running cumulative into a whole-pile daily delta (dispInstall) via cumulative
+  // rounding, so the "Piles (day)" column always sums back to the totals.
   function computeDisplay(schedule) {
     const byCh = {};
     schedule.forEach((e) => (byCh[e.chId] || (byCh[e.chId] = [])).push(e));
@@ -335,6 +389,9 @@
     });
   }
 
+  // Tab 2 — chainage-wise / machine-wise day-by-day plan (material assumed
+  // unlimited in Bluesky). Mirrors the planner's Table view; the Group-by control
+  // re-sorts and re-groups by Date / Chainage / Machine.
   function renderSchedule(r) {
     if (!r.schedule || !r.schedule.length) {
       U.clear($("#bsTableScroll"));
@@ -353,6 +410,8 @@
     thead.appendChild(htr); table.appendChild(thead);
     const tb = el("tbody");
 
+    // sortVal orders rows within the chosen grouping; keyFn decides when to emit
+    // a new group-header row. The multipliers just make the primary key dominate.
     const rows = r.schedule.slice();
     const sortVal = {
       date: (e) => e.date.getTime() * 100 + e.machine,
@@ -380,6 +439,7 @@
       (r.scheduleFinish ? " · finishes " + U.fmtDate(r.scheduleFinish) : "");
   }
 
+  // A full-width divider row that labels the start of each Date/Chainage/Machine group.
   function scheduleGroupHeader(groupBy, e, span) {
     let label;
     if (groupBy === "date") label = U.fmtFriendly(e.date) + "  ·  Day " + e.dayNum;
@@ -390,6 +450,8 @@
     return tr;
   }
 
+  // One schedule line (a machine's work on a chainage for a day). % Comp. and the
+  // completed-row highlight use the true cumulative (e.cum), not the rounded delta.
   function scheduleRow(e) {
     const pct = e.mto > 0 ? (e.cum / e.mto) * 100 : 0;
     const done = e.cum >= e.mto - 1e-6;

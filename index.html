@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Sheet Pile Installation Planner</title>
-  <link rel="stylesheet" href="styles.css?v=84" />
+  <link rel="stylesheet" href="styles.css?v=86" />
   <!--
     SheetJS (xlsx) is vendored locally in ./vendor so the app works fully offline.
     If you prefer the CDN, replace the src below with:
@@ -74,6 +74,10 @@
     </div>
   </section>
 
+  <!-- ============================ INSTALLATION PLANNER MODULE ============================
+       Forward planner: user sets machines/manpower/productivity; the engine (engine.js)
+       simulates day-by-day and renders Gantt/Material/Table/Map + validation. Layout is a
+       collapsible top input panel (#paramsCard) over the full-width results (.bs-results). -->
   <main class="layout layout--stack" id="plannerLayout" hidden>
    <div class="bs-shell">
 
@@ -352,7 +356,10 @@
    </div>
   </main>
 
-  <!-- ============================ BLUESKY MODULE ============================ -->
+  <!-- ============================ BLUESKY MODULE ============================
+       Target-date back-planner: user sets a target date + priorities; bluesky.js back-
+       calculates the machines/manpower needed, a material gap check, a schedule and a
+       schedule-led probability of success. Wiring/rendering live in bluesky_ui.js. -->
   <main class="layout layout--bluesky" id="blueskyLayout" hidden>
    <div class="bs-shell">
 
@@ -534,15 +541,15 @@
   <!-- Scripts (load order matters: util -> data -> engine -> xer -> ui).
        The ?v= query string is a cache-buster: bump it whenever js/ changes so
        browsers don't run a stale copy. -->
-  <script src="js/chainage_data.js?v=84"></script>
-  <script src="js/util.js?v=84"></script>
-  <script src="js/data.js?v=84"></script>
-  <script src="js/engine.js?v=84"></script>
-  <script src="js/xer.js?v=84"></script>
-  <script src="js/ui.js?v=84"></script>
+  <script src="js/chainage_data.js?v=86"></script>
+  <script src="js/util.js?v=86"></script>
+  <script src="js/data.js?v=86"></script>
+  <script src="js/engine.js?v=86"></script>
+  <script src="js/xer.js?v=86"></script>
+  <script src="js/ui.js?v=86"></script>
   <!-- Bluesky target-date back-planner (loads after ui.js so it can read the shared store). -->
-  <script src="js/bluesky.js?v=84"></script>
-  <script src="js/bluesky_ui.js?v=84"></script>
+  <script src="js/bluesky.js?v=86"></script>
+  <script src="js/bluesky_ui.js?v=86"></script>
 </body>
 </html>
 

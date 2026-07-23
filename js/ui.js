@@ -102,8 +102,11 @@
     window.scrollTo(0, 0);
   }
 
+  // Zoom the map by a relative factor (delegates to the active GL or SVG renderer).
   function mapZoomBy(f) { if (mapGL) mapGL.zoomBy(f); else setMapZoom(state.mapZoom * f); }
+  // Reset the map zoom to fit the whole boundary.
   function mapZoomFit() { if (mapGL) mapGL.fit(); else setMapZoom(1); }
+  // Apply an absolute zoom level to the SVG map fallback.
   function setMapZoom(z) {
     state.mapZoom = U.clamp(z, 0.5, 12);
     if (state.result) renderMap();
@@ -141,6 +144,7 @@
 
   /* ============================ FILE LOADING ============================ */
   function fileRow(kind) { return document.querySelector('.filerow[data-file="' + kind + '"]'); }
+  // Update a data-file row's status text and state class (ok/bad).
   function setStatus(kind, msg, cls) {
     const row = fileRow(kind);
     row.querySelector('[data-role="status"]').textContent = msg;
@@ -148,6 +152,7 @@
     if (cls) row.classList.add(cls);
   }
 
+  // Parse a user-picked .xlsx for the given kind, store it, and refresh.
   function handleFile(kind, file) {
     setStatus(kind, "Reading…");
     const reader = new FileReader();
@@ -166,6 +171,7 @@
     if (kind === "chainage") reader.readAsText(file); else reader.readAsArrayBuffer(file);
   }
 
+  // Build the short one-line status summary shown for a loaded file.
   function summarize(kind, m) {
     if (kind === "chainage") return "✓ " + U.fmtInt(m.features.length) + " chainages · " + m.priorities.length + " priorities · " + m.profiles.length + " profiles";
     if (kind === "manpower") {
@@ -178,8 +184,10 @@
     return "✓ loaded";
   }
 
+  // True once the chainage model + all three workbooks are parsed.
   function allLoaded() { return state.parsed.chainage && state.parsed.manpower && state.parsed.material && state.parsed.progress; }
 
+  // Recompute the loaded-file count; once complete, build defaults and enable the form.
   function refresh() {
     const n = ["manpower", "material", "progress"].filter((k) => state.parsed[k]).length;
     $("#dataStatusBadge").textContent = n + " / 3 loaded";
@@ -259,6 +267,7 @@
     renderRampChart();
     refreshHindranceCalendars();
   }
+  // Set an input's value by selector (no-op if the element is missing).
   function setVal(sel, v) { const n = $(sel); if (n) n.value = v; }
 
   /* ---- Priority pill dropdown (single-select) ------------------------------ */
@@ -279,8 +288,11 @@
     });
     syncPriority();
   }
+  // Select a single priority and close the menu.
   function choosePriority(p) { selectedPriority = p; closePriorityMenu(); syncPriority(); }
+  // Clear the priority selection (pill x).
   function clearPriority() { selectedPriority = null; syncPriority(); }
+  // Repaint the priority pill + menu radio state from selectedPriority.
   function syncPriority() {
     const pills = $("#pPriorityPills"); if (!pills) return;
     U.clear(pills);
@@ -298,8 +310,11 @@
       o.classList.toggle("is-sel", on); o.setAttribute("aria-selected", String(on));
     });
   }
+  // Open/close the priority options popover.
   function togglePriorityMenu() { $("#pPriorityMenu").hidden ? openPriorityMenu() : closePriorityMenu(); }
+  // Show the priority popover and set open state/aria.
   function openPriorityMenu() { $("#pPriorityMenu").hidden = false; $("#pPriorityMS").classList.add("is-open"); $("#pPriorityControl").setAttribute("aria-expanded", "true"); }
+  // Hide the priority popover (outside-click or after a pick).
   function closePriorityMenu() { const m = $("#pPriorityMenu"); if (!m) return; m.hidden = true; $("#pPriorityMS").classList.remove("is-open"); $("#pPriorityControl").setAttribute("aria-expanded", "false"); }
 
   // Show an auto-computed field greyed; when the planner edits it, turn it solid and
@@ -338,6 +353,7 @@
     }
   }
 
+  // Show/hide the 'machines capped by manpower (6/machine)' notice as inputs change.
   function refreshCapNotice() {
     const machines = parseInt($("#pMachines").value, 10);
     const manpower = parseInt($("#pManpower").value, 10);
@@ -350,6 +366,7 @@
     } else { notice.hidden = true; }
   }
 
+  // Append an editable hindrance row (type/amount/unit + a Mon-aligned day calendar).
   function addHindranceRow(data) {
     data = data || {};
     const list = $("#hindranceList");
@@ -470,11 +487,13 @@
 
   /* ============================ STORAGE ============================ */
   function readStored() { try { return JSON.parse(localStorage.getItem(LS_KEY)); } catch (e) { return null; } }
+  // Persist the effective deployed machine count (+ priority/decisions) to localStorage.
   function writeStored(machines, priority, decisions) {
     const compact = (decisions || []).map((d) => ({ code: d.code, decision: d.decision }));
     try { localStorage.setItem(LS_KEY, JSON.stringify({ machines, priority, ts: Date.now(), decisions: compact })); } catch (e) {}
     updateStoredHistoryHint();
   }
+  // Clear the stored machine-count history.
   function resetHistory() {
     try { localStorage.removeItem(LS_KEY); } catch (e) {}
     if (state.defaults) setVal("#pPrevMachines", $("#pMachines").value || state.defaults.machines);
@@ -482,6 +501,7 @@
     updateStoredHistoryHint();
     U.toast("Stored machine history cleared.", "ok");
   }
+  // Update the 'stored machine history' hint text below the ramp settings.
   function updateStoredHistoryHint() {
     const s = readStored();
     $("#storedHistoryHint").textContent = s ? ("Stored: " + s.machines + " machines · " + (s.priority || "") + " · " + U.fmtShort(new Date(s.ts))) : "Nothing stored yet.";
@@ -502,12 +522,14 @@
       ])));
       modal.hidden = false;
       const proceed = $("#warnProceed"), abort = $("#warnAbort");
+      // Close the warnings modal and resolve the confirmation promise.
       function cleanup(val) { modal.hidden = true; proceed.onclick = abort.onclick = null; resolve(val); }
       proceed.onclick = () => cleanup(true);
       abort.onclick = () => cleanup(false);
     });
   }
 
+  // Validate inputs, run the engine, confirm any warnings, then play the loader and render.
   async function onGenerate() {
     if (!allLoaded()) { U.toast("Load the manpower, material and progress files first.", "bad"); return; }
     const p = gatherParams();
@@ -545,6 +567,7 @@
     "Generating plan"
   ];
 
+  // Read + validate the planner form into an engine params object (returns null on error).
   function gatherParams() {
     const priority = selectedPriority;
     if (!priority) { U.toast("Choose a chainage priority.", "bad"); openPriorityMenu(); return null; }
@@ -635,6 +658,7 @@
       U.toast("Export failed: " + e.message, "bad");
     }
   }
+  // Trigger a browser download of a text blob (used by the .xer export).
   function downloadText(filename, text) {
     const blob = new Blob([text], { type: "application/octet-stream" });
     const a = document.createElement("a");
@@ -702,6 +726,7 @@
       host._ro.observe(host);
     }
   }
+  // Draw the recent-progress bar chart (piles/day) at true pixel size.
   function drawProgressChart() {
     const host = $("#progressChart"); if (!host) return;
     const meta = $("#progressCardMeta");
@@ -762,6 +787,7 @@
     host.onmouseleave = hideTip;
   }
 
+  // Switch the results view (Gantt/Material/Table/Map) and lazy-render Gantt/Map.
   function setView(v) {
     state.view = v;
     $("#ganttView").hidden = v !== "gantt";
@@ -786,6 +812,7 @@
     });
   }
 
+  // Render the day-by-day schedule table for the current group-by.
   function renderTable() {
     const r = state.result;
     computeDisplay(r.schedule);
@@ -827,6 +854,7 @@
     $("#tableSummary").textContent = r.schedule.length + " entries · " + r.worked.length + " chainages · " + U.fmtInt(Math.round(r.totalInstalled)) + " piles installed in window";
   }
 
+  // Build a group-divider row (Date/Chainage/Machine) for the table.
   function groupHeader(groupBy, x, span) {
     let label;
     if (groupBy === "date") {
@@ -841,6 +869,7 @@
     return tr;
   }
 
+  // Build one work row (a machine's install on a chainage for a day).
   function workRow(e) {
     const pct = e.mto > 0 ? (e.cum / e.mto) * 100 : 0;
     const done = e.cum >= e.mto - 1e-6;
@@ -864,6 +893,7 @@
     ].forEach((td) => tr.appendChild(td));
     return tr;
   }
+  // Build a non-working-day row (weekly off / hindrance).
   function nonworkRow(c, span) {
     const tr = el("tr", { class: "row-nonwork" });
     tr.appendChild(el("td", { colspan: span, text: U.fmtShort(c.date) + " (Day " + c.dayNum + ") — " + c.nonWorkReason + " · no installation" }));
@@ -1016,9 +1046,11 @@
     attachGanttTips(host);
     renderLegend();
   }
+  // Tooltip HTML for a worked chainage bar in the Gantt.
   function tipFor(w) {
     return U.esc(w.id + " · " + w.profile + "\nMachine " + w.machine + "\n" + Math.round(w.done) + " / " + U.fmtInt(w.mto) + " piles (" + U.fmtNum((w.done / w.mto) * 100, 1) + "%)\n" + U.fmtShort(w.startDate) + " → " + U.fmtShort(w.lastDate) + (w.completed ? " (completed)" : ""));
   }
+  // Render the Gantt colour legend (by profile or by machine).
   function renderLegend() {
     const r = state.result, host = $("#ganttLegend"); U.clear(host);
     const items = [];
@@ -1033,6 +1065,7 @@
     if (r.lostDays.length) host.appendChild(el("span", { class: "legend-item" }, [el("span", { class: "legend-swatch", style: "background:#fbf2dd;border:1px solid #eccb86" }), document.createTextNode("Hindrance day")]));
   }
   let ganttTip = null;
+  // Wire hover tooltips onto the rendered Gantt bars.
   function attachGanttTips(host) {
     if (!ganttTip) { ganttTip = el("div", { class: "gantt-tip" }); document.body.appendChild(ganttTip); }
     host.addEventListener("mousemove", (ev) => {
@@ -1057,6 +1090,7 @@
   function mapVisible(cat) { return !state.mapFilters.size || state.mapFilters.has(cat); }
   let mapTipEl = null, mapGL = null, _ptTex = null;
 
+  // Tooltip HTML for a chainage on the map.
   function mapTipText(f, st, info) {
     const lbl = (MAP_STATUS[st] || {}).label || st || "Other priority";
     let t = f.id + " · " + f.profile + "\nStatus: " + lbl + "\nMTO: " + U.fmtInt(f.mto) + " piles";
@@ -1064,12 +1098,15 @@
       "\n" + Math.round(info.done) + " / " + U.fmtInt(info.mto) + " (" + U.fmtNum(info.done / info.mto * 100, 1) + "%)";
     return U.esc(t);
   }
+  // Position and show the floating tooltip at a screen point.
   function showTip(clientX, clientY, html) {
     if (!mapTipEl) { mapTipEl = el("div", { class: "map-tip" }); document.body.appendChild(mapTipEl); }
     mapTipEl.style.display = "block"; mapTipEl.style.left = (clientX + 14) + "px"; mapTipEl.style.top = (clientY + 14) + "px";
     mapTipEl.innerHTML = html.replace(/\n/g, "<br>");
   }
+  // Hide the floating tooltip.
   function hideTip() { if (mapTipEl) mapTipEl.style.display = "none"; }
+  // Feature-detect WebGL so the map can fall back to SVG when unavailable.
   function webglOK() {
     try { const c = document.createElement("canvas"); return !!(window.WebGLRenderingContext && (c.getContext("webgl") || c.getContext("experimental-webgl"))); }
     catch (e) { return false; }
@@ -1103,6 +1140,7 @@
     };
   }
 
+  // Render the map: WebGL (three.js) if available, else the SVG fallback.
   function renderMap() {
     const host = $("#mapScroll");
     if (mapGL) { try { mapGL.dispose(); } catch (e) {} mapGL = null; }
@@ -1125,6 +1163,7 @@
     const x = c.getContext("2d"); x.beginPath(); x.arc(32, 32, 27, 0, Math.PI * 2); x.fillStyle = "#fff"; x.fill();
     _ptTex = new THREE.CanvasTexture(c); _ptTex.needsUpdate = true; return _ptTex;
   }
+  // three.js WebGL map renderer (orthographic pan/zoom, marker picking, filtering).
   function renderMapGL(data) {
     const host = $("#mapScroll"); U.clear(host);
     const { geoFeats, infoById, minLng, maxLng, minLat, maxLat, kx, catOf } = data;
@@ -1187,6 +1226,7 @@
     // camera fit + pan/zoom
     const cx = dataW / 2, cy = dataH / 2;
     let panX = cx, panY = cy, zoom = 1;
+    // Apply the current pan/zoom to the orthographic camera and redraw.
     function applyCam() {
       const aspect = W / Hh, margin = 1.08;
       let halfW = dataW * margin / 2, halfH = dataH * margin / 2;
@@ -1201,6 +1241,7 @@
     const w2s = (wx, wy) => [(wx - cam.left) / camW() * W, (cam.top - wy) / camH() * Hh];
     applyCam(); draw();
 
+    // Hit-test the nearest chainage marker to a screen (mouse) point.
     function pick(mx, my) {
       let best = null, bd = 144;
       for (const p of pickables) {
@@ -1210,6 +1251,7 @@
       }
       return best;
     }
+    // Position the selection ring/marker on a picked chainage.
     function placeSel(p) {
       if (!p) { selObj.visible = false; return; }
       selObj.geometry.attributes.position.setXYZ(0, p.wx, p.wy, 0);
@@ -1250,6 +1292,7 @@
     });
     cv.addEventListener("pointerleave", hideTip);
 
+    // Re-colour markers to honour the active legend filter set.
     function applyFilter() {
       Object.keys(objs).forEach((cat) => {
         const vis = cat === "boundary" ? true : mapVisible(cat);   // boundary is always shown
@@ -1258,6 +1301,7 @@
       if (state.mapSelected) { const ps = pickables.find((p) => p.id === state.mapSelected); selObj.visible = !!ps && mapVisible(ps.cat); }
       draw();
     }
+    // Re-render the map only if the container width actually changed.
     function onResize() { if ((host.clientWidth || 880) !== W) renderMap(); }
     window.addEventListener("resize", onResize);
 
@@ -1319,6 +1363,7 @@
     };
   }
 
+  // Build the map scale bar for the current pixel-per-metre scale.
   function mapScaleBar(S, pad, H) {
     const mPerPx = 111320 / S;
     const raw = mPerPx * 120, pow = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / pow;
@@ -1332,6 +1377,7 @@
       '<text x="' + (x0 + px / 2) + '" y="' + (y - 6) + '" text-anchor="middle" fill="#cdd5df" font-size="10">' + label + '</text>';
   }
 
+  // Update the map info bar for a hovered/pinned chainage.
   function showMapInfo(f, st, info) {
     const box = $("#mapInfo");
     if (!f) { box.textContent = "Drag to pan, scroll to zoom. Hover a chainage for details; click to pin. Click legend entries to filter (multiple allowed)."; return; }
@@ -1358,7 +1404,9 @@
       host.appendChild(node);
     });
   }
+  // Re-apply the legend filter to whichever renderer is active.
   function reapplyMapFilter() { if (mapGL) mapGL.applyFilter(); else renderMap(); updateLegendActive(); }
+  // Toggle a legend category in the map filter set and re-apply.
   function toggleMapFilter(cat) {
     if (state.mapFilters.has(cat)) state.mapFilters.delete(cat); else state.mapFilters.add(cat);
     reapplyMapFilter();
@@ -1369,6 +1417,7 @@
     state.mapFilters = new Set(cats || []);
     setView("map");
   }
+  // Sync the legend chips' active styling with the current filter.
   function updateLegendActive() {
     const any = state.mapFilters.size > 0;
     U.$$("#mapLegend .legend-item").forEach((it) => {
@@ -1499,7 +1548,9 @@
     return { label: "Est. finish (all material available)", value: "—", sub: "no machines deployed", kind: "warn" };
   }
 
+  // Build a titled section wrapper for the validation panel.
   function section(title) { const s = el("div", { class: "vsection" }); s.appendChild(el("div", { class: "vsection__title", text: title })); return s; }
+  // Build a KPI stat-tile grid from {label,value,sub,tone} items.
   function statGrid(stats) {
     const g = el("div", { class: "statgrid" });
     stats.forEach((s) => {
@@ -1511,6 +1562,7 @@
     });
     return g;
   }
+  // Build a labelled horizontal progress bar (percent complete).
   function bigBar(pct) {
     const bar = el("div", { class: "bigbar" });
     bar.appendChild(el("div", { class: "bigbar__fill", style: "width:" + U.clamp(pct, 0, 100) + "%" }));

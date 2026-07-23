@@ -69,7 +69,9 @@
       const prior = installedByChainage[f.name] || 0;
       if (f.code && prior > 0) codeConsumedPrior[f.code] = (codeConsumedPrior[f.code] || 0) + prior;
     });
+    // Material record for an item code (or null if none in the file).
     function codeMaterial(code) { return material.byCode[code] || null; }
+    // On-site stock still usable now = Accepted-at-Site minus what prior installs consumed.
     function netOnsite(code) {
       const m = codeMaterial(code);
       return m ? Math.max(0, m.onsite - (codeConsumedPrior[code] || 0)) : 0;
@@ -77,7 +79,7 @@
     // Profile label (Item Description) for an item code.
     const profileByCode = {};
     candidates.forEach((f) => { if (f.code && !profileByCode[f.code]) profileByCode[f.code] = f.profile; });
-    function profileForCode(code) { return profileByCode[code] || code; }
+    function profileForCode(code) { return profileByCode[code] || code; }   // code → display profile name
 
     /* ---- 3. working days available until the target ------------------------- */
     let workingDays = 0;

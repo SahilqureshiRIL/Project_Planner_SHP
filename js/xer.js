@@ -66,12 +66,14 @@
 
   // XER is CRLF-terminated, ASCII, no BOM (matches the taskmapper sample).
   const EOL = "\r\n";
+  // Sanitize a field value for the tab-delimited .xer (strip tabs/newlines).
   function clean(v) {
     if (v == null) return "";
     return String(v)
       .replace(/[\t\r\n]+/g, " ")        // never break the TSV rows
       .replace(/[^\x20-\x7E]/g, "");     // keep it plain ASCII
   }
+  // Emit a %T/%F/%R table block for a record set.
   function emit(name, rows) {
     const fields = F[name];
     const numset = new Set(NUM[name] || []);
@@ -86,10 +88,13 @@
     return s;
   }
 
+  // Zero-pad a number to two digits (for date fields).
   function pad2(n) { return (n < 10 ? "0" : "") + n; }
   // "2026-07-13 08:00"
   function dt(d, hhmm) { return d ? U.fmtISO(d) + " " + (hhmm || "08:00") : ""; }
+  // Round to 4 decimals for numeric .xer fields.
   function n4(x) { return Math.round((x || 0) * 10000) / 10000; }
+  // Generate a P6-style GUID for records that need one.
   function guid() {
     const c = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
     let s = ""; for (let i = 0; i < 22; i++) s += c[Math.floor(Math.random() * c.length)];
@@ -188,6 +193,7 @@
     // ---- WBS hierarchy: Root -> Priority -> Zone -> Profile (tasks hang off Profile).
     const zoneOf = (w) => ((featById[w.id] || {}).zone) || "(zone n/a)";
     let wid = ROOT_WBS;
+    // Add a WBS node row (Root -> Priority -> Zone -> Profile hierarchy).
     function wbsNode(id, parent, seq, code, name, isRoot) {
       return {
         wbs_id: id, proj_id: PROJ, obs_id: OBSID, seq_num: seq, est_wt: 1,
@@ -312,6 +318,7 @@
     worked.forEach((w) => {
       const f = featById[w.id] || {};
       const fk = taskIdById[w.id];
+      // Add a UDF value row for the current task (skips blank/empty values).
       function u(id, txt) { if (txt !== "" && txt != null) udfRows.push({ udf_type_id: id, fk_id: fk, proj_id: PROJ, udf_text: String(txt) }); }
       u(901, Math.round(w.thisPlan || 0));                                   // Quantity Nos (piles this window)
       u(902, w.profile);                                                     // Pile Type

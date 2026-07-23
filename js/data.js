@@ -25,6 +25,7 @@
     header.forEach((h, i) => { const n = norm(h); if (n && !(n in idx)) idx[n] = i; });
     return { rows: rows.slice(1), header: header, col: idx };
   }
+  // Resolve the required column indices for a sheet, or throw a clear error.
   function requireCols(sheet, names, where) {
     const missing = names.filter((n) => !(norm(n) in sheet.col));
     if (missing.length) throw new Error(where + ": missing column(s) " + missing.join(", "));
@@ -91,6 +92,7 @@
     }
     return [[a[0], a[1]], [b[0], b[1]]];
   }
+  // Attach a boundary segment + its midpoint to a chainage property object.
   function attachSeg(p, seg) {
     if (seg) { p.__seg = seg; p.__mid = [(seg[0][0] + seg[1][0]) / 2, (seg[0][1] + seg[1][1]) / 2]; }
     return p;
@@ -137,6 +139,7 @@
     throw new Error("Unknown workbook kind: " + kind);
   };
 
+  // Tolerant (case/space-insensitive) worksheet lookup.
   function getSheet(wb, name) {
     // tolerant sheet lookup (case/space-insensitive)
     if (wb.Sheets[name]) return wb.Sheets[name];
@@ -181,6 +184,7 @@
     if (!sMachine || !sManpower || !sHour)
       throw new Error("Need sheets 'Machine Status', 'Manpower Status', 'Shifthour Status'.");
 
+    // Read a dated shift series (Shift Date + the given value column).
     function readSeries(ws, valCol, where) {
       const sh = readSheet(ws);
       const [cDate, cVal] = requireCols(sh, ["Shift Date", valCol], where);
@@ -210,6 +214,7 @@
       fix: machine.applied || manpower.applied || hour.applied || null
     };
   }
+  // Index a dated series by ISO date -> value.
   function mapByISO(records) { const m = {}; records.forEach((r) => { m[U.fmtISO(r.date)] = r.val; }); return m; }
 
   /* =====================================================================
@@ -312,6 +317,7 @@
     return { installedByDate, installedByChainage, lastInstallByChainage, maxDate, installedRowCount };
   }
 
+  // Derive a ramp-up profile from the recent productivity window (fallback if sparse).
   function deriveAdaptiveRamp(windowDays, mp, pr) {
     const fallbackProfile = [0.45, 0.58, 0.70, 0.80, 0.88, 0.94, 0.98, 1.00];
     const daily = [];
