@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Sheet Pile Installation Planner</title>
-  <link rel="stylesheet" href="styles.css?v=60" />
+  <link rel="stylesheet" href="styles.css?v=65" />
   <!--
     SheetJS (xlsx) is vendored locally in ./vendor so the app works fully offline.
     If you prefer the CDN, replace the src below with:
@@ -53,7 +53,7 @@
   <!-- ============================ HOME / MODULE PICKER ============================ -->
   <section class="home" id="homePicker">
     <div class="home__inner">
-      <h2 class="home__title">Choose a tool</h2>
+      <h2 class="home__title">Advance Planning Tool</h2>
       <p class="home__sub">Two ways to plan sheet-pile installation.</p>
       <div class="home__cards">
         <button type="button" class="modcard" data-module="planner">
@@ -392,7 +392,7 @@
         </div>
         <footer class="card__foot" id="bsFoot" hidden>
           <button type="button" id="bsCalcBtn" class="btn btn--primary btn--block">
-            <svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/></svg><span>Calculate</span>
+            <svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/></svg><span>Process Plan</span>
           </button>
         </footer>
       </section>
@@ -409,14 +409,20 @@
           <div class="plan-summary" id="bsSummary" hidden></div>
           <div class="emptystate" id="bsEmpty">
             <div class="emptystate__icon">&#127919;</div>
-            <p>Pick a <strong>target date</strong> and one or more <strong>priorities</strong>, then <strong>Calculate</strong>.</p>
+            <p>Pick a <strong>target date</strong> and one or more <strong>priorities</strong>, then <strong>Process Plan</strong>.</p>
           </div>
         </div>
       </section>
 
+      <!-- Tab switcher for the two result panels -->
+      <div class="bs-tabs" id="bsTabs" hidden role="tablist">
+        <button type="button" class="bs-tab is-active" data-bstab="material" role="tab">Priority &amp; Profile-wise Material Check</button>
+        <button type="button" class="bs-tab" data-bstab="plan" role="tab">Chainage-wise &amp; machine-wise plan</button>
+      </div>
+
       <section class="card" id="bsProfileCard" hidden>
         <div class="card__head">
-          <h2 class="card__title">Profile-wise material check</h2>
+          <h2 class="card__title">Priority & Profile-wise Material Check</h2>
           <span class="badge" id="bsProfileBadge"></span>
         </div>
         <div class="card__body">
@@ -428,6 +434,27 @@
             <strong>Gap</strong> = remaining demand not covered by At site + In transit &mdash; these piles cannot be installed until more material is ordered.
             <strong>Work halts</strong> = the day a profile runs out of material at the required pace.
           </p>
+        </div>
+      </section>
+
+      <!-- Chainage-wise / machine-wise day-by-day plan (material assumed unlimited) -->
+      <section class="card" id="bsTableCard" hidden>
+        <div class="card__head">
+          <h2 class="card__title">Chainage-wise &amp; machine-wise plan</h2>
+          <span class="badge badge--muted">material unlimited</span>
+        </div>
+        <div class="card__body">
+          <div class="table-controls">
+            <label class="inline-field">Group by
+              <select id="bsTableGroup" class="input input--sm">
+                <option value="date" selected>Date</option>
+                <option value="chainage">Chainage</option>
+                <option value="machine">Machine</option>
+              </select>
+            </label>
+            <span class="hint hint--inline" id="bsTableSummary"></span>
+          </div>
+          <div class="table-scroll" id="bsTableScroll"></div>
         </div>
       </section>
     </div>
@@ -460,15 +487,15 @@
   <!-- Scripts (load order matters: util -> data -> engine -> xer -> ui).
        The ?v= query string is a cache-buster: bump it whenever js/ changes so
        browsers don't run a stale copy. -->
-  <script src="js/chainage_data.js?v=60"></script>
-  <script src="js/util.js?v=60"></script>
-  <script src="js/data.js?v=60"></script>
-  <script src="js/engine.js?v=60"></script>
-  <script src="js/xer.js?v=60"></script>
-  <script src="js/ui.js?v=60"></script>
+  <script src="js/chainage_data.js?v=65"></script>
+  <script src="js/util.js?v=65"></script>
+  <script src="js/data.js?v=65"></script>
+  <script src="js/engine.js?v=65"></script>
+  <script src="js/xer.js?v=65"></script>
+  <script src="js/ui.js?v=65"></script>
   <!-- Bluesky target-date back-planner (loads after ui.js so it can read the shared store). -->
-  <script src="js/bluesky.js?v=60"></script>
-  <script src="js/bluesky_ui.js?v=60"></script>
+  <script src="js/bluesky.js?v=65"></script>
+  <script src="js/bluesky_ui.js?v=65"></script>
 </body>
 </html>
 

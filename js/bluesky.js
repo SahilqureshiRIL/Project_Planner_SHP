@@ -95,32 +95,51 @@
     else machinesNeeded = Math.max(1, Math.ceil(requiredRate / perMachineDaily - 1e-9));
     const manpower = isFinite(machinesNeeded) ? machinesNeeded * 6 : Infinity;        // 6 people per machine (engine rule)
 
-    /* ---- 5. per-profile demand vs supply (at-site / in-transit / gap) ------- */
-    const demandByCode = {};
-    rows.forEach((r) => { const c = r.f.code || "(no code)"; demandByCode[c] = (demandByCode[c] || 0) + r.remaining; });
+    /* ---- 5. per-priority-profile demand vs supply (at-site / in-transit / gap)
+       One row per (priority, profile). Because material is a single on-site /
+       in-transit pool per item code shared across priorities, that pool is
+       ALLOCATED across the priorities that use the code in priority order
+       (P-1a before P-1b … before P-2) — higher priority draws material first —
+       so the per-row In Stock / In Transit still sum back to the code totals. */
+    const groupKey = (prio, code) => prio + "|||" + code;
+    const demandByGroup = {};
+    rows.forEach((r) => {
+      const code = r.f.code || "(no code)";
+      const k = groupKey(r.f.priority, code);
+      const g = demandByGroup[k] || (demandByGroup[k] = { priority: r.f.priority, code, demand: 0 });
+      g.demand += r.remaining;
+    });
+    const groupsByCode = {};
+    Object.keys(demandByGroup).forEach((k) => { const g = demandByGroup[k]; (groupsByCode[g.code] || (groupsByCode[g.code] = [])).push(g); });
 
-    const profileRows = Object.keys(demandByCode).map((code) => {
+    const profileRows = [];
+    Object.keys(groupsByCode).forEach((code) => {
       const m = codeMaterial(code);
       const inbound = m ? m.inbound : [];
-      const atSite = netOnsite(code);
-      // In-transit that can realistically be used by the target (arrives in-window,
-      // usable = arrival + 1 ≤ target). Later arrivals are tracked separately.
-      let inTransitByTarget = 0, inTransitLater = 0;
+      // Shared pools for this code: on-site stock, in-transit usable by target, and later.
+      let poolSite = netOnsite(code), poolTransit = 0, poolLater = 0;
       inbound.forEach((inb) => {
         if (U.cmpDate(inb.arrival, planStart) < 0) return;               // overdue pre-window on-hold: not counted
-        if (U.cmpDate(inb.usable, target) <= 0) inTransitByTarget += inb.qty;
-        else inTransitLater += inb.qty;
+        if (U.cmpDate(inb.usable, target) <= 0) poolTransit += inb.qty;
+        else poolLater += inb.qty;
       });
-      const demand = demandByCode[code];
-      const supplyByTarget = atSite + inTransitByTarget;
-      const gap = Math.max(0, demand - supplyByTarget);
-      return {
-        code, profile: profileForCode(code),
-        demand, atSite, inTransitByTarget, inTransitLater,
-        supplyByTarget, gap, haltsOn: null   // filled by the simulation below
-      };
-    }).sort((a, b) => b.gap - a.gap || b.demand - a.demand || a.profile.localeCompare(b.profile));
-    const rowByCode = {}; profileRows.forEach((r) => { rowByCode[r.code] = r; });
+      // Allocate the pools to this code's priorities, highest priority first.
+      groupsByCode[code].sort((a, b) => U.priorityOrder(a.priority) - U.priorityOrder(b.priority)).forEach((g) => {
+        const siteAlloc = Math.min(g.demand, poolSite); poolSite -= siteAlloc;
+        let rem = g.demand - siteAlloc;
+        const transitAlloc = Math.min(rem, poolTransit); poolTransit -= transitAlloc; rem -= transitAlloc;
+        const laterAlloc = Math.min(rem, poolLater); poolLater -= laterAlloc;
+        profileRows.push({
+          priority: g.priority, code, profile: profileForCode(code),
+          demand: g.demand, atSite: siteAlloc, inTransitByTarget: transitAlloc, inTransitLater: laterAlloc,
+          supplyByTarget: siteAlloc + transitAlloc, gap: Math.max(0, g.demand - siteAlloc - transitAlloc),
+          haltsOn: null   // filled by the simulation below
+        });
+      });
+    });
+    // Sort by priority, then by Required (demand) descending.
+    profileRows.sort((a, b) => U.priorityOrder(a.priority) - U.priorityOrder(b.priority) || b.demand - a.demand || a.profile.localeCompare(b.profile));
+    const rowByGroup = {}; profileRows.forEach((r) => { rowByGroup[groupKey(r.priority, r.code)] = r; });
 
     /* ---- 6. material-aware simulation: when (if ever) does work halt? -------
        Run the crew forward at the computed capacity, drawing on-site stock and
@@ -163,7 +182,8 @@
           const code = queue[q].f.code;
           const avail = stock[code] || 0;
           if (avail <= EPS) {                             // this profile is starved today
-            if (!rowByCode[code].haltsOn) rowByCode[code].haltsOn = new Date(d);
+            const gr = rowByGroup[groupKey(queue[q].f.priority, code)];
+            if (gr && !gr.haltsOn) gr.haltsOn = new Date(d);
             continue;
           }
           const take = Math.min(need, avail, cap);
@@ -197,6 +217,58 @@
       verdictLevel = "ok";
     }
 
+    /* ---- 8. probability of success (schedule-led, Bluesky only) ------------
+       A weighted geometric mean of three factors derived from the site's
+       ACTUALS vs. what this target date demands. Material is deliberately
+       excluded (it is surfaced separately in the gap table). Geometric so one
+       weak factor pulls the score down; clamped to (2%, 98%) so it is never a
+       false 0% / 100% certainty. */
+    const probability = successProbability(p, machinesNeeded, dailyInstallSeries(progress));
+
+    /* ---- 9. chainage-wise / machine-wise schedule (material UNLIMITED) -----
+       A day-by-day plan for the computed crew at steady productivity, ignoring
+       material entirely (Bluesky assumes unlimited supply). One chainage per
+       machine per day (same model as the planner's table); a machine picks the
+       next queued chainage the day after it finishes one. Runs from plan start
+       over working days until the whole remaining scope is installed. */
+    const schedule = [];
+    const scheduleCalendar = [];
+    if (isFinite(machinesNeeded) && machinesNeeded > 0 && remainingPiles > EPS) {
+      const M = machinesNeeded, capPerMachine = perMachineDaily;
+      const q = rows.slice().sort((a, b) =>
+        U.priorityOrder(a.f.priority) - U.priorityOrder(b.f.priority) || a.f.sortKey - b.f.sortKey);
+      const stt = q.map((r) => ({ f: r.f, prior: r.prior, remaining: r.remaining, done: 0, machine: null }));
+      const assign = new Array(M).fill(-1);      // machine slot -> index into stt (-1 = idle)
+      let qptr = 0, dayNum = 0, guard = 0, remainingLeft = remainingPiles;
+      const HMAX = 3650;
+      let d = new Date(planStart);
+      while (remainingLeft > EPS && guard < HMAX) {
+        guard++;
+        if (U.isoDow(d) <= p.workDaysPerWeek) {
+          dayNum++;
+          scheduleCalendar.push({ date: new Date(d), dayNum: dayNum, isWorking: true });
+          for (let i = 0; i < M; i++) if (assign[i] < 0 && qptr < stt.length) assign[i] = qptr++;
+          for (let i = 0; i < M; i++) {
+            const si = assign[i];
+            if (si < 0) continue;
+            const s = stt[si];
+            const need = s.remaining - s.done;
+            if (need <= EPS) { assign[i] = -1; continue; }
+            if (s.machine == null) s.machine = i + 1;
+            const install = Math.min(capPerMachine, need);
+            s.done += install; remainingLeft -= install;
+            schedule.push({ date: new Date(d), dayNum: dayNum, machine: i + 1, chId: s.f.id,
+              profile: s.f.profile, code: s.f.code, install: install,
+              cum: s.prior + s.done, mto: s.f.mto, priorInstalled: s.prior });
+            if (s.done >= s.remaining - EPS) assign[i] = -1;   // free the machine for the next day
+          }
+        }
+        d = U.addDays(d, 1);
+      }
+    }
+    const scheduleWorked = Object.keys(schedule.reduce((m, e) => ((m[e.chId] = 1), m), {})).length;
+    const scheduleFinish = schedule.length ? schedule[schedule.length - 1].date : null;
+
     return {
       params: p, planStart, target, workingDays, perMachineDaily,
       priorities: p.priorities.slice(),
@@ -205,7 +277,57 @@
       requiredRate, machinesNeeded, manpower,
       profileRows, gapTotal, materialShort,
       haltDate, completionDate,
-      verdict, verdictLevel
+      verdict, verdictLevel, probability,
+      schedule, scheduleCalendar, scheduleWorked, scheduleFinish
     };
   };
+
+  /* Recent daily install throughput (piles on days that logged installs), most
+     recent 30 records — the raw material for the consistency factor. */
+  function dailyInstallSeries(progress) {
+    const byDate = (progress && progress.installedByDate) || {};
+    return Object.keys(byDate).sort().slice(-30).map((k) => byDate[k]).filter((v) => v > 0);
+  }
+
+  // Schedule-led probability of success. Weights (crew 0.47, productivity 0.40,
+  // consistency 0.13) renormalized from the schedule-led set with material dropped.
+  function successProbability(p, machinesNeeded, dailyInstalls) {
+    const W = { mac: 0.47, prod: 0.40, cons: 0.13 };
+
+    // 1. Crew scalability — machinesNeeded vs. the machines your actual crew can
+    //    field (min of recent machines and what recent manpower supports, 6/machine).
+    const baseMac = p.baselineMachines || 0;
+    const mpMac = Math.floor((p.baselineManpower || 0) / 6);
+    const baseCap = Math.max(1, (baseMac && mpMac) ? Math.min(baseMac, mpMac) : (baseMac || mpMac || 1));
+    const x = isFinite(machinesNeeded) ? machinesNeeded / baseCap : Infinity;
+    const S_mac = isFinite(x) ? Math.exp(-0.55 * Math.max(0, x - 1)) : 0.001;
+
+    // 2. Productivity realism — assumed vs. actual recent productivity. Optimistic
+    //    (input above actual) is penalized; conservative saturates near 1.
+    const ap = p.actualProductivity || 0;
+    let S_prod;
+    if (ap <= 0) S_prod = 0.6;                                   // no actuals → neutral
+    else { const y = p.productivity / ap; S_prod = 1 / (1 + Math.max(0, y - 1)); }
+
+    // 3. Delivery consistency — coefficient of variation of recent daily output.
+    let S_cons, cv = null;
+    if (!dailyInstalls || dailyInstalls.length < 3) S_cons = 0.7;   // too little data → neutral
+    else {
+      const mean = dailyInstalls.reduce((s, v) => s + v, 0) / dailyInstalls.length;
+      if (mean <= 0) S_cons = 0.7;
+      else {
+        const variance = dailyInstalls.reduce((s, v) => s + (v - mean) * (v - mean), 0) / dailyInstalls.length;
+        cv = Math.sqrt(variance) / mean;
+        S_cons = U.clamp(1 - 0.5 * cv, 0.4, 1);
+      }
+    }
+
+    const raw = Math.exp(W.mac * Math.log(S_mac) + W.prod * Math.log(S_prod) + W.cons * Math.log(S_cons));
+    const bounded = U.clamp(raw, 0.02, 0.98);
+    return {
+      percent: Math.round(bounded * 100),
+      factors: { mac: S_mac, prod: S_prod, cons: S_cons },
+      weights: W, scaleX: x, cv: cv, baseCap: baseCap
+    };
+  }
 })();

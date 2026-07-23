@@ -834,6 +834,20 @@ table.data tr.row-completed td { color: var(--success); }
 .bs-prio__name { font-size: 13px; font-weight: 650; color: var(--text); }
 .bs-prio__meta { font-size: 11px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
 
-.bs-table td.bs-prof { max-width: 320px; white-space: normal; font-weight: 600; color: var(--text); }
+/* Bluesky result tabs — light segmented control on the results surface. */
+.bs-tabs { display: inline-flex; gap: 4px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; padding: 4px; }
+.bs-tab {
+  border: none; background: transparent; cursor: pointer;
+  padding: 9px 16px; border-radius: 9px; font-size: 12.5px; font-weight: 650; color: var(--text-muted);
+  transition: background .14s, color .14s, box-shadow .14s;
+}
+.bs-tab:hover { color: var(--navy); background: rgba(4,15,82,0.05); }
+.bs-tab.is-active { background: var(--surface); color: var(--navy); box-shadow: var(--shadow-sm); }
+
+.bs-prob-note { font-size: 12px; line-height: 1.55; color: var(--text-muted); background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 10px 12px; margin: 0 0 var(--s-3); }
+.bs-prob-note strong { color: var(--navy); font-variant-numeric: tabular-nums; }
+
+.bs-table td.bs-prio-cell { font-weight: 700; white-space: nowrap; color: var(--navy); }
+.bs-table td.bs-prof { max-width: 300px; white-space: normal; font-weight: 600; color: var(--text); }
 .bs-table tbody tr.is-short td { background: var(--t-rose-bg1) !important; }
 .bs-table td.bs-gap { color: var(--t-rose-ink); font-weight: 700; }
