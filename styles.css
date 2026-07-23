@@ -686,9 +686,46 @@ table.data tr.row-completed td { color: var(--success); }
 .bigbar__fill { position: absolute; inset: 0 auto 0 0; background: linear-gradient(90deg, var(--gold-300) 0%, var(--gold) 60%, var(--gold-600) 100%); border-radius: 999px; }
 .bigbar__txt { position: relative; line-height: 24px; font-size: 11.5px; font-weight: 700; color: var(--navy); padding-left: 12px; }
 
+/* Recent-progress ("Submissions"-style) chart: header, Week/Month toggle,
+   ‹ › paging and legend — all on the light card body. */
+.subm-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s-3); margin-bottom: var(--s-3); }
+.subm-title { font-family: var(--display); font-size: 15px; font-weight: 750; color: var(--navy); margin: 0; }
+.subm-sub { font-size: 12px; color: var(--text-muted); margin: 3px 0 0; }
+.subm-controls { display: flex; align-items: center; gap: var(--s-2); flex: none; }
+
+/* Week / Month segmented toggle (navy active pill). */
+.seg2 { display: inline-flex; background: var(--surface-2); border: 1px solid var(--border); border-radius: 9px; padding: 3px; gap: 2px; }
+.seg2__btn { border: none; background: transparent; cursor: pointer; padding: 5px 13px; font-size: 12px; font-weight: 650; color: var(--text-muted); border-radius: 7px; transition: background .14s, color .14s; }
+.seg2__btn:hover { color: var(--navy); }
+.seg2__btn.is-active { background: var(--accent); color: #fff; box-shadow: var(--shadow-sm); }
+
+.progress-nav { display: inline-flex; gap: 4px; }
+.progress-nav__btn {
+  width: 28px; height: 28px; display: grid; place-items: center; cursor: pointer;
+  border: 1px solid var(--border-strong); background: var(--surface); color: var(--text-muted);
+  border-radius: 8px; transition: background .14s ease, border-color .14s ease, color .14s ease, opacity .14s ease;
+}
+.progress-nav__btn:hover:not(:disabled) { background: var(--surface-2); border-color: var(--accent); color: var(--navy); }
+.progress-nav__btn:disabled { opacity: .35; cursor: default; }
+
+.subm-legend { display: flex; gap: var(--s-4); margin-top: var(--s-2); font-size: 12px; color: var(--text-muted); }
+.subm-legend__item { display: inline-flex; align-items: center; gap: 7px; }
+.subm-legend__dot { width: 10px; height: 10px; border-radius: 50%; background: var(--navy); }
+.subm-legend__line { width: 20px; height: 3px; border-radius: 2px; background: var(--gold); box-shadow: 0 0 6px rgba(210,171,103,0.9); }
+
 /* Recent-progress day chart (piles installed per day) */
-.daychart { width: 100%; }
+.daychart { width: 100%; overflow: hidden; }   /* clip the slide so it reads as a graceful transition */
 .daychart__svg { display: block; }   /* rendered at true px size — no upscaling */
+/* Paging / mode-switch transitions (applied one-shot on redraw). */
+@keyframes daySlideInLeft  { from { opacity: 0; transform: translateX(-32px); } to { opacity: 1; transform: none; } }
+@keyframes daySlideInRight { from { opacity: 0; transform: translateX(32px);  } to { opacity: 1; transform: none; } }
+@keyframes dayFadeUp       { from { opacity: 0; transform: translateY(8px);   } to { opacity: 1; transform: none; } }
+.daychart__svg--in-left  { animation: daySlideInLeft  .34s cubic-bezier(.2,.7,.2,1) both; }
+.daychart__svg--in-right { animation: daySlideInRight .34s cubic-bezier(.2,.7,.2,1) both; }
+.daychart__svg--fade     { animation: dayFadeUp       .30s ease both; }
+@media (prefers-reduced-motion: reduce) {
+  .daychart__svg--in-left, .daychart__svg--in-right, .daychart__svg--fade { animation: none; }
+}
 .daybar { cursor: pointer; }
 .daybar__bar { transition: filter .13s ease; }
 .daybar:hover .daybar__bar { filter: brightness(1.16) saturate(1.08); }

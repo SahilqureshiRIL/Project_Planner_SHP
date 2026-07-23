@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Sheet Pile Installation Planner</title>
-  <link rel="stylesheet" href="styles.css?v=90" />
+  <link rel="stylesheet" href="styles.css?v=95" />
   <!--
     SheetJS (xlsx) is vendored locally in ./vendor so the app works fully offline.
     If you prefer the CDN, replace the src below with:
@@ -344,15 +344,36 @@
         <div class="card__body" id="validationBody"></div>
       </section>
 
-      <!-- Recent progress: sheet piles installed per day (from progress history) -->
+      <!-- Recent progress: piles installed, aggregated by week or month (from progress history) -->
       <section class="card" id="progressCard" hidden>
-        <div class="card__head">
-          <h2 class="card__title">Recent progress &middot; piles installed per day</h2>
-          <span class="badge badge--muted" id="progressCardMeta"></span>
-        </div>
         <div class="card__body">
-          <p class="hint" style="margin-bottom:12px">Sheet piles installed on each of the last 7 recorded work days.</p>
+          <!-- Header row: title + dynamic subtitle (left), Week/Month toggle + ‹ › paging (right). -->
+          <div class="subm-head">
+            <div>
+              <h2 class="subm-title">Recent progress</h2>
+              <p class="subm-sub" id="progressSub"></p>
+            </div>
+            <div class="subm-controls">
+              <div class="seg2" id="progressMode">
+                <button type="button" class="seg2__btn is-active" data-mode="week">Week</button>
+                <button type="button" class="seg2__btn" data-mode="month">Month</button>
+              </div>
+              <div class="progress-nav">
+                <button type="button" class="progress-nav__btn" id="progressPrev" title="Older" aria-label="Older">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+                </button>
+                <button type="button" class="progress-nav__btn" id="progressNext" title="Newer" aria-label="Newer">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+                </button>
+              </div>
+            </div>
+          </div>
           <div class="daychart" id="progressChart"></div>
+          <!-- Legend -->
+          <div class="subm-legend">
+            <span class="subm-legend__item"><span class="subm-legend__dot"></span> Piles installed</span>
+            <span class="subm-legend__item"><span class="subm-legend__line"></span> Trend (3-period avg)</span>
+          </div>
         </div>
       </section>
     </div>
@@ -561,15 +582,15 @@
   <!-- Scripts (load order matters: util -> data -> engine -> xer -> ui).
        The ?v= query string is a cache-buster: bump it whenever js/ changes so
        browsers don't run a stale copy. -->
-  <script src="js/chainage_data.js?v=90"></script>
-  <script src="js/util.js?v=90"></script>
-  <script src="js/data.js?v=90"></script>
-  <script src="js/engine.js?v=90"></script>
-  <script src="js/xer.js?v=90"></script>
-  <script src="js/ui.js?v=90"></script>
+  <script src="js/chainage_data.js?v=95"></script>
+  <script src="js/util.js?v=95"></script>
+  <script src="js/data.js?v=95"></script>
+  <script src="js/engine.js?v=95"></script>
+  <script src="js/xer.js?v=95"></script>
+  <script src="js/ui.js?v=95"></script>
   <!-- Bluesky target-date back-planner (loads after ui.js so it can read the shared store). -->
-  <script src="js/bluesky.js?v=90"></script>
-  <script src="js/bluesky_ui.js?v=90"></script>
+  <script src="js/bluesky.js?v=95"></script>
+  <script src="js/bluesky_ui.js?v=95"></script>
 </body>
 </html>
 

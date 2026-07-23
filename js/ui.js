@@ -16,6 +16,9 @@
     view: "gantt", ganttColor: "profile", mapZoom: 1, mapSelected: null, mapFilters: new Set()
   };
   let selectedPriority = null;   // planner priority (single-select pill dropdown)
+  let progressMode = "week";     // recent-progress chart aggregation: "week" | "month"
+  let progressOffset = 0;        // periods back from the latest that the 7-period window ends (paged by ‹ ›)
+  let progressAnim = null;       // one-shot redraw transition: "older" | "newer" | "fade" (cleared after each draw)
 
   // Shared read-only access for the Bluesky module (js/bluesky_ui.js), so it can
   // reuse the same loaded store/defaults without duplicating the load pipeline.
@@ -75,6 +78,17 @@
     // Blocked-chainages popup: close via the button or by clicking the backdrop.
     { const bx = $("#blockedCloseX"); if (bx) bx.addEventListener("click", closeBlockedModal); }
     { const bm = $("#blockedModal"); if (bm) bm.addEventListener("click", (e) => { if (e.target === bm) closeBlockedModal(); }); }
+
+    // Recent-progress chart: Week/Month toggle + ‹ / › paging (one period per click).
+    { const seg = $("#progressMode");
+      if (seg) U.$$(".seg2__btn", seg).forEach((b) => b.addEventListener("click", () => {
+        progressMode = b.dataset.mode; progressOffset = 0; progressAnim = "fade";
+        U.$$(".seg2__btn", seg).forEach((x) => x.classList.toggle("is-active", x === b));
+        redrawProgressKeepScroll();
+      })); }
+    { const pl = $("#progressPrev"), pn = $("#progressNext");
+      if (pl) pl.addEventListener("click", () => { progressOffset += 1; progressAnim = "older"; redrawProgressKeepScroll(); });   // older → slide in from left
+      if (pn) pn.addEventListener("click", () => { progressOffset -= 1; progressAnim = "newer"; redrawProgressKeepScroll(); }); }  // newer → slide in from right
     U.$$("#ganttColorMode .seg__btn").forEach((b) =>
       b.addEventListener("click", () => { state.ganttColor = b.dataset.mode; U.$$("#ganttColorMode .seg__btn").forEach((x) => x.classList.toggle("is-active", x === b)); if (state.result) renderGantt(); }));
     $("#tableGroup").addEventListener("change", () => { if (state.result) renderTable(); });
@@ -732,63 +746,115 @@
       host._ro.observe(host);
     }
   }
+  // Redraw the chart while pinning the page scroll position. Swapping the chart's
+  // DOM (and toggling the paging buttons' disabled state) can make the browser
+  // shift the viewport; capturing and restoring scrollY keeps the view steady.
+  function redrawProgressKeepScroll() {
+    const x = window.scrollX, y = window.scrollY;
+    drawProgressChart();
+    window.scrollTo(x, y);
+    requestAnimationFrame(() => { if (Math.abs(window.scrollY - y) > 1 || Math.abs(window.scrollX - x) > 1) window.scrollTo(x, y); });
+  }
   // Draw the recent-progress bar chart (piles/day) at true pixel size.
   function drawProgressChart() {
     const host = $("#progressChart"); if (!host) return;
-    const meta = $("#progressCardMeta");
+    const sub = $("#progressSub");
     const pr = state.store && state.store.progress;
     const map = (pr && pr.installedByDate) || {};
     const parseISO = (iso) => { const p = iso.split("-"); return new Date(+p[0], (+p[1]) - 1, +p[2]); };
-    const last = Object.keys(map).filter((iso) => (map[iso] || 0) > 0).sort().slice(-7);
+    const WIN = 7;                          // periods shown at once (7 weeks or 7 months)
+    const isMonth = progressMode === "month";
+
+    // Aggregate daily installs into week (Monday-started) or month buckets; keep
+    // only non-empty periods, sorted oldest → newest.
+    const buckets = {};
+    Object.keys(map).forEach((iso) => {
+      const v = map[iso] || 0; if (v <= 0) return;
+      const d = parseISO(iso);
+      let key, rep;
+      if (isMonth) { key = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0"); rep = new Date(d.getFullYear(), d.getMonth(), 1); }
+      else { const m = new Date(d); m.setDate(m.getDate() - ((m.getDay() === 0 ? 7 : m.getDay()) - 1)); key = U.fmtISO(m); rep = m; }
+      (buckets[key] || (buckets[key] = { sum: 0, date: rep })).sum += v;
+    });
+    const keys = Object.keys(buckets).sort();
     U.clear(host);
-    if (!last.length) {
+    if (!keys.length) {
       host.appendChild(el("div", { class: "emptystate", html: "<p>No dated installs in the progress history.</p>" }));
-      if (meta) meta.textContent = "";
+      if (sub) sub.textContent = "";
       return;
     }
-    const vals = last.map((iso) => Math.round(map[iso] || 0));
-    const total = vals.reduce((a, b) => a + b, 0), avg = total / vals.length, dataMax = Math.max(1, Math.max.apply(null, vals));
-    if (meta) meta.textContent = U.fmtInt(total) + " piles · " + last.length + " days · " + U.fmtInt(Math.round(avg)) + "/day avg";
+    // 3-period trailing moving average over the FULL series (so the earliest shown
+    // point is still accurate), then sliced to the visible window.
+    const seriesAll = keys.map((k) => buckets[k].sum);
+    const maAll = seriesAll.map((_, i) => { let acc = 0, c = 0; for (let j = Math.max(0, i - 2); j <= i; j++) { acc += seriesAll[j]; c++; } return acc / c; });
 
-    // "nice" y-axis: round tick step so labels read 0/50/100… not 30/59/89.
+    // Page a WIN-sized window with the ‹ › buttons.
+    const maxOffset = Math.max(0, keys.length - WIN);
+    if (progressOffset > maxOffset) progressOffset = maxOffset;
+    if (progressOffset < 0) progressOffset = 0;
+    const endIdx = keys.length - progressOffset, startIdx = Math.max(0, endIdx - WIN);
+    const wKeys = keys.slice(startIdx, endIdx);
+    const vals = wKeys.map((k) => buckets[k].sum);
+    const ma = maAll.slice(startIdx, endIdx);
+    const dates = wKeys.map((k) => buckets[k].date);
+    { const pl = $("#progressPrev"), pn = $("#progressNext");
+      if (pl) pl.disabled = progressOffset >= maxOffset;   // no older periods
+      if (pn) pn.disabled = progressOffset <= 0; }          // already at the latest
+
+    const total = vals.reduce((a, b) => a + b, 0), dataMax = Math.max(1, Math.max.apply(null, vals));
+    if (sub) sub.textContent = U.fmtInt(total) + " piles across " + wKeys.length + " " +
+      (isMonth ? "month" : "week") + (wKeys.length === 1 ? "" : "s") + " shown · x-axis shows each " +
+      (isMonth ? "month" : "week’s starting date");
+
+    // "nice" y-axis: round tick step so labels read 0/4/8/12… not odd values.
     const rough = dataMax / 4, pw = Math.pow(10, Math.floor(Math.log10(rough))), rf = rough / pw;
     const nf = rf <= 1 ? 1 : rf <= 2 ? 2 : rf <= 2.5 ? 2.5 : rf <= 5 ? 5 : 10, step = nf * pw;
     const yMax = Math.max(step, Math.ceil(dataMax / step) * step);
     const ticks = []; for (let t = 0; t <= yMax + 1e-9; t += step) ticks.push(Math.round(t));
 
     // fixed height, natural pixel width (NO viewBox upscaling)
-    const W = Math.max(360, Math.floor(host.clientWidth || 760)), H = 208;
-    const padL = 40, padR = 58, padT = 18, padB = 38;
-    const plotW = W - padL - padR, plotH = H - padT - padB, n = last.length, slot = plotW / n, barW = Math.min(36, slot * 0.5);
+    const W = Math.max(360, Math.floor(host.clientWidth || 760)), H = 220;
+    const padL = 38, padR = 20, padT = 20, padB = 34;
+    const plotW = W - padL - padR, plotH = H - padT - padB, n = wKeys.length, slot = plotW / n, barW = Math.min(42, slot * 0.42);
     const yOf = (v) => padT + plotH - (v / yMax) * plotH;
+    const cxOf = (i) => padL + slot * i + slot / 2;
+    const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const xLabel = (d) => isMonth ? (MON[d.getMonth()] + " " + String(d.getFullYear()).slice(2)) : U.fmtShort(d);
 
     let s = '<svg class="daychart__svg" width="' + W + '" height="' + H + '" font-family="inherit">';
-    s += '<defs><linearGradient id="barGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5b52ec"/><stop offset="1" stop-color="#2a3aa0"/></linearGradient></defs>';
-    // gridlines + y ticks (round values)
+    s += '<defs><linearGradient id="barGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1c3a86"/><stop offset="1" stop-color="#0b1f66"/></linearGradient>' +
+      // Gold glow for the trend line (#d2ab67).
+      '<filter id="trendGlow" x="-10%" y="-80%" width="120%" height="260%"><feDropShadow dx="0" dy="0" stdDeviation="3.5" flood-color="#d2ab67" flood-opacity="0.9"/></filter></defs>';
+    // gridlines + y ticks
     ticks.forEach((tv) => {
       const gy = yOf(tv);
       s += '<line x1="' + padL + '" y1="' + gy.toFixed(1) + '" x2="' + (W - padR) + '" y2="' + gy.toFixed(1) + '" stroke="#eaeef7"/>';
       s += '<text x="' + (padL - 8) + '" y="' + (gy + 3.5).toFixed(1) + '" text-anchor="end" font-size="10" fill="#9aa3bd">' + U.fmtInt(tv) + '</text>';
     });
-    // bars + value + date labels
-    last.forEach((iso, i) => {
-      const v = vals[i], cxp = padL + slot * i + slot / 2, bx = cxp - barW / 2, by = yOf(v), bh = Math.max(0, padT + plotH - by), d = parseISO(iso);
-      const tip = U.fmtFriendly(d) + " — <strong>" + U.fmtInt(v) + "</strong> pile" + (v === 1 ? "" : "s") + " installed";
+    // bars + x-axis labels (each period's starting date)
+    wKeys.forEach((k, i) => {
+      const v = vals[i], cxp = cxOf(i), bx = cxp - barW / 2, by = yOf(v), bh = Math.max(0, padT + plotH - by), d = dates[i];
+      const tip = xLabel(d) + " — <strong>" + U.fmtInt(v) + "</strong> pile" + (v === 1 ? "" : "s");
       s += '<g class="daybar" data-tip="' + U.esc(tip) + '">';
       s += '<rect class="daybar__hit" x="' + (cxp - slot / 2).toFixed(1) + '" y="' + padT + '" width="' + slot.toFixed(1) + '" height="' + plotH + '" fill="transparent"/>';
-      s += '<rect class="daybar__bar" x="' + bx.toFixed(1) + '" y="' + by.toFixed(1) + '" width="' + barW.toFixed(1) + '" height="' + bh.toFixed(1) + '" rx="4" fill="url(#barGrad)"/>';
-      s += '<text class="daybar__val" x="' + cxp.toFixed(1) + '" y="' + (by - 6).toFixed(1) + '" text-anchor="middle" font-size="10.5" font-weight="700" fill="#3a4780">' + U.fmtInt(v) + '</text>';
-      s += '<text x="' + cxp.toFixed(1) + '" y="' + (H - 20) + '" text-anchor="middle" font-size="10.5" font-weight="600" fill="#5b6690">' + U.weekdayShort(d) + '</text>';
-      s += '<text x="' + cxp.toFixed(1) + '" y="' + (H - 7) + '" text-anchor="middle" font-size="9.5" fill="#9aa3bd">' + U.fmtShort(d) + '</text>';
+      s += '<rect class="daybar__bar" x="' + bx.toFixed(1) + '" y="' + by.toFixed(1) + '" width="' + barW.toFixed(1) + '" height="' + bh.toFixed(1) + '" rx="3" fill="url(#barGrad)"/>';
+      s += '<text x="' + cxp.toFixed(1) + '" y="' + (H - 13) + '" text-anchor="middle" font-size="10.5" font-weight="600" fill="#5b6690">' + U.esc(xLabel(d)) + '</text>';
       s += '</g>';
     });
-    // average line drawn ON TOP of bars (was hidden behind), with a label chip in the right gutter
-    const ay = yOf(avg);
-    s += '<line x1="' + padL + '" y1="' + ay.toFixed(1) + '" x2="' + (W - padR) + '" y2="' + ay.toFixed(1) + '" stroke="#c99a4f" stroke-width="1.5" stroke-dasharray="4 3"/>';
-    s += '<rect x="' + (W - padR + 5) + '" y="' + (ay - 9).toFixed(1) + '" width="' + (padR - 9) + '" height="18" rx="9" fill="#f6edda" stroke="#e4cea1"/>';
-    s += '<text x="' + (W - padR / 2 + 0.5).toFixed(1) + '" y="' + (ay + 3.5).toFixed(1) + '" text-anchor="middle" font-size="10" font-weight="700" fill="#8a6d2f">Avg ' + U.fmtInt(Math.round(avg)) + '</text>';
+    // trend line = 3-period moving average, gold + glow, with a marker per period
+    const pts = ma.map((mv, i) => cxOf(i).toFixed(1) + "," + yOf(mv).toFixed(1));
+    s += '<polyline points="' + pts.join(" ") + '" fill="none" stroke="#d2ab67" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" filter="url(#trendGlow)"/>';
+    ma.forEach((mv, i) => { s += '<circle cx="' + cxOf(i).toFixed(1) + '" cy="' + yOf(mv).toFixed(1) + '" r="4.5" fill="#fff" stroke="#d2ab67" stroke-width="2.5"/>'; });
     s += '</svg>';
     host.innerHTML = s;
+    // One-shot slide/fade transition on paging or mode-switch (the SVG is a fresh
+    // node each render, so the CSS animation replays cleanly every time).
+    const svg = host.firstElementChild;
+    if (svg && progressAnim) {
+      svg.classList.add(progressAnim === "older" ? "daychart__svg--in-left"
+        : progressAnim === "newer" ? "daychart__svg--in-right" : "daychart__svg--fade");
+    }
+    progressAnim = null;
     host.onmousemove = (ev) => { const g = ev.target.closest ? ev.target.closest(".daybar") : null; const t = g && g.getAttribute("data-tip"); if (t) showTip(ev.clientX, ev.clientY, t); else hideTip(); };
     host.onmouseleave = hideTip;
   }
