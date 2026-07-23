@@ -16,6 +16,10 @@
     view: "gantt", ganttColor: "profile", mapZoom: 1, mapSelected: null, mapFilters: new Set()
   };
 
+  // Shared read-only access for the Bluesky module (js/bluesky_ui.js), so it can
+  // reuse the same loaded store/defaults without duplicating the load pipeline.
+  SPP.app = { getStore: () => state.store, getDefaults: () => state.defaults, showModule: (m) => showModule(m) };
+
   document.addEventListener("DOMContentLoaded", init);
 
   /* ============================ INIT / WIRING ============================ */
@@ -30,7 +34,10 @@
     U.$$('input[type="file"]').forEach((inp) => {
       inp.addEventListener("change", (e) => { if (e.target.files[0]) handleFile(inp.dataset.input, e.target.files[0]); });
     });
-    { const hb = $("#homeLogoBtn"); if (hb) hb.addEventListener("click", () => location.reload()); }
+    // Header logo → back to the module picker (keeps loaded data, unlike a reload).
+    { const hb = $("#homeLogoBtn"); if (hb) hb.addEventListener("click", () => showModule(null)); }
+    // Module picker cards → open the chosen tool.
+    U.$$(".modcard").forEach((c) => c.addEventListener("click", () => showModule(c.dataset.module)));
     $("#tryBundledBtn").addEventListener("click", tryBundled);
     $("#exportPlanBtn").addEventListener("click", onExportXer);
     $("#generateBtn2").addEventListener("click", onGenerate);
@@ -72,6 +79,20 @@
     refresh();
     tryBundled();   // auto-load the three files from ./data/ so the app opens on the Plan Parameters screen
   }
+  // Switch between the module picker (m = null), the forward planner ("planner")
+  // and the Bluesky target-date planner ("bluesky"). Header controls that belong
+  // to the planner's plan view are hidden unless the planner is active with a plan.
+  function showModule(m) {
+    const picker = $("#homePicker"), planner = $("#plannerLayout"), bluesky = $("#blueskyLayout");
+    if (picker) picker.hidden = !!m;
+    if (planner) planner.hidden = m !== "planner";
+    if (bluesky) bluesky.hidden = m !== "bluesky";
+    const plannerActive = m === "planner" && !!state.result;
+    ["#viewToggle", "#exportPlanBtn", "#sidebarToggle"].forEach((sel) => { const n = $(sel); if (n) n.hidden = !plannerActive; });
+    if (m === "bluesky" && SPP.blueskyUI && SPP.blueskyUI.onShow) SPP.blueskyUI.onShow();
+    window.scrollTo(0, 0);
+  }
+
   function mapZoomBy(f) { if (mapGL) mapGL.zoomBy(f); else setMapZoom(state.mapZoom * f); }
   function mapZoomFit() { if (mapGL) mapGL.fit(); else setMapZoom(1); }
   function setMapZoom(z) {
@@ -161,6 +182,7 @@
         populateDefaults();
         $("#paramsCard").setAttribute("aria-disabled", "false");
         $("#generateBtn2").disabled = false;
+        if (SPP.blueskyUI && SPP.blueskyUI.onDataReady) SPP.blueskyUI.onDataReady();
       } catch (err) {
         U.toast("Defaults error: " + err.message, "bad");
       }

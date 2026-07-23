@@ -215,7 +215,7 @@ button { font-family: inherit; }
   max-height: calc(100vh - var(--header-h) - var(--s-4) * 2);
 }
 .sidebar .card--ribbon > .card__head { flex: none; }
-.sidebar .card--ribbon > #paramsBody {
+.sidebar .card--ribbon > .card__body {
   flex: 1 1 auto; min-height: 0;
   overflow-y: auto; overflow-x: hidden;
 }
@@ -229,7 +229,7 @@ button { font-family: inherit; }
   .layout { grid-template-columns: 1fr; }
   .sidebar { position: static; }
   .sidebar .card--ribbon { max-height: none; }
-  .sidebar .card--ribbon > #paramsBody { overflow: visible; }
+  .sidebar .card--ribbon > .card__body { overflow: visible; }
 }
 
 /* ============================ CARDS ============================ */
@@ -361,6 +361,7 @@ button { font-family: inherit; }
 .notice--warn { background: var(--warning-bg); border-color: #eccb86; color: #6f4e12; }
 .notice--bad  { background: var(--danger-bg);  border-color: #eeb3a8; color: #7c2417; }
 .notice--info { background: var(--info-bg);     border-color: #b9cdf0; color: #284c8a; }
+.notice--ok   { background: var(--success-bg);  border-color: #aedcc4; color: #155e3c; }
 
 /* ============================ FILE ROWS ============================ */
 .hint { font-size: 12px; font-weight: bold ; color: var(--text-muted); margin-bottom: var(--s-3); }
@@ -463,6 +464,7 @@ select.input--sm { background-position: right 8px center, center; padding-right:
   line-height: 1.5; box-shadow: var(--shadow-pop); border: 1px solid rgba(210,171,103,0.35);
 }
 .info:hover .info__pop, .info:focus .info__pop { display: block; }
+
 
 /* Hindrances */
 .hindrance-list { display: flex; flex-direction: column; gap: var(--s-2); margin-bottom: var(--s-2); }
@@ -765,3 +767,73 @@ table.data tr.row-completed td { color: var(--success); }
 .decision--adj .decision__tag { background: var(--info-bg);    color: var(--info); }
 .decision__warn { font-size: 12.5px; color: var(--text); }
 .decision__detail { font-size: 11.5px; color: var(--text-muted); margin-top: 2px; }
+
+/* =============================================================================
+   Home / module picker — the landing screen that chooses Planner vs Bluesky.
+   ============================================================================= */
+.home {
+  min-height: calc(100vh - var(--header-h));
+  display: flex; align-items: center; justify-content: center;
+  padding: var(--s-6) var(--s-4);
+}
+.home__inner { width: 100%; max-width: 860px; text-align: center; }
+.home__title { font-family: var(--display); font-size: 30px; font-weight: 800; color: var(--navy); letter-spacing: -.02em; margin: 0 0 6px; }
+.home__sub { font-size: 14.5px; color: var(--text-muted); margin: 0 0 var(--s-6); }
+.home__cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: var(--s-4); }
+.modcard {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 10px; text-align: left;
+  padding: var(--s-5); border-radius: var(--r-lg); cursor: pointer;
+  background: linear-gradient(180deg, #ffffff 0%, var(--surface-2) 100%);
+  border: 1px solid var(--border); border-top: 4px solid var(--gold);
+  box-shadow: var(--shadow-sm); transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease;
+}
+.modcard:hover { transform: translateY(-3px); box-shadow: var(--shadow-md); border-top-color: var(--gold-600); }
+.modcard--bluesky { border-top-color: var(--t-sky); }
+.modcard--bluesky:hover { border-top-color: var(--t-sky-ink); }
+.modcard__icon {
+  width: 46px; height: 46px; border-radius: 12px; display: grid; place-items: center;
+  background: var(--accent-100); color: var(--accent);
+}
+.modcard--bluesky .modcard__icon { background: var(--t-sky-bg1); color: var(--t-sky-ink); }
+.modcard__icon svg { width: 26px; height: 26px; }
+.modcard__name { font-family: var(--display); font-size: 18px; font-weight: 750; color: var(--navy); display: flex; align-items: center; gap: 8px; }
+.modcard__tag { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--t-sky-ink); background: var(--t-sky-bg1); border-radius: 999px; padding: 2px 9px; }
+.modcard__desc { font-size: 12.5px; line-height: 1.55; color: var(--text-muted); }
+
+/* =============================================================================
+   Tinted stat tiles — the tone tokens (§accent tones) applied as a coloured
+   left border + label ink. Shared by the planner summary and Bluesky.
+   ============================================================================= */
+.stat--t-indigo  { border-left-color: var(--t-indigo); }
+.stat--t-violet  { border-left-color: var(--t-violet); }
+.stat--t-teal    { border-left-color: var(--t-teal); }
+.stat--t-amber   { border-left-color: var(--t-amber); }
+.stat--t-rose    { border-left-color: var(--t-rose); }
+.stat--t-sky     { border-left-color: var(--t-sky); }
+.stat--t-emerald { border-left-color: var(--t-emerald); }
+.stat--t-indigo  .stat__label { color: var(--t-indigo-ink); }
+.stat--t-violet  .stat__label { color: var(--t-violet-ink); }
+.stat--t-teal    .stat__label { color: var(--t-teal-ink); }
+.stat--t-amber   .stat__label { color: var(--t-amber-ink); }
+.stat--t-rose    .stat__label { color: var(--t-rose-ink); }
+.stat--t-sky     .stat__label { color: var(--t-sky-ink); }
+.stat--t-emerald .stat__label { color: var(--t-emerald-ink); }
+
+/* =============================================================================
+   Bluesky module — priority picker + profile-wise material table.
+   ============================================================================= */
+.bs-prio-list { display: flex; flex-direction: column; gap: 6px; }
+.bs-prio {
+  display: flex; align-items: center; gap: 10px; cursor: pointer;
+  padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--r-sm);
+  background: var(--surface); transition: border-color .14s ease, background .14s ease;
+}
+.bs-prio:hover { border-color: var(--border-strong); background: var(--surface-2); }
+.bs-prio__cb { width: 16px; height: 16px; accent-color: var(--accent); flex: none; }
+.bs-prio__body { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.bs-prio__name { font-size: 13px; font-weight: 650; color: var(--text); }
+.bs-prio__meta { font-size: 11px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+
+.bs-table td.bs-prof { max-width: 320px; white-space: normal; font-weight: 600; color: var(--text); }
+.bs-table tbody tr.is-short td { background: var(--t-rose-bg1) !important; }
+.bs-table td.bs-gap { color: var(--t-rose-ink); font-weight: 700; }
