@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Sheet Pile Installation Planner</title>
-  <link rel="stylesheet" href="styles.css?v=95" />
+  <link rel="stylesheet" href="styles.css?v=97" />
   <!--
     SheetJS (xlsx) is vendored locally in ./vendor so the app works fully offline.
     If you prefer the CDN, replace the src below with:
@@ -158,9 +158,10 @@
 
                 <div class="bs-col__divider" aria-hidden="true"></div>
 
-                <!-- Column 2 — resources -->
+                <!-- Column 2 — resources. Two paired rows (each one aligned slot) so the
+                     rows line up with Column 1's single-field slots. -->
                 <div class="bs-col">
-                  <div class="field-grid">
+                  <div class="field-pair">
                     <div class="field">
                       <label class="field__label" for="pMachines">Machines Deployable</label>
                       <input type="number" id="pMachines" class="input" min="0" step="1" />
@@ -171,6 +172,8 @@
                       <input type="number" id="pManpower" class="input" min="0" step="1" />
                       <p class="field__hint" id="pManpowerHint">7-day onsite Avg</p>
                     </div>
+                  </div>
+                  <div class="field-pair">
                     <div class="field">
                       <label class="field__label" for="pWorkDays">Work Days / week</label>
                       <select id="pWorkDays" class="input">
@@ -205,33 +208,32 @@
                     <div id="hindranceList" class="hindrance-list"></div>
                     <button type="button" id="addHindranceBtn" class="btn btn--ghost btn--sm">+ Add hindrance</button>
                   </div>
-                  <details class="advanced" id="rampAdvanced">
-                    <summary>Ramp-up settings <span class="field__tag">editable</span></summary>
-                    <div class="advanced__body">
-                      <div class="field-grid">
-                        <div class="field">
-                          <label class="field__label" for="pRampN">Days to steady-state (n)</label>
-                          <input type="number" id="pRampN" class="input" min="0" step="1" value="7" />
-                        </div>
-                        <div class="field">
-                          <label class="field__label" for="pPrevMachines">Machines from previous plan</label>
-                          <input type="number" id="pPrevMachines" class="input" min="0" step="1" />
-                          <p class="field__hint" id="pPrevHint">from localStorage / first run = machines</p>
-                        </div>
+                  <!-- Ramp-up settings inputs are kept in the DOM (hidden) so the engine
+                       and the live curve still use their default values; only the
+                       Ramp-up curve preview is shown to the planner. -->
+                  <div hidden id="rampInputs">
+                    <div class="field-grid">
+                      <div class="field">
+                        <label class="field__label" for="pRampN">Days to steady-state (n)</label>
+                        <input type="number" id="pRampN" class="input" min="0" step="1" value="7" />
                       </div>
                       <div class="field">
-                        <label class="field__label" for="pRampProfile">Ramp profile (day 0&hellip;n multipliers)</label>
-                        <input type="text" id="pRampProfile" class="input input--mono" value="0.45, 0.58, 0.70, 0.80, 0.88, 0.94, 0.98, 1.00" />
-                        <p class="field__hint">Comma-separated per-day multipliers applied to a newly introduced machine.</p>
+                        <label class="field__label" for="pPrevMachines">Machines from previous plan</label>
+                        <input type="number" id="pPrevMachines" class="input" min="0" step="1" />
+                        <p class="field__hint" id="pPrevHint">from localStorage / first run = machines</p>
                       </div>
-                      <div class="field">
-                        <label class="field__label">Ramp-up curve <span class="field__tag">live preview</span></label>
-                        <div class="ramp-chart" id="rampChart"></div>
-                      </div>
-                      <button type="button" id="resetHistoryBtn" class="btn btn--ghost btn--sm">Reset stored machine history</button>
-                      <span class="hint hint--inline" id="storedHistoryHint"></span>
                     </div>
-                  </details>
+                    <div class="field">
+                      <label class="field__label" for="pRampProfile">Ramp profile (day 0&hellip;n multipliers)</label>
+                      <input type="text" id="pRampProfile" class="input input--mono" value="0.45, 0.58, 0.70, 0.80, 0.88, 0.94, 0.98, 1.00" />
+                    </div>
+                    <button type="button" id="resetHistoryBtn" class="btn btn--ghost btn--sm">Reset stored machine history</button>
+                    <span class="hint hint--inline" id="storedHistoryHint"></span>
+                  </div>
+                  <div class="field">
+                    <label class="field__label">Ramp-up curve <span class="field__tag">live preview</span></label>
+                    <div class="ramp-chart" id="rampChart"></div>
+                  </div>
                 </div>
               </div>
 
@@ -582,15 +584,15 @@
   <!-- Scripts (load order matters: util -> data -> engine -> xer -> ui).
        The ?v= query string is a cache-buster: bump it whenever js/ changes so
        browsers don't run a stale copy. -->
-  <script src="js/chainage_data.js?v=95"></script>
-  <script src="js/util.js?v=95"></script>
-  <script src="js/data.js?v=95"></script>
-  <script src="js/engine.js?v=95"></script>
-  <script src="js/xer.js?v=95"></script>
-  <script src="js/ui.js?v=95"></script>
+  <script src="js/chainage_data.js?v=97"></script>
+  <script src="js/util.js?v=97"></script>
+  <script src="js/data.js?v=97"></script>
+  <script src="js/engine.js?v=97"></script>
+  <script src="js/xer.js?v=97"></script>
+  <script src="js/ui.js?v=97"></script>
   <!-- Bluesky target-date back-planner (loads after ui.js so it can read the shared store). -->
-  <script src="js/bluesky.js?v=95"></script>
-  <script src="js/bluesky_ui.js?v=95"></script>
+  <script src="js/bluesky.js?v=97"></script>
+  <script src="js/bluesky_ui.js?v=97"></script>
 </body>
 </html>
 
