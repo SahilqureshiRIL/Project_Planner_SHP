@@ -113,6 +113,14 @@
   function store() { return SPP.app && SPP.app.getStore ? SPP.app.getStore() : null; }
   function defaults() { return SPP.app && SPP.app.getDefaults ? SPP.app.getDefaults() : null; }
 
+  // Bluesky plans forward from the next Monday on/after TODAY (never backdated).
+  function planStartFromToday() {
+    const t = new Date();
+    let d = new Date(t.getFullYear(), t.getMonth(), t.getDate());   // today at local midnight
+    while (U.isoDow(d) !== 1) d = U.addDays(d, 1);                  // advance to Monday (today if already Monday)
+    return d;
+  }
+
   /* ---- fill inputs + build the priority picker from the loaded data -------- */
   function populate() {
     const st = store(), d = defaults();
@@ -121,14 +129,13 @@
     $("#bsPlaceholder").hidden = true;
     $("#bsForm").hidden = false;
 
-    // Default target = 4 weeks after the plan-start anchor; can't be before it.
-    const start = d.planStartDefault;
+    // Default target = 4 weeks after the plan start; can't be before it.
+    const start = planStartFromToday();
     const target = U.addDays(start, 28);
     const tEl = $("#bsTarget");
     tEl.value = U.fmtISO(target);
     tEl.min = U.fmtISO(start);
-    $("#bsStartHint").textContent = "Plan start: " + U.fmtFriendly(start) +
-      " (first Monday after latest record " + U.fmtShort(d.latestDataDate) + ")";
+    $("#bsStartHint").textContent = "Plan start: " + U.fmtFriendly(start) + " (next Monday from today)";
 
     if (d.workhours) $("#bsWorkhours").value = d.workhours;
     if (d.productivity) $("#bsProductivity").value = U.fmtNum(d.productivity, 3);
@@ -180,7 +187,7 @@
     let res;
     try {
       res = SPP.bluesky.compute(st, {
-        priorities, targetDate, planStart: d.planStartDefault,
+        priorities, targetDate, planStart: planStartFromToday(),
         workDaysPerWeek, workhours, productivity,
         // Actuals for the probability-of-success factors.
         baselineMachines: d.machines, baselineManpower: d.manpower, actualProductivity: d.productivity
@@ -208,10 +215,11 @@
     "Building chainage-wise schedule",
     "Computing plan"
   ];
-  function runLoader(done) {
+  BUI.runLoader = runLoader;   // shared with the planner module (ui.js)
+  function runLoader(done, steps) {
     const overlay = $("#bsLoader"), list = $("#bsLoaderList");
     U.clear(list);
-    const items = LOADER_STEPS.map((label) => {
+    const items = (steps || LOADER_STEPS).map((label) => {
       const li = el("li", { class: "bs-lstep" });
       li.appendChild(el("span", { class: "bs-lstep__ico", html:
         '<svg class="bs-lstep__check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg>' }));
@@ -337,8 +345,8 @@
     computeDisplay(r.schedule);
     const groupBy = $("#bsTableGroup").value;
 
-    const cols = ["Date", "Day #", "Machine", "Chainage", "Profile", "Item Code", "Piles (day)", "Cum.", "MTO", "% Comp."];
-    const NUM = { "Piles (day)": 1, "Cum.": 1, "MTO": 1, "% Comp.": 1 };
+    const cols = ["Date", "Day #", "Machine", "Chainage", "Profile", "Item Code", "Piles (day)", "MTO", "% Comp."];
+    const NUM = { "Piles (day)": 1, "MTO": 1, "% Comp.": 1 };
     const table = el("table", { class: "data" });
     const thead = el("thead"), htr = el("tr");
     cols.forEach((c) => htr.appendChild(el("th", { class: NUM[c] ? "num" : "", text: c })));
@@ -394,7 +402,6 @@
       el("td", { text: e.profile }),
       el("td", { text: e.code || "—" }),
       el("td", { class: "num", text: U.fmtInt(e.dispInstall) }),
-      el("td", { class: "num", text: U.fmtInt(e.dispCum) }),
       el("td", { class: "num", text: U.fmtInt(e.mto) }),
       el("td", { class: "num", text: U.fmtNum(pct, 1) + "%" })
     ].forEach((td) => tr.appendChild(td));

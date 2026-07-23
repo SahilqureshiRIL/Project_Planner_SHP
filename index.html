@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Sheet Pile Installation Planner</title>
-  <link rel="stylesheet" href="styles.css?v=71" />
+  <link rel="stylesheet" href="styles.css?v=84" />
   <!--
     SheetJS (xlsx) is vendored locally in ./vendor so the app works fully offline.
     If you prefer the CDN, replace the src below with:
@@ -74,9 +74,8 @@
     </div>
   </section>
 
-  <main class="layout" id="plannerLayout" hidden>
-    <!-- ============================ SIDEBAR (INPUTS) ============================ -->
-    <aside class="sidebar">
+  <main class="layout layout--stack" id="plannerLayout" hidden>
+   <div class="bs-shell">
 
       <!-- ---- Data files (hidden: files are auto-loaded from ./data/; this card only
            re-appears as a fallback if auto-loading fails, e.g. opened via file://) ---- -->
@@ -119,133 +118,145 @@
         </div>
       </section>
 
-      <!-- ---- Parameters ---- -->
-      <section class="card card--ribbon" id="paramsCard" aria-disabled="true">
-        <div class="card__head">
-          <h2 class="card__title">Plan Parameters</h2>
-          <span class="badge badge--muted">Onsite Last 7 Day Avg defaults</span>
-        </div>
-        <div class="card__body" id="paramsBody">
-          <p class="placeholder" id="paramsPlaceholder">Loading data from ./data/ &hellip;</p>
+      <!-- ---- Parameters: collapsible top panel ---- -->
+      <section class="bs-panel" id="paramsCard" aria-disabled="true">
+        <button type="button" class="bs-panel__bar" id="plannerPanelToggle" aria-expanded="true" aria-controls="paramsBody">
+          <span class="bs-panel__title">
+            <svg class="bs-panel__ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg>
+            Plan Parameters
+          </span>
+          <span class="bs-panel__hint">Onsite last-7-day averages &middot; edit as needed</span>
+          <span class="bs-panel__chev" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+          </span>
+        </button>
 
-          <div id="paramsForm" hidden>
-            <!-- Priority -->
-            <div class="field">
-              <label class="field__label" for="pPriority">Chainage Priority</label>
-              <select id="pPriority" class="input">
-                <option value="" selected disabled>Select priority&hellip;</option>
-              </select>
-              <!-- <p class="field__hint">Phase 1 plans a single priority.</p> -->
-            </div>
+        <div class="bs-panel__wrap" id="paramsBody">
+          <div class="bs-panel__body">
+            <p class="placeholder" id="paramsPlaceholder">Loading data from ./data/ &hellip;</p>
 
-            <!-- Plan period -->
-            <div class="field">
-              <span class="field__label">Plan Period</span>
-              <div class="radiorow" id="pPeriod">
-                <label class="radio"><input type="radio" name="period" value="2" checked /> 2 weeks</label>
-                <label class="radio"><input type="radio" name="period" value="3" /> 3 weeks</label>
-              </div>
-            </div>
-
-            <!-- Plan start (Mondays only) -->
-            <div class="field">
-              <label class="field__label" for="pStart">Plan Start Date <span class="field__tag">Mondays only</span></label>
-              <input type="date" id="pStart" class="input" />
-              <p class="field__hint" id="pStartHint">Default = first Monday after the latest dated record.</p>
-            </div>
-
-            <div class="field-grid">
-              <!-- Machines -->
-              <div class="field">
-                <label class="field__label" for="pMachines">Machines Deployable</label>
-                <input type="number" id="pMachines" class="input" min="0" step="1" />
-                <p class="field__hint" id="pMachinesHint">Onsite Avg (last 7 days)</p>
-              </div>
-              <!-- Manpower -->
-              <div class="field">
-                <label class="field__label" for="pManpower">Manpower</label>
-                <input type="number" id="pManpower" class="input" min="0" step="1" />
-                <p class="field__hint" id="pManpowerHint">Onsite Avg (last 7 days)</p>
-              </div>
-              <!-- Work days/week -->
-              <div class="field">
-                <label class="field__label" for="pWorkDays">Work Days / week</label>
-                <select id="pWorkDays" class="input">
-                  <option value="5">5 (Mon&ndash;Fri)</option>
-                  <option value="6" selected>6 (Mon&ndash;Sat)</option>
-                  <option value="7">7 (all days)</option>
-                </select>
-              </div>
-              <!-- Workhours -->
-              <div class="field">
-                <label class="field__label" for="pWorkhours">Workhours / day</label>
-                <input type="number" id="pWorkhours" class="input" min="1" step="1" />
-                <p class="field__hint" id="pWorkhoursHint">Onsite Avg (last 7 days)</p>
-              </div>
-            </div>
-
-            <!-- Cap notice -->
-            <div class="notice notice--warn" id="capNotice" hidden></div>
-
-            <!-- Productivity -->
-            <div class="field">
-              <label class="field__label" for="pProductivity">
-                Productivity <span class="field__tag">piles / machine / hour</span>
-                <span class="info" id="prodInfo" tabindex="0">&#9432;<span class="info__pop" id="prodInfoPop"></span></span>
-              </label>
-              <input type="number" id="pProductivity" class="input" min="0.001" step="0.001" />
-              <p class="field__hint" id="pProductivityHint">Onsite Avg (last 7 days)</p>
-            </div>
-
-            <!-- Hindrances -->
-            <div class="field">
-              <span class="field__label">Hindrances <span class="field__tag">plan-wide</span></span>
-              <div id="hindranceList" class="hindrance-list"></div>
-              <button type="button" id="addHindranceBtn" class="btn btn--ghost btn--sm">+ Add hindrance</button>
-            </div>
-
-            <!-- Ramp-up (collapsible) -->
-            <details class="advanced" id="rampAdvanced">
-              <summary>Ramp-up settings <span class="field__tag">editable</span></summary>
-              <div class="advanced__body">
-                <div class="field-grid">
+            <div id="paramsForm" hidden>
+              <div class="pl-cols">
+                <!-- Column 1 — scope -->
+                <div class="bs-col">
                   <div class="field">
-                    <label class="field__label" for="pRampN">Days to steady-state (n)</label>
-                    <input type="number" id="pRampN" class="input" min="0" step="1" value="7" />
+                    <span class="field__label">Chainage Priority</span>
+                    <div class="ms ms--single" id="pPriorityMS">
+                      <div class="ms__control" id="pPriorityControl" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false">
+                        <span class="ms__pills" id="pPriorityPills"></span>
+                        <span class="ms__arrow" aria-hidden="true">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+                        </span>
+                      </div>
+                      <div class="ms__menu" id="pPriorityMenu" hidden role="listbox"></div>
+                    </div>
                   </div>
                   <div class="field">
-                    <label class="field__label" for="pPrevMachines">Machines from previous plan</label>
-                    <input type="number" id="pPrevMachines" class="input" min="0" step="1" />
-                    <p class="field__hint" id="pPrevHint">from localStorage / first run = machines</p>
+                    <span class="field__label">Plan Period</span>
+                    <div class="radiorow" id="pPeriod">
+                      <label class="radio"><input type="radio" name="period" value="2" checked /> 2 weeks</label>
+                      <label class="radio"><input type="radio" name="period" value="3" /> 3 weeks</label>
+                    </div>
+                  </div>
+                  <div class="field">
+                    <label class="field__label" for="pStart">Plan Start Date <span class="field__tag">Mondays only</span></label>
+                    <input type="date" id="pStart" class="input" />
+                    <p class="field__hint" id="pStartHint">Default = first Monday after the latest dated record.</p>
                   </div>
                 </div>
-                <div class="field">
-                  <label class="field__label" for="pRampProfile">Ramp profile (day 0&hellip;n multipliers)</label>
-                  <input type="text" id="pRampProfile" class="input input--mono" value="0.45, 0.58, 0.70, 0.80, 0.88, 0.94, 0.98, 1.00" />
-                  <p class="field__hint">Comma-separated per-day multipliers applied to a newly introduced machine.</p>
-                </div>
-                <div class="field">
-                  <label class="field__label">Ramp-up curve <span class="field__tag">live preview</span></label>
-                  <div class="ramp-chart" id="rampChart"></div>
-                </div>
-                <button type="button" id="resetHistoryBtn" class="btn btn--ghost btn--sm">Reset stored machine history</button>
-                <span class="hint hint--inline" id="storedHistoryHint"></span>
-              </div>
-            </details>
 
+                <div class="bs-col__divider" aria-hidden="true"></div>
+
+                <!-- Column 2 — resources -->
+                <div class="bs-col">
+                  <div class="field-grid">
+                    <div class="field">
+                      <label class="field__label" for="pMachines">Machines Deployable</label>
+                      <input type="number" id="pMachines" class="input" min="0" step="1" />
+                      <p class="field__hint" id="pMachinesHint">7-day onsite Avg</p>
+                    </div>
+                    <div class="field">
+                      <label class="field__label" for="pManpower">Manpower</label>
+                      <input type="number" id="pManpower" class="input" min="0" step="1" />
+                      <p class="field__hint" id="pManpowerHint">7-day onsite Avg</p>
+                    </div>
+                    <div class="field">
+                      <label class="field__label" for="pWorkDays">Work Days / week</label>
+                      <select id="pWorkDays" class="input">
+                        <option value="5">5 (Mon&ndash;Fri)</option>
+                        <option value="6" selected>6 (Mon&ndash;Sat)</option>
+                        <option value="7">7 (all days)</option>
+                      </select>
+                    </div>
+                    <div class="field">
+                      <label class="field__label" for="pWorkhours">Workhours / day</label>
+                      <input type="number" id="pWorkhours" class="input" min="1" step="1" />
+                      <p class="field__hint" id="pWorkhoursHint">7-day onsite Avg</p>
+                    </div>
+                  </div>
+                  <div class="notice notice--warn" id="capNotice" hidden></div>
+                  <div class="field">
+                    <label class="field__label" for="pProductivity">
+                      Productivity <span class="field__tag">piles / machine / hour</span>
+                      <span class="info" id="prodInfo" tabindex="0">&#9432;<span class="info__pop" id="prodInfoPop"></span></span>
+                    </label>
+                    <input type="number" id="pProductivity" class="input" min="0.001" step="0.001" />
+                    <p class="field__hint" id="pProductivityHint">Onsite Avg (last 7 days)</p>
+                  </div>
+                </div>
+
+                <div class="bs-col__divider" aria-hidden="true"></div>
+
+                <!-- Column 3 — adjustments -->
+                <div class="bs-col">
+                  <div class="field">
+                    <span class="field__label">Hindrances <span class="field__tag">plan-wide</span></span>
+                    <div id="hindranceList" class="hindrance-list"></div>
+                    <button type="button" id="addHindranceBtn" class="btn btn--ghost btn--sm">+ Add hindrance</button>
+                  </div>
+                  <details class="advanced" id="rampAdvanced">
+                    <summary>Ramp-up settings <span class="field__tag">editable</span></summary>
+                    <div class="advanced__body">
+                      <div class="field-grid">
+                        <div class="field">
+                          <label class="field__label" for="pRampN">Days to steady-state (n)</label>
+                          <input type="number" id="pRampN" class="input" min="0" step="1" value="7" />
+                        </div>
+                        <div class="field">
+                          <label class="field__label" for="pPrevMachines">Machines from previous plan</label>
+                          <input type="number" id="pPrevMachines" class="input" min="0" step="1" />
+                          <p class="field__hint" id="pPrevHint">from localStorage / first run = machines</p>
+                        </div>
+                      </div>
+                      <div class="field">
+                        <label class="field__label" for="pRampProfile">Ramp profile (day 0&hellip;n multipliers)</label>
+                        <input type="text" id="pRampProfile" class="input input--mono" value="0.45, 0.58, 0.70, 0.80, 0.88, 0.94, 0.98, 1.00" />
+                        <p class="field__hint">Comma-separated per-day multipliers applied to a newly introduced machine.</p>
+                      </div>
+                      <div class="field">
+                        <label class="field__label">Ramp-up curve <span class="field__tag">live preview</span></label>
+                        <div class="ramp-chart" id="rampChart"></div>
+                      </div>
+                      <button type="button" id="resetHistoryBtn" class="btn btn--ghost btn--sm">Reset stored machine history</button>
+                      <span class="hint hint--inline" id="storedHistoryHint"></span>
+                    </div>
+                  </details>
+                </div>
+              </div>
+
+              <div class="bs-actions" id="paramsFoot" hidden>
+                <button type="button" id="generateBtn2" class="btn btn--primary bs-process">
+                  <svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg><span>Process Plan</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
-        <footer class="card__foot" id="paramsFoot" hidden>
-          <button type="button" id="generateBtn2" class="btn btn--primary btn--block">
-            <svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg><span>Generate Plan</span>
-          </button>
-        </footer>
       </section>
-    </aside>
 
-    <!-- ============================ MAIN (RESULTS) ============================ -->
-    <div class="main">
-      <section class="card card--ribbon" id="resultsCard">
+    <!-- ============================ RESULTS ============================ -->
+    <div class="bs-results">
+      <section class="card card--ribbon" id="resultsCard" hidden>
         <div class="card__head">
           <h2 class="card__title">Plan</h2>
           <div class="card__head-meta" id="planMeta"></div>
@@ -338,6 +349,7 @@
         </div>
       </section>
     </div>
+   </div>
   </main>
 
   <!-- ============================ BLUESKY MODULE ============================ -->
@@ -522,15 +534,15 @@
   <!-- Scripts (load order matters: util -> data -> engine -> xer -> ui).
        The ?v= query string is a cache-buster: bump it whenever js/ changes so
        browsers don't run a stale copy. -->
-  <script src="js/chainage_data.js?v=71"></script>
-  <script src="js/util.js?v=71"></script>
-  <script src="js/data.js?v=71"></script>
-  <script src="js/engine.js?v=71"></script>
-  <script src="js/xer.js?v=71"></script>
-  <script src="js/ui.js?v=71"></script>
+  <script src="js/chainage_data.js?v=84"></script>
+  <script src="js/util.js?v=84"></script>
+  <script src="js/data.js?v=84"></script>
+  <script src="js/engine.js?v=84"></script>
+  <script src="js/xer.js?v=84"></script>
+  <script src="js/ui.js?v=84"></script>
   <!-- Bluesky target-date back-planner (loads after ui.js so it can read the shared store). -->
-  <script src="js/bluesky.js?v=71"></script>
-  <script src="js/bluesky_ui.js?v=71"></script>
+  <script src="js/bluesky.js?v=84"></script>
+  <script src="js/bluesky_ui.js?v=84"></script>
 </body>
 </html>
 

@@ -15,6 +15,7 @@
     store: null, defaults: null, result: null,
     view: "gantt", ganttColor: "profile", mapZoom: 1, mapSelected: null, mapFilters: new Set()
   };
+  let selectedPriority = null;   // planner priority (single-select pill dropdown)
 
   // Shared read-only access for the Bluesky module (js/bluesky_ui.js), so it can
   // reuse the same loaded store/defaults without duplicating the load pipeline.
@@ -48,7 +49,6 @@
     $("#pMachines").addEventListener("input", refreshCapNotice);
     $("#pManpower").addEventListener("input", refreshCapNotice);
     U.$$('input[name="period"]').forEach((r) => r.addEventListener("change", refreshHindranceCalendars));
-    $("#pWorkDays").addEventListener("change", refreshHindranceCalendars);
 
     // Ramp-up curve live preview (Change 5)
     ["#pRampProfile", "#pRampN", "#pProductivity", "#pWorkhours"].forEach((sel) => {
@@ -57,10 +57,19 @@
 
     U.$$("#viewToggle .view-toggle__btn").forEach((b) =>
       b.addEventListener("click", () => setView(b.dataset.view)));
-    $("#sidebarToggle").addEventListener("click", () => {
-      const layout = document.querySelector(".layout");
-      setSidebarCollapsed(!(layout && layout.classList.contains("is-collapsed")));
-    });
+    const togglePanel = () => { const p = $("#paramsCard"); setSidebarCollapsed(!(p && p.classList.contains("is-collapsed"))); };
+    $("#sidebarToggle").addEventListener("click", togglePanel);
+    { const pt = $("#plannerPanelToggle"); if (pt) pt.addEventListener("click", togglePanel); }
+
+    // Priority pill dropdown (single-select).
+    { const ctrl = $("#pPriorityControl");
+      if (ctrl) {
+        ctrl.addEventListener("click", (e) => { if (!e.target.closest(".ms__pill-x")) togglePriorityMenu(); });
+        ctrl.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); togglePriorityMenu(); } });
+      }
+      document.addEventListener("click", (e) => { if (!e.target.closest("#pPriorityMS")) closePriorityMenu(); });
+    }
+    $("#pWorkDays").addEventListener("change", refreshHindranceCalendars);
     U.$$("#ganttColorMode .seg__btn").forEach((b) =>
       b.addEventListener("click", () => { state.ganttColor = b.dataset.mode; U.$$("#ganttColorMode .seg__btn").forEach((x) => x.classList.toggle("is-active", x === b)); if (state.result) renderGantt(); }));
     $("#tableGroup").addEventListener("change", () => { if (state.result) renderTable(); });
@@ -224,19 +233,15 @@
   /* ============================ DEFAULTS -> FORM ============================ */
   function populateDefaults() {
     const d = state.defaults, ch = state.store.chainage;
-    const sel = $("#pPriority");
-    const cur = sel.value;
-    U.clear(sel);
-    sel.appendChild(el("option", { value: "", disabled: "", selected: cur ? null : "" , text: "Select priority…" }));
-    ch.priorities.forEach((p) => sel.appendChild(el("option", { value: p, text: p + "  (" + U.fmtInt(ch.priorityCounts[p]) + " chainages)", selected: p === cur ? "" : null })));
+    buildPriorityDropdown(ch, selectedPriority);
 
     // Auto-computed fields show greyed (as defaults); once edited they turn solid and
     // the hint reveals the original auto value.
     markComputed("#pStart", "#pStartHint", U.fmtISO(d.planStartDefault),
       "Auto: " + U.fmtFriendly(d.planStartDefault) + " (first Monday after latest record " + U.fmtShort(d.latestDataDate) + ")");
-    markComputed("#pMachines", "#pMachinesHint", d.machines, "Auto (7-day onsite avg " + U.fmtNum(d.sumMachine / 7, 2) + "/day → " + d.machines + ")");
-    markComputed("#pManpower", "#pManpowerHint", d.manpower, "Auto (7-day onsite avg " + U.fmtNum(d.sumMan / 7, 2) + "/day → " + d.manpower + ")");
-    markComputed("#pWorkhours", "#pWorkhoursHint", d.workhours, "Auto (7-day onsite avg " + U.fmtNum(d.sumHour / 7, 2) + "/day → " + d.workhours + ")");
+    markComputed("#pMachines", "#pMachinesHint", d.machines, "7-day onsite Avg");
+    markComputed("#pManpower", "#pManpowerHint", d.manpower, "7-day onsite Avg");
+    markComputed("#pWorkhours", "#pWorkhoursHint", d.workhours, "7-day onsite Avg");
     markComputed("#pProductivity", "#pProductivityHint", U.fmtNum(d.productivity, 3), "Auto (adaptive, last 7-day actual window)");
     setVal("#pRampN", d.rampN != null ? d.rampN : 7);
     setVal("#pRampProfile", (d.rampProfile || [1]).join(", "));
@@ -255,6 +260,47 @@
     refreshHindranceCalendars();
   }
   function setVal(sel, v) { const n = $(sel); if (n) n.value = v; }
+
+  /* ---- Priority pill dropdown (single-select) ------------------------------ */
+  function buildPriorityDropdown(ch, keep) {
+    const menu = $("#pPriorityMenu"); if (!menu) return;
+    U.clear(menu);
+    selectedPriority = (keep && ch.priorities.indexOf(keep) >= 0) ? keep : null;
+    ch.priorities.forEach((p) => {
+      const opt = el("div", { class: "ms__opt", role: "option", dataset: { prio: p }, "aria-selected": "false",
+        onclick: () => choosePriority(p) });
+      opt.appendChild(el("span", { class: "ms__check", html:
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg>' }));
+      const body = el("span", { class: "ms__opt-body" });
+      body.appendChild(el("span", { class: "ms__opt-name", text: p }));
+      body.appendChild(el("span", { class: "ms__opt-meta", text: U.fmtInt(ch.priorityCounts[p]) + " chainages" }));
+      opt.appendChild(body);
+      menu.appendChild(opt);
+    });
+    syncPriority();
+  }
+  function choosePriority(p) { selectedPriority = p; closePriorityMenu(); syncPriority(); }
+  function clearPriority() { selectedPriority = null; syncPriority(); }
+  function syncPriority() {
+    const pills = $("#pPriorityPills"); if (!pills) return;
+    U.clear(pills);
+    if (!selectedPriority) {
+      pills.appendChild(el("span", { class: "ms__placeholder", text: "Select priority…" }));
+    } else {
+      const pill = el("span", { class: "ms__pill" });
+      pill.appendChild(el("span", { text: selectedPriority }));
+      pill.appendChild(el("button", { type: "button", class: "ms__pill-x", title: "Clear", html: "&times;",
+        onclick: (e) => { e.stopPropagation(); clearPriority(); } }));
+      pills.appendChild(pill);
+    }
+    U.$$("#pPriorityMenu .ms__opt").forEach((o) => {
+      const on = o.dataset.prio === selectedPriority;
+      o.classList.toggle("is-sel", on); o.setAttribute("aria-selected", String(on));
+    });
+  }
+  function togglePriorityMenu() { $("#pPriorityMenu").hidden ? openPriorityMenu() : closePriorityMenu(); }
+  function openPriorityMenu() { $("#pPriorityMenu").hidden = false; $("#pPriorityMS").classList.add("is-open"); $("#pPriorityControl").setAttribute("aria-expanded", "true"); }
+  function closePriorityMenu() { const m = $("#pPriorityMenu"); if (!m) return; m.hidden = true; $("#pPriorityMS").classList.remove("is-open"); $("#pPriorityControl").setAttribute("aria-expanded", "false"); }
 
   // Show an auto-computed field greyed; when the planner edits it, turn it solid and
   // surface the original computed value in the hint below.
@@ -480,14 +526,28 @@
 
     state.result = result;
     writeStored(result.deployed, p.priority);   // §5.6 persist effective deployed count
-    renderAll();
-    U.toast("Plan generated — " + result.deployed + " machine(s) deployed.", "ok");
-    document.getElementById("resultsCard").scrollIntoView({ behavior: "smooth", block: "start" });
+
+    const finish = () => {
+      renderAll();
+      U.toast("Plan generated — " + result.deployed + " machine(s) deployed.", "ok");
+      window.scrollTo({ top: 0, behavior: "smooth" });   // start from top: header → collapsed panel → Plan
+    };
+    // Run the shared checklist loader (constant ~5s), then reveal the plan.
+    if (SPP.blueskyUI && SPP.blueskyUI.runLoader) SPP.blueskyUI.runLoader(finish, PLANNER_LOADER_STEPS);
+    else finish();
   }
+  const PLANNER_LOADER_STEPS = [
+    "Reading site data & progress",
+    "Netting installed piles",
+    "Ordering work queue by material",
+    "Simulating daily installation",
+    "Optimizing machine count",
+    "Generating plan"
+  ];
 
   function gatherParams() {
-    const priority = $("#pPriority").value;
-    if (!priority) { U.toast("Choose a chainage priority.", "bad"); $("#pPriority").focus(); return null; }
+    const priority = selectedPriority;
+    if (!priority) { U.toast("Choose a chainage priority.", "bad"); openPriorityMenu(); return null; }
     const planStart = U.parseISODate($("#pStart").value);
     if (!planStart) { U.toast("Pick a plan start date.", "bad"); return null; }
     if (!U.isMonday(planStart)) { U.toast("Plan start must be a Monday.", "bad"); return null; }
@@ -515,6 +575,7 @@
   /* ============================ RENDER (top) ============================ */
   function renderAll() {
     const r = state.result;
+    $("#resultsCard").hidden = false;
     $("#resultsEmpty").hidden = true;
     $("#viewToggle").hidden = false;
     $("#validationCard").hidden = false;
@@ -538,10 +599,11 @@
     setSidebarCollapsed(true);   // collapse inputs on generate for a full-width plan view
   }
 
-  // Show/hide the inputs sidebar and keep the toggle label in sync.
+  // Collapse/expand the top input panel and keep the toggles in sync.
   function setSidebarCollapsed(collapsed) {
-    const layout = document.querySelector(".layout");
-    if (layout) layout.classList.toggle("is-collapsed", collapsed);
+    const panel = $("#paramsCard");
+    if (panel) panel.classList.toggle("is-collapsed", collapsed);
+    const bar = $("#plannerPanelToggle"); if (bar) bar.setAttribute("aria-expanded", String(!collapsed));
     const btn = $("#sidebarToggle");
     if (btn) {
       btn.hidden = false;
