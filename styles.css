@@ -537,6 +537,13 @@ select.input--sm { background-position: right 8px center, center; padding-right:
 }
 .view-toggle__btn.is-active .vt-ico { color: var(--navy); opacity: 1; }
 
+/* In-panel variant: the switcher now lives in the light Plan card (below the
+   forecast), so it needs a light surface instead of the header's glass look. */
+.view-toggle--inpanel { background: var(--surface-2); border-color: var(--border); backdrop-filter: none; margin: 4px 0 var(--s-4); }
+.view-toggle--inpanel .view-toggle__btn { color: var(--text-muted); }
+.view-toggle--inpanel .view-toggle__btn:hover { color: var(--navy); background: rgba(4,15,82,0.06); }
+.view-toggle--inpanel .view-toggle__btn .vt-ico { opacity: .9; }
+
 /* Button icons */
 .btn-ico { width: 15px; height: 15px; flex: none; }
 
@@ -753,6 +760,18 @@ table.data tr.row-completed td { color: var(--success); }
 .warn-badge.w-warn { background: var(--warning-bg); color: var(--warning); }
 .warn-badge.w-info { background: var(--info-bg);    color: var(--info); }
 .modal__body { padding: var(--s-4); }
+/* Wider variant used for the blocked-chainages table popup. The table itself is
+   the single scroll region (the body doesn't scroll), so there's only one bar. */
+.modal--wide { max-width: 900px; }
+.modal--wide .modal__body { max-height: none; overflow: visible; }
+#blockedModalScroll { max-height: 66vh; }
+/* Generous horizontal spacing between the popup's columns. */
+#blockedModalScroll table.data th, #blockedModalScroll table.data td { padding-left: 18px; padding-right: 18px; }
+/* Header row: badge + a cross close button on the right. */
+.modal__head-right { display: flex; align-items: center; gap: 10px; }
+.modal__x { border: none; background: rgba(255,255,255,0.16); color: #fff; width: 27px; height: 27px; border-radius: 7px;
+  font-size: 19px; line-height: 1; cursor: pointer; display: grid; place-items: center; transition: background .14s ease; }
+.modal__x:hover { background: rgba(255,255,255,0.30); }
 .modal__text { font-size: 14px; line-height: 1.5; margin-bottom: var(--s-3); }
 .modal__hint { font-size: 12px; color: var(--text-muted); background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-sm); padding: var(--s-2) var(--s-3); margin-bottom: var(--s-3); }
 .modal__q { font-size: 13px; font-weight: 650; }

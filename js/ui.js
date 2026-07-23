@@ -57,9 +57,10 @@
 
     U.$$("#viewToggle .view-toggle__btn").forEach((b) =>
       b.addEventListener("click", () => setView(b.dataset.view)));
-    const togglePanel = () => { const p = $("#paramsCard"); setSidebarCollapsed(!(p && p.classList.contains("is-collapsed"))); };
-    $("#sidebarToggle").addEventListener("click", togglePanel);
-    { const pt = $("#plannerPanelToggle"); if (pt) pt.addEventListener("click", togglePanel); }
+    // Collapse/expand the input panel via its own header bar (the old header
+    // "Hide inputs" button was removed).
+    { const pt = $("#plannerPanelToggle");
+      if (pt) pt.addEventListener("click", () => { const p = $("#paramsCard"); setSidebarCollapsed(!(p && p.classList.contains("is-collapsed"))); }); }
 
     // Priority pill dropdown (single-select).
     { const ctrl = $("#pPriorityControl");
@@ -70,6 +71,10 @@
       document.addEventListener("click", (e) => { if (!e.target.closest("#pPriorityMS")) closePriorityMenu(); });
     }
     $("#pWorkDays").addEventListener("change", refreshHindranceCalendars);
+
+    // Blocked-chainages popup: close via the button or by clicking the backdrop.
+    { const bx = $("#blockedCloseX"); if (bx) bx.addEventListener("click", closeBlockedModal); }
+    { const bm = $("#blockedModal"); if (bm) bm.addEventListener("click", (e) => { if (e.target === bm) closeBlockedModal(); }); }
     U.$$("#ganttColorMode .seg__btn").forEach((b) =>
       b.addEventListener("click", () => { state.ganttColor = b.dataset.mode; U.$$("#ganttColorMode .seg__btn").forEach((x) => x.classList.toggle("is-active", x === b)); if (state.result) renderGantt(); }));
     $("#tableGroup").addEventListener("change", () => { if (state.result) renderTable(); });
@@ -89,15 +94,16 @@
     tryBundled();   // auto-load the three files from ./data/ so the app opens on the Plan Parameters screen
   }
   // Switch between the module picker (m = null), the forward planner ("planner")
-  // and the Bluesky target-date planner ("bluesky"). Header controls that belong
-  // to the planner's plan view are hidden unless the planner is active with a plan.
+  // and the Bluesky target-date planner ("bluesky"). The header Export button is
+  // shown only when the planner is active with a generated plan; the view switcher
+  // lives inside the (planner-only) Plan card, so it needs no handling here.
   function showModule(m) {
     const picker = $("#homePicker"), planner = $("#plannerLayout"), bluesky = $("#blueskyLayout");
     if (picker) picker.hidden = !!m;
     if (planner) planner.hidden = m !== "planner";
     if (bluesky) bluesky.hidden = m !== "bluesky";
     const plannerActive = m === "planner" && !!state.result;
-    ["#viewToggle", "#exportPlanBtn", "#sidebarToggle"].forEach((sel) => { const n = $(sel); if (n) n.hidden = !plannerActive; });
+    { const n = $("#exportPlanBtn"); if (n) n.hidden = !plannerActive; }
     if (m === "bluesky" && SPP.blueskyUI && SPP.blueskyUI.onShow) SPP.blueskyUI.onShow();
     window.scrollTo(0, 0);
   }
@@ -1377,6 +1383,33 @@
       '<text x="' + (x0 + px / 2) + '" y="' + (y - 6) + '" text-anchor="middle" fill="#cdd5df" font-size="10">' + label + '</text>';
   }
 
+  // Populate + open the "blocked chainages" popup: a table of each blocked
+  // chainage against its profile (and item code / scope) so the planner sees
+  // exactly what is excluded for want of material. `blocked` is r.blocked.
+  function openBlockedModal(blocked) {
+    const rows = (blocked || []).slice().sort((a, b) =>
+      String(a.profile).localeCompare(String(b.profile)) || U.chainageSortKey(a.id) - U.chainageSortKey(b.id));
+    $("#blockedCount").textContent = rows.length + " blocked";
+
+    const table = el("table", { class: "data" });
+    const thead = el("thead"), htr = el("tr");
+    ["Chainage", "Profile", "Item Code", "Piles (MTO)"].forEach((h) => htr.appendChild(el("th", { class: h === "Piles (MTO)" ? "num" : "", text: h })));
+    thead.appendChild(htr); table.appendChild(thead);
+    const tb = el("tbody");
+    rows.forEach((f) => {
+      const tr = el("tr");
+      tr.appendChild(el("td", { text: f.id }));
+      tr.appendChild(el("td", { text: f.profile }));
+      tr.appendChild(el("td", { text: f.code || "—" }));
+      tr.appendChild(el("td", { class: "num", text: U.fmtInt(f.mto) }));
+      tb.appendChild(tr);
+    });
+    table.appendChild(tb);
+    const scroll = $("#blockedModalScroll"); U.clear(scroll); scroll.appendChild(table);
+    $("#blockedModal").hidden = false;
+  }
+  function closeBlockedModal() { const m = $("#blockedModal"); if (m) m.hidden = true; }
+
   // Update the map info bar for a hovered/pinned chainage.
   function showMapInfo(f, st, info) {
     const box = $("#mapInfo");
@@ -1416,6 +1449,8 @@
   function setMapFilters(cats) {
     state.mapFilters = new Set(cats || []);
     setView("map");
+    // The map now lives inside the Plan card, so bring it into view after it renders.
+    requestAnimationFrame(() => { const m = $("#mapView"); if (m) m.scrollIntoView({ behavior: "smooth", block: "start" }); });
   }
   // Sync the legend chips' active styling with the current filter.
   function updateLegendActive() {
@@ -1487,6 +1522,13 @@
     if (r.blocked.length) {
       const bl = el("div", { class: "blocked-note" });
       bl.appendChild(el("span", { class: "blocked-note__txt", html: "<strong>" + r.blocked.length + "</strong> chainage(s) blocked — no usable material (" + U.fmtInt(r.blockedMTO) + " piles)." }));
+      // Button 1 — open a popup table of the blocked chainages vs their profiles.
+      const listBtn = el("button", { type: "button", class: "btn btn--ghost btn--sm" },
+        [el("span", { html: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:5px"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>' }),
+         document.createTextNode("View blocked list")]);
+      listBtn.addEventListener("click", () => openBlockedModal(r.blocked));
+      bl.appendChild(listBtn);
+      // Button 2 — jump to the map with the "blocked" filter applied.
       const btn = el("button", { type: "button", class: "btn btn--ghost btn--sm" },
         [el("span", { html: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:5px"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2z"/><line x1="9" y1="4" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="20"/></svg>' }),
          document.createTextNode("View blocked on map")]);
