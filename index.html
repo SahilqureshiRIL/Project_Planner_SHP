@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Sheet Pile Installation Planner</title>
-  <link rel="stylesheet" href="styles.css?v=65" />
+  <link rel="stylesheet" href="styles.css?v=71" />
   <!--
     SheetJS (xlsx) is vendored locally in ./vendor so the app works fully offline.
     If you prefer the CDN, replace the src below with:
@@ -342,75 +342,93 @@
 
   <!-- ============================ BLUESKY MODULE ============================ -->
   <main class="layout layout--bluesky" id="blueskyLayout" hidden>
-    <!-- ---- Bluesky inputs ---- -->
-    <aside class="sidebar">
-      <section class="card card--ribbon" id="bsParamsCard">
-        <div class="card__head">
-          <h2 class="card__title">Target &amp; Scope</h2>
-          <span class="badge badge--muted">Bluesky</span>
-        </div>
-        <div class="card__body">
+   <div class="bs-shell">
+
+    <!-- ---- Bluesky inputs: collapsible top panel ---- -->
+    <section class="bs-panel" id="bsParamsCard">
+      <button type="button" class="bs-panel__bar" id="bsPanelToggle" aria-expanded="true" aria-controls="bsPanelWrap">
+        <span class="bs-panel__title">
+          <svg class="bs-panel__ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/></svg>
+          Target &amp; Scope
+        </span>
+        <span class="bs-panel__hint" id="bsPanelHint">Set your target date, priorities &amp; pace</span>
+        <span class="bs-panel__chev" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+        </span>
+      </button>
+
+      <div class="bs-panel__wrap" id="bsPanelWrap">
+        <div class="bs-panel__body">
           <p class="placeholder" id="bsPlaceholder">Loading data from ./data/ &hellip;</p>
+
           <div id="bsForm" hidden>
-            <!-- Target date -->
-            <div class="field">
-              <label class="field__label" for="bsTarget">Target Date <span class="field__tag">finish by</span></label>
-              <input type="date" id="bsTarget" class="input" />
-              <p class="field__hint" id="bsStartHint"></p>
-            </div>
+            <div class="bs-cols">
+              <!-- Section 1 — target & scope -->
+              <div class="bs-col">
+                <div class="field">
+                  <label class="field__label" for="bsTarget">Target Date <span class="field__tag">finish by</span></label>
+                  <input type="date" id="bsTarget" class="input" />
+                  <p class="field__hint" id="bsStartHint"></p>
+                </div>
 
-            <!-- Priorities (multi-select with km scope) -->
-            <div class="field">
-              <span class="field__label">Priorities <span class="field__tag">select one or more &middot; km scope shown</span></span>
-              <div id="bsPriorityList" class="bs-prio-list"></div>
-            </div>
-
-            <div class="field-grid">
-              <!-- Work days/week -->
-              <div class="field">
-                <label class="field__label" for="bsWorkDays">Work Days / week</label>
-                <select id="bsWorkDays" class="input">
-                  <option value="5">5 (Mon&ndash;Fri)</option>
-                  <option value="6" selected>6 (Mon&ndash;Sat)</option>
-                  <option value="7">7 (all days)</option>
-                </select>
+                <div class="field">
+                  <span class="field__label">Priorities <span class="field__tag">select one or more</span></span>
+                  <div class="ms" id="bsPriorityMS">
+                    <div class="ms__control" id="bsMsControl" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false">
+                      <span class="ms__pills" id="bsMsPills"></span>
+                      <span class="ms__arrow" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+                      </span>
+                    </div>
+                    <div class="ms__menu" id="bsMsMenu" hidden role="listbox" aria-multiselectable="true"></div>
+                  </div>
+                  <p class="field__hint" id="bsScopeHint"></p>
+                </div>
               </div>
-              <!-- Workhours -->
-              <div class="field">
-                <label class="field__label" for="bsWorkhours">Workhours / day</label>
-                <input type="number" id="bsWorkhours" class="input" min="1" step="1" />
+
+              <div class="bs-col__divider" aria-hidden="true"></div>
+
+              <!-- Section 2 — pace -->
+              <div class="bs-col">
+                <div class="field">
+                  <label class="field__label" for="bsWorkDays">Work Days / week</label>
+                  <select id="bsWorkDays" class="input">
+                    <option value="5">5 (Mon&ndash;Fri)</option>
+                    <option value="6" selected>6 (Mon&ndash;Sat)</option>
+                    <option value="7">7 (all days)</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label class="field__label" for="bsWorkhours">Workhours / day</label>
+                  <input type="number" id="bsWorkhours" class="input" min="1" step="1" />
+                </div>
+                <div class="field">
+                  <label class="field__label" for="bsProductivity">Productivity <span class="field__tag">piles / machine / hour</span></label>
+                  <input type="number" id="bsProductivity" class="input" min="0.001" step="0.001" />
+                  <p class="field__hint" id="bsProdHint"></p>
+                </div>
               </div>
             </div>
 
-            <!-- Productivity -->
-            <div class="field">
-              <label class="field__label" for="bsProductivity">Productivity <span class="field__tag">piles / machine / hour</span></label>
-              <input type="number" id="bsProductivity" class="input" min="0.001" step="0.001" />
-              <p class="field__hint" id="bsProdHint"></p>
+            <div class="bs-actions">
+              <button type="button" id="bsCalcBtn" class="btn btn--primary bs-process">
+                <svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/></svg><span>Process Plan</span>
+              </button>
             </div>
           </div>
         </div>
-        <footer class="card__foot" id="bsFoot" hidden>
-          <button type="button" id="bsCalcBtn" class="btn btn--primary btn--block">
-            <svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/></svg><span>Process Plan</span>
-          </button>
-        </footer>
-      </section>
-    </aside>
+      </div>
+    </section>
 
     <!-- ---- Bluesky results ---- -->
-    <div class="main">
-      <section class="card card--ribbon" id="bsResultsCard">
+    <div class="bs-results">
+      <section class="card card--ribbon" id="bsResultsCard" hidden>
         <div class="card__head">
-          <h2 class="card__title">Requirement</h2>
+          <h2 class="card__title">Plan</h2>
           <div class="card__head-meta" id="bsMeta"></div>
         </div>
         <div class="card__body">
           <div class="plan-summary" id="bsSummary" hidden></div>
-          <div class="emptystate" id="bsEmpty">
-            <div class="emptystate__icon">&#127919;</div>
-            <p>Pick a <strong>target date</strong> and one or more <strong>priorities</strong>, then <strong>Process Plan</strong>.</p>
-          </div>
         </div>
       </section>
 
@@ -458,7 +476,24 @@
         </div>
       </section>
     </div>
+   </div>
   </main>
+
+  <!-- Bluesky processing loader — a sequential checklist (constant ~3s) -->
+  <div class="bs-loader" id="bsLoader" hidden>
+    <div class="bs-loader__card">
+      <div class="bs-loader__head">
+        <span class="bs-loader__spark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/></svg>
+        </span>
+        <div>
+          <div class="bs-loader__title">Processing plan</div>
+          <div class="bs-loader__sub">Crunching your target &amp; actuals&hellip;</div>
+        </div>
+      </div>
+      <ul class="bs-loader__list" id="bsLoaderList"></ul>
+    </div>
+  </div>
 
   <!-- Warnings confirmation modal: review warnings, then Proceed or Abort -->
   <div class="modal-overlay" id="warnModal" hidden>
@@ -487,15 +522,15 @@
   <!-- Scripts (load order matters: util -> data -> engine -> xer -> ui).
        The ?v= query string is a cache-buster: bump it whenever js/ changes so
        browsers don't run a stale copy. -->
-  <script src="js/chainage_data.js?v=65"></script>
-  <script src="js/util.js?v=65"></script>
-  <script src="js/data.js?v=65"></script>
-  <script src="js/engine.js?v=65"></script>
-  <script src="js/xer.js?v=65"></script>
-  <script src="js/ui.js?v=65"></script>
+  <script src="js/chainage_data.js?v=71"></script>
+  <script src="js/util.js?v=71"></script>
+  <script src="js/data.js?v=71"></script>
+  <script src="js/engine.js?v=71"></script>
+  <script src="js/xer.js?v=71"></script>
+  <script src="js/ui.js?v=71"></script>
   <!-- Bluesky target-date back-planner (loads after ui.js so it can read the shared store). -->
-  <script src="js/bluesky.js?v=65"></script>
-  <script src="js/bluesky_ui.js?v=65"></script>
+  <script src="js/bluesky.js?v=71"></script>
+  <script src="js/bluesky_ui.js?v=71"></script>
 </body>
 </html>
 

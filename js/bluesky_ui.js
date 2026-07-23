@@ -14,6 +14,8 @@
   let populated = false;
   let lastResult = null;   // kept so the table can re-render on a group-by change
   let activeTab = "material";   // "material" | "plan" — defaults to the material check
+  const selected = new Set();   // selected priorities (multiselect state)
+  let scopeCache = null;        // per-priority scope, for pill/menu meta
 
   document.addEventListener("DOMContentLoaded", () => {
     const btn = $("#bsCalcBtn");
@@ -21,7 +23,80 @@
     const grp = $("#bsTableGroup");
     if (grp) grp.addEventListener("change", () => { if (lastResult) renderSchedule(lastResult); });
     U.$$(".bs-tab").forEach((b) => b.addEventListener("click", () => setTab(b.dataset.bstab)));
+
+    // Collapsible top panel.
+    const toggle = $("#bsPanelToggle");
+    if (toggle) toggle.addEventListener("click", () => setPanelCollapsed(!$("#bsParamsCard").classList.contains("is-collapsed")));
+
+    // Multiselect dropdown open/close.
+    const ctrl = $("#bsMsControl");
+    if (ctrl) {
+      ctrl.addEventListener("click", (e) => { if (!e.target.closest(".ms__pill-x")) toggleMenu(); });
+      ctrl.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleMenu(); } });
+    }
+    document.addEventListener("click", (e) => { if (!e.target.closest("#bsPriorityMS")) closeMenu(); });
   });
+
+  function setPanelCollapsed(collapsed) {
+    const card = $("#bsParamsCard");
+    card.classList.toggle("is-collapsed", collapsed);
+    const t = $("#bsPanelToggle"); if (t) t.setAttribute("aria-expanded", String(!collapsed));
+  }
+
+  /* ---- priority multiselect dropdown --------------------------------------- */
+  function toggleMenu() { $("#bsMsMenu").hidden ? openMenu() : closeMenu(); }
+  function openMenu() {
+    $("#bsMsMenu").hidden = false;
+    $("#bsMsControl").setAttribute("aria-expanded", "true");
+    $("#bsPriorityMS").classList.add("is-open");
+  }
+  function closeMenu() {
+    const m = $("#bsMsMenu"); if (!m) return;
+    m.hidden = true;
+    $("#bsMsControl").setAttribute("aria-expanded", "false");
+    $("#bsPriorityMS").classList.remove("is-open");
+  }
+
+  function toggleOption(prio) {
+    if (selected.has(prio)) selected.delete(prio); else selected.add(prio);
+    syncMs();
+  }
+  function removeOption(prio) { selected.delete(prio); syncMs(); }
+
+  // Re-render the pills (in the control) and the checked state in the menu.
+  function syncMs() {
+    const pills = $("#bsMsPills"); U.clear(pills);
+    const ordered = st_priorities().filter((p) => selected.has(p));
+    if (!ordered.length) {
+      pills.appendChild(el("span", { class: "ms__placeholder", text: "Select priorities…" }));
+    } else {
+      ordered.forEach((p) => {
+        const pill = el("span", { class: "ms__pill" });
+        pill.appendChild(el("span", { text: p }));
+        pill.appendChild(el("button", { type: "button", class: "ms__pill-x", title: "Remove " + p, html: "&times;",
+          onclick: (e) => { e.stopPropagation(); removeOption(p); } }));
+        pills.appendChild(pill);
+      });
+    }
+    U.$$("#bsMsMenu .ms__opt").forEach((o) => {
+      const on = selected.has(o.dataset.prio);
+      o.classList.toggle("is-sel", on);
+      o.setAttribute("aria-selected", String(on));
+    });
+    updateScopeHint();
+  }
+
+  function updateScopeHint() {
+    const hint = $("#bsScopeHint"); if (!hint) return;
+    if (!selected.size || !scopeCache) { hint.textContent = ""; return; }
+    let km = 0, piles = 0, ch = 0;
+    st_priorities().filter((p) => selected.has(p)).forEach((p) => {
+      const s = scopeCache[p]; if (s) { km += s.remainingKm || 0; piles += s.remaining || 0; ch += s.chainages || 0; }
+    });
+    hint.textContent = "Scope: " + U.fmtNum(km, 2) + " km left · " + U.fmtInt(piles) + " piles · " + U.fmtInt(ch) + " chainages";
+  }
+
+  function st_priorities() { const st = store(); return st ? st.chainage.priorities : []; }
 
   // Switch the visible result panel; the tab bar governs card visibility.
   function setTab(tab) {
@@ -45,7 +120,6 @@
     populated = true;
     $("#bsPlaceholder").hidden = true;
     $("#bsForm").hidden = false;
-    $("#bsFoot").hidden = false;
 
     // Default target = 4 weeks after the plan-start anchor; can't be before it.
     const start = d.planStartDefault;
@@ -60,29 +134,32 @@
     if (d.productivity) $("#bsProductivity").value = U.fmtNum(d.productivity, 3);
     $("#bsProdHint").textContent = d.prodDerivation || "";
 
-    buildPriorityList(st);
+    buildPriorityMenu(st);
   }
 
-  function buildPriorityList(st) {
-    const host = $("#bsPriorityList");
-    U.clear(host);
-    const scope = SPP.bluesky.priorityScope(st);
+  function buildPriorityMenu(st) {
+    const menu = $("#bsMsMenu");
+    U.clear(menu);
+    selected.clear();
+    scopeCache = SPP.bluesky.priorityScope(st);
     st.chainage.priorities.forEach((p) => {
-      const s = scope[p] || { scopeKm: 0, remaining: 0, chainages: 0 };
-      const id = "bsPrio_" + p.replace(/[^A-Za-z0-9]/g, "_");
-      const row = el("label", { class: "bs-prio", for: id });
-      row.appendChild(el("input", { type: "checkbox", id: id, value: p, class: "bs-prio__cb" }));
-      const body = el("span", { class: "bs-prio__body" });
-      body.appendChild(el("span", { class: "bs-prio__name", text: p }));
-      body.appendChild(el("span", { class: "bs-prio__meta",
+      const s = scopeCache[p] || { remainingKm: 0, remaining: 0, chainages: 0 };
+      const opt = el("div", { class: "ms__opt", role: "option", dataset: { prio: p }, "aria-selected": "false",
+        onclick: () => toggleOption(p) });
+      opt.appendChild(el("span", { class: "ms__check", html:
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg>' }));
+      const body = el("span", { class: "ms__opt-body" });
+      body.appendChild(el("span", { class: "ms__opt-name", text: p }));
+      body.appendChild(el("span", { class: "ms__opt-meta",
         text: U.fmtNum(s.remainingKm || 0, 2) + " km left · " + U.fmtInt(s.remaining) + " piles · " + U.fmtInt(s.chainages) + " ch" }));
-      row.appendChild(body);
-      host.appendChild(row);
+      opt.appendChild(body);
+      menu.appendChild(opt);
     });
+    syncMs();
   }
 
   function selectedPriorities() {
-    return U.$$("#bsPriorityList .bs-prio__cb:checked").map((c) => c.value);
+    return st_priorities().filter((p) => selected.has(p));
   }
 
   /* ---- calculate + render -------------------------------------------------- */
@@ -111,9 +188,46 @@
     } catch (err) { U.toast("Calculation failed: " + err.message, "bad"); console.error(err); return; }
 
     lastResult = res;
-    renderResult(res);
-    U.toast("Requirement computed.", "ok");
-    $("#bsResultsCard").scrollIntoView({ behavior: "smooth", block: "start" });
+    // Run the checklist loader (constant ~3s), then reveal the results and
+    // collapse the input panel so the plan gets the full screen.
+    runLoader(() => {
+      renderResult(res);
+      setPanelCollapsed(true);
+      U.toast("Plan ready.", "ok");
+      // Start the view from the top: header → collapsed panel → Plan.
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+  }
+
+  /* ---- checklist loader (fixed ~3s, sequential ticks) ---------------------- */
+  const LOADER_STEPS = [
+    "Reading site actuals",
+    "Netting installed progress",
+    "Checking material stock & in-transit",
+    "Back-calculating crew & manpower",
+    "Building chainage-wise schedule",
+    "Computing plan"
+  ];
+  function runLoader(done) {
+    const overlay = $("#bsLoader"), list = $("#bsLoaderList");
+    U.clear(list);
+    const items = LOADER_STEPS.map((label) => {
+      const li = el("li", { class: "bs-lstep" });
+      li.appendChild(el("span", { class: "bs-lstep__ico", html:
+        '<svg class="bs-lstep__check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg>' }));
+      li.appendChild(el("span", { class: "bs-lstep__label", text: label }));
+      list.appendChild(li);
+      return li;
+    });
+    overlay.hidden = false;
+    const total = 5000, step = total / items.length;
+    items.forEach((li, i) => {
+      // Each item phases in (is-in) and starts spinning (is-active) on its turn,
+      // then flips to a tick (is-done) before the next item phases in.
+      setTimeout(() => li.classList.add("is-in", "is-active"), Math.round(i * step));
+      setTimeout(() => { li.classList.remove("is-active"); li.classList.add("is-done"); }, Math.round((i + 1) * step - 160));
+    });
+    setTimeout(() => { overlay.hidden = true; done(); }, total + 180);
   }
 
   function renderResult(r) {
@@ -124,9 +238,9 @@
       "<span>" + U.fmtFriendly(r.planStart) + " start</span>" +
       "<span>" + r.workingDays + " working days</span>";
 
+    $("#bsResultsCard").hidden = false;
     const host = $("#bsSummary");
     host.hidden = false; U.clear(host);
-    $("#bsEmpty").hidden = true;
 
     const machinesTxt = isFinite(r.machinesNeeded) ? String(r.machinesNeeded) : "—";
     const manpowerTxt = isFinite(r.manpower) ? U.fmtInt(r.manpower) : "—";
@@ -223,7 +337,7 @@
     computeDisplay(r.schedule);
     const groupBy = $("#bsTableGroup").value;
 
-    const cols = ["Date", "Day #", "Machine", "Chainage", "Profile", "Item Code", "Piles (day)", "Cum.", "MTO", "% Comp.", "Status"];
+    const cols = ["Date", "Day #", "Machine", "Chainage", "Profile", "Item Code", "Piles (day)", "Cum.", "MTO", "% Comp."];
     const NUM = { "Piles (day)": 1, "Cum.": 1, "MTO": 1, "% Comp.": 1 };
     const table = el("table", { class: "data" });
     const thead = el("thead"), htr = el("tr");
@@ -272,8 +386,6 @@
     const pct = e.mto > 0 ? (e.cum / e.mto) * 100 : 0;
     const done = e.cum >= e.mto - 1e-6;
     const tr = el("tr", { class: done ? "row-completed" : "" });
-    const status = done ? el("span", { class: "pill pill--done", text: "Completed" })
-      : el("span", { class: "pill pill--prog", text: "In progress" });
     [
       el("td", { text: U.fmtShort(e.date) }),
       el("td", { class: "num", text: e.dayNum }),
@@ -284,8 +396,7 @@
       el("td", { class: "num", text: U.fmtInt(e.dispInstall) }),
       el("td", { class: "num", text: U.fmtInt(e.dispCum) }),
       el("td", { class: "num", text: U.fmtInt(e.mto) }),
-      el("td", { class: "num", text: U.fmtNum(pct, 1) + "%" }),
-      el("td", {}, [status])
+      el("td", { class: "num", text: U.fmtNum(pct, 1) + "%" })
     ].forEach((td) => tr.appendChild(td));
     return tr;
   }
