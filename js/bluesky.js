@@ -44,6 +44,26 @@
     const prioritiesSet = new Set(p.priorities || []);
     const perMachineDaily = p.productivity * p.workhours;   // piles / machine / day (steady-state)
 
+    /* ---- ramp-up: machines beyond the already-installed (steady-state) count
+       ramp up over their working days, same model as engine.js §5.4 — one shared
+       working-day counter, factor 1.0 for machines 1..prevMachines, rampFactor(k)
+       for machines beyond that. ------------------------------------------------- */
+    const prevMachines = Math.max(0, p.prevMachines || 0);
+    const rampProfile = (p.rampProfile && p.rampProfile.length) ? p.rampProfile : [1];
+    function rampFactor(k) { return rampProfile[Math.min(k, rampProfile.length - 1)]; }
+    // Total piles installable by M machines over `days` working days, honoring ramp-up
+    // for machines beyond prevMachines (steady machines run at factor 1.0 throughout).
+    function capacityOverDays(M, days) {
+      let total = 0;
+      for (let k = 0; k < days; k++) {
+        const steady = Math.min(M, prevMachines) * perMachineDaily;
+        const newCount = Math.max(0, M - prevMachines);
+        const ramped = newCount * rampFactor(k) * perMachineDaily;
+        total += steady + ramped;
+      }
+      return total;
+    }
+
     /* ---- 1. remaining scope across the selected priorities ------------------ */
     const installedByChainage = (progress && progress.installedByChainage) || {};
     const candidates = chainage.features.filter((f) => prioritiesSet.has(f.priority));
@@ -89,13 +109,27 @@
       }
     }
 
-    /* ---- 4. back-calculate the crew (the whole point of Bluesky) ------------ */
-    const requiredRate = workingDays > 0 ? remainingPiles / workingDays : Infinity;  // piles / day
+    /* ---- 4. back-calculate the crew (the whole point of Bluesky) ------------
+       With ramp-up, capacity isn't a flat machines × rate — machines beyond the
+       already-installed count ramp up over their working days, so the minimum
+       crew is found by searching upward for the smallest M whose ramp-aware
+       capacityOverDays(M, workingDays) covers remainingPiles (mirrors engine.js's
+       per-machine capacity model, just solved in reverse for M instead of piles). */
+    const requiredRate = workingDays > 0 ? remainingPiles / workingDays : Infinity;  // piles / day (flat reference rate)
     let machinesNeeded;
     if (remainingPiles <= EPS) machinesNeeded = 0;                                    // nothing left to do
     else if (workingDays <= 0 || perMachineDaily <= EPS) machinesNeeded = Infinity;   // impossible in the window
-    else machinesNeeded = Math.max(1, Math.ceil(requiredRate / perMachineDaily - 1e-9));
+    else {
+      // Upper bound via the flat (no-ramp) estimate, then search upward — ramp-up
+      // only ever needs the same M or a few more, never fewer.
+      const flatGuess = Math.max(1, Math.ceil(requiredRate / perMachineDaily - 1e-9));
+      let M = flatGuess;
+      const MAX_M = flatGuess + 200;   // generous ceiling against pathological ramp curves
+      while (M < MAX_M && capacityOverDays(M, workingDays) < remainingPiles - EPS) M++;
+      machinesNeeded = M;
+    }
     const manpower = isFinite(machinesNeeded) ? machinesNeeded * 6 : Infinity;        // 6 people per machine (engine rule)
+    const rampedMachines = isFinite(machinesNeeded) ? Math.max(0, machinesNeeded - prevMachines) : 0;
 
     /* ---- 5. per-priority-profile demand vs supply (at-site / in-transit / gap)
        One row per (priority, profile). Because material is a single on-site /
@@ -171,12 +205,14 @@
     let installedTotal = 0;
     const HORIZON = 1460;                // ~4 years guard
     if (isFinite(machinesNeeded) && machinesNeeded > 0 && remainingPiles > EPS) {
-      const dayCap = machinesNeeded * perMachineDaily;
-      let ai = 0;
+      const steadyCap = Math.min(machinesNeeded, prevMachines) * perMachineDaily;
+      let ai = 0, workingOrdinal = -1;
       let d = new Date(planStart);
       for (let i = 0; i < HORIZON && installedTotal < remainingPiles - EPS; i++, d = U.addDays(d, 1)) {
         while (ai < arrivals.length && U.cmpDate(arrivals[ai].usable, d) <= 0) { stock[arrivals[ai].code] += arrivals[ai].qty; ai++; }
         if (U.isoDow(d) > p.workDaysPerWeek) continue;    // non-working day
+        workingOrdinal++;
+        const dayCap = steadyCap + rampedMachines * rampFactor(workingOrdinal) * perMachineDaily;
         let cap = dayCap, installedToday = 0;
         for (let q = 0; q < queue.length && cap > EPS; q++) {
           const need = queue[q].remaining - done[q];
@@ -236,18 +272,18 @@
     const schedule = [];
     const scheduleCalendar = [];
     if (isFinite(machinesNeeded) && machinesNeeded > 0 && remainingPiles > EPS) {
-      const M = machinesNeeded, capPerMachine = perMachineDaily;
+      const M = machinesNeeded;
       const q = rows.slice().sort((a, b) =>
         U.priorityOrder(a.f.priority) - U.priorityOrder(b.f.priority) || a.f.sortKey - b.f.sortKey);
       const stt = q.map((r) => ({ f: r.f, prior: r.prior, remaining: r.remaining, done: 0, machine: null }));
       const assign = new Array(M).fill(-1);      // machine slot -> index into stt (-1 = idle)
-      let qptr = 0, dayNum = 0, guard = 0, remainingLeft = remainingPiles;
+      let qptr = 0, dayNum = 0, guard = 0, remainingLeft = remainingPiles, workingOrdinal = -1;
       const HMAX = 3650;
       let d = new Date(planStart);
       while (remainingLeft > EPS && guard < HMAX) {
         guard++;
         if (U.isoDow(d) <= p.workDaysPerWeek) {
-          dayNum++;
+          dayNum++; workingOrdinal++;
           scheduleCalendar.push({ date: new Date(d), dayNum: dayNum, isWorking: true });
           for (let i = 0; i < M; i++) if (assign[i] < 0 && qptr < stt.length) assign[i] = qptr++;
           for (let i = 0; i < M; i++) {
@@ -257,6 +293,11 @@
             const need = s.remaining - s.done;
             if (need <= EPS) { assign[i] = -1; continue; }
             if (s.machine == null) s.machine = i + 1;
+            // Machine slots 0..prevMachines-1 are already-installed (steady-state,
+            // factor 1.0); slots beyond that are new and ramp per rampFactor(k).
+            const isNew = i >= prevMachines;
+            const factor = isNew ? rampFactor(workingOrdinal) : 1.0;
+            const capPerMachine = perMachineDaily * factor;
             const install = Math.min(capPerMachine, need);
             s.done += install; remainingLeft -= install;
             schedule.push({ date: new Date(d), dayNum: dayNum, machine: i + 1, chId: s.f.id,
@@ -277,6 +318,7 @@
       candidateCount: candidates.length, activeCount: rows.length,
       remainingPiles, remainingKm, totalScopeKm, totalMTO, priorTotal,
       requiredRate, machinesNeeded, manpower,
+      prevMachines, rampedMachines, rampProfile,
       profileRows, gapTotal, materialShort,
       haltDate, completionDate,
       verdict, verdictLevel, probability,

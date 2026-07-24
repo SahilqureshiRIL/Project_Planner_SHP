@@ -177,6 +177,11 @@
     if (d.productivity) $("#bsProductivity").value = U.fmtNum(d.productivity, 3);
     $("#bsProdHint").textContent = d.prodDerivation || "";
 
+    // Already-installed (steady-state) machines default to the 7-day onsite
+    // average — same baseline the planner uses for its ramp's prevMachines.
+    if (d.machines != null) $("#bsPrevMachines").value = d.machines;
+    $("#bsPrevHint").textContent = "Auto (7-day onsite avg → " + d.machines + "). Machines beyond this ramp up before reaching full productivity.";
+
     buildPriorityMenu(st);
   }
 
@@ -222,6 +227,7 @@
     const workDaysPerWeek = parseInt($("#bsWorkDays").value, 10) || 6;
     const workhours = parseInt($("#bsWorkhours").value, 10);
     const productivity = U.toNum($("#bsProductivity").value);
+    const prevMachines = Math.max(0, parseInt($("#bsPrevMachines").value, 10) || 0);
     if (!(workhours > 0)) { U.toast("Workhours must be positive.", "bad"); return; }
     if (!(productivity > 0)) { U.toast("Productivity must be greater than 0.", "bad"); return; }
 
@@ -230,6 +236,9 @@
       res = SPP.bluesky.compute(st, {
         priorities, targetDate, planStart: planStartFromToday(),
         workDaysPerWeek, workhours, productivity,
+        // Already-installed machines run at steady-state (factor 1.0); machines
+        // beyond this ramp up per the same adaptive curve the planner derives.
+        prevMachines, rampProfile: d.rampProfile,
         // Actuals for the probability-of-success factors.
         baselineMachines: d.machines, baselineManpower: d.manpower, actualProductivity: d.productivity
       });
@@ -317,6 +326,9 @@
     host.appendChild(statGrid([
       { label: "Probability of success", value: prob.percent + "%", sub: "schedule-led · your actuals vs target", tone: probTone },
       { label: "Machines needed", value: machinesTxt, sub: isFinite(r.machinesNeeded) ? "at " + U.fmtNum(r.perMachineDaily, 1) + " piles/machine/day" : "not reachable", tone: "indigo" },
+      { label: "Already installed machines", value: U.fmtInt(r.prevMachines || 0), sub: isFinite(r.machinesNeeded)
+          ? (r.rampedMachines > 0 ? r.rampedMachines + " new machine(s) ramping up" : "covers the full crew — no ramp-up needed")
+          : "steady-state baseline", tone: "sky" },
       { label: "Manpower required", value: manpowerTxt, sub: "6 people / machine", tone: "violet" },
       { label: "Piles to install", value: U.fmtInt(Math.round(r.remainingPiles)), sub: U.fmtInt(r.priorTotal) + " already done", tone: "teal" },
       { label: "Length remaining", value: U.fmtNum(r.remainingKm, 2) + " km", sub: "of " + U.fmtNum(r.totalScopeKm, 1) + " km scope", tone: "sky" },
