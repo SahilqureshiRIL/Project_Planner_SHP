@@ -872,6 +872,13 @@
   }
 
   /* ============================ TABLE VIEW (§6.1) ============================ */
+  // Per-chainage display prep: turn each day's raw float install into a whole-pile
+  // "Piles (day)" value. Rounding the CUMULATIVE total each day (old approach) could
+  // show non-monotonic values like 26, 27, 26 even under flat capacity, because
+  // independent day-to-day rounding error was carried through the running total.
+  // Fix: ceil every non-final day's raw install (so a flat/rising capacity series
+  // never dips), then on the chainage's last day, net the display against MTO so
+  // the displayed total still ties out exactly (absorbing the rounding surplus).
   function computeDisplay(schedule) {
     const byCh = {};
     schedule.forEach((e) => (byCh[e.chId] || (byCh[e.chId] = [])).push(e));
@@ -880,7 +887,12 @@
       // cum already includes piles installed before this plan, so seed prev with that
       // so the per-day install (dispInstall) reflects only THIS plan's daily work.
       let prev = Math.round(list.length ? (list[0].priorInstalled || 0) : 0);
-      list.forEach((e) => { e.dispCum = Math.round(e.cum); e.dispInstall = e.dispCum - prev; prev = e.dispCum; });
+      list.forEach((e, idx) => {
+        const isLastDay = idx === list.length - 1 || e.cum >= e.mto - 1e-6;
+        e.dispInstall = isLastDay ? Math.max(0, Math.round(e.mto) - prev) : Math.ceil(e.install);
+        prev += e.dispInstall;
+        e.dispCum = prev;
+      });
     });
   }
 
