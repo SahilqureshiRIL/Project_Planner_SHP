@@ -376,16 +376,25 @@
     const scroll = $("#bsProfileScroll"); U.clear(scroll); scroll.appendChild(t);
   }
 
-  // Per-chainage display prep: sort each chainage's entries by date and turn the
-  // running cumulative into a whole-pile daily delta (dispInstall) via cumulative
-  // rounding, so the "Piles (day)" column always sums back to the totals.
+  // Per-chainage display prep: turn each day's raw float install into a whole-pile
+  // "Piles (day)" value. Rounding the CUMULATIVE total each day (old approach) could
+  // show non-monotonic values like 26, 27, 26 even under flat capacity, because
+  // independent day-to-day rounding error was carried through the running total.
+  // Fix: ceil every non-final day's raw install (so a flat/rising capacity series
+  // never dips), then on the chainage's last day, net the display against MTO so
+  // the displayed total still ties out exactly (absorbing the rounding surplus).
   function computeDisplay(schedule) {
     const byCh = {};
     schedule.forEach((e) => (byCh[e.chId] || (byCh[e.chId] = [])).push(e));
     Object.values(byCh).forEach((list) => {
       list.sort((a, b) => a.date - b.date);
       let prev = Math.round(list.length ? (list[0].priorInstalled || 0) : 0);
-      list.forEach((e) => { e.dispCum = Math.round(e.cum); e.dispInstall = e.dispCum - prev; prev = e.dispCum; });
+      list.forEach((e, idx) => {
+        const isLastDay = idx === list.length - 1 || e.cum >= e.mto - 1e-6;
+        e.dispInstall = isLastDay ? Math.max(0, Math.round(e.mto) - prev) : Math.ceil(e.install);
+        prev += e.dispInstall;
+        e.dispCum = prev;
+      });
     });
   }
 
@@ -402,8 +411,8 @@
     computeDisplay(r.schedule);
     const groupBy = $("#bsTableGroup").value;
 
-    const cols = ["Date", "Day #", "Machine", "Chainage", "Profile", "Item Code", "Piles (day)", "MTO", "% Comp."];
-    const NUM = { "Piles (day)": 1, "MTO": 1, "% Comp.": 1 };
+    const cols = ["Date", "Day #", "Machine", "Chainage", "Profile", "Item Code", "Piles (day)", "Cum.", "MTO", "% Comp."];
+    const NUM = { "Piles (day)": 1, "Cum.": 1, "MTO": 1, "% Comp.": 1 };
     const table = el("table", { class: "data" });
     const thead = el("thead"), htr = el("tr");
     cols.forEach((c) => htr.appendChild(el("th", { class: NUM[c] ? "num" : "", text: c })));
@@ -464,6 +473,7 @@
       el("td", { text: e.profile }),
       el("td", { text: e.code || "—" }),
       el("td", { class: "num", text: U.fmtInt(e.dispInstall) }),
+      el("td", { class: "num", text: U.fmtInt(e.dispCum) }),
       el("td", { class: "num", text: U.fmtInt(e.mto) }),
       el("td", { class: "num", text: U.fmtNum(pct, 1) + "%" })
     ].forEach((td) => tr.appendChild(td));
