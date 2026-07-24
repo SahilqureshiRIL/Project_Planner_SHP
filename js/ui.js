@@ -1651,21 +1651,21 @@
   function planFinishStat(r) {
     if (r.remainingMTO <= 0) return { label: "Priority finish", value: "Complete", sub: "already fully installed", kind: "ok" };
     if (r.finishCoversAll && r.projectedFinish)
-      return { label: "Est. finish (as per material availability)", value: U.fmtDate(r.projectedFinish), sub: (r.projFinishWorkingDays || 0) + " working days at " + r.deployed + " machine(s)", kind: "" };
+      return { label: "Total Work Halt due to Non-Availability of Material", value: U.fmtDate(r.projectedFinish), sub: (r.projFinishWorkingDays || 0) + " working days at " + r.deployed + " machine(s)", kind: "" };
     if (r.projTimeLimited)
-      return { label: "Est. finish (as per material availability)", value: "beyond ~2 yr", sub: "scope exceeds a 2-year horizon", kind: "warn" };
+      return { label: "Total Work Halt due to Non-Availability of Material", value: "beyond ~2 yr", sub: "scope exceeds a 2-year horizon", kind: "warn" };
     if (r.projectedFinish)
-      return { label: "Est. finish (as per material availability)", value: U.fmtDate(r.projectedFinish), sub: U.fmtInt(r.unachievablePiles) + " more material needed", kind: "warn" };
-    return { label: "Est. finish (as per material availability)", value: "—", sub: r.deployed <= 0 ? "no machines deployed" : "no installable material", kind: "warn" };
+      return { label: "Total Work Halt due to Non-Availability of Material", value: U.fmtDate(r.projectedFinish), sub: U.fmtInt(r.unachievablePiles) + " more material needed", kind: "warn" };
+    return { label: "Total Work Halt due to Non-Availability of Material", value: "—", sub: r.deployed <= 0 ? "no machines deployed" : "no installable material", kind: "warn" };
   }
 
   // Estimated finish assuming ALL material arrives — rate-limited only
   // (steady daily capacity × remaining scope), ignoring supply constraints.
   function fullFinishStat(r) {
-    if (r.remainingMTO <= 0) return { label: "Est. finish (all material available)", value: "Complete", sub: "already fully installed", kind: "ok" };
+    if (r.remainingMTO <= 0) return { label: "Est. Finish · As per Full Material Availability", value: "Complete", sub: "already fully installed", kind: "ok" };
     if (r.fullMaterialFinish)
-      return { label: "Est. finish (all material available)", value: U.fmtDate(r.fullMaterialFinish), sub: (r.fullMaterialWorkingDays || 0) + " working days at " + U.fmtNum(r.effectiveDailyCapacity, 0) + " piles/day", kind: "ok" };
-    return { label: "Est. finish (all material available)", value: "—", sub: "no machines deployed", kind: "warn" };
+      return { label: "Est. Finish · As per Full Material Availability", value: U.fmtDate(r.fullMaterialFinish), sub: (r.fullMaterialWorkingDays || 0) + " working days at " + U.fmtNum(r.effectiveDailyCapacity, 0) + " piles/day", kind: "ok" };
+    return { label: "Est. Finish · As per Full Material Availability", value: "—", sub: "no machines deployed", kind: "warn" };
   }
 
   // Build a titled section wrapper for the validation panel.

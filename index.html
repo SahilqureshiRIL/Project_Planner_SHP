@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Sheet Pile Installation Planner</title>
-  <link rel="stylesheet" href="styles.css?v=100" />
+  <link rel="stylesheet" href="styles.css?v=103" />
   <!--
     SheetJS (xlsx) is vendored locally in ./vendor so the app works fully offline.
     If you prefer the CDN, replace the src below with:
@@ -504,7 +504,7 @@
       <section class="card" id="bsTableCard" hidden>
         <div class="card__head">
           <h2 class="card__title">Chainage-wise &amp; machine-wise plan</h2>
-          <span class="badge badge--muted">material unlimited</span>
+          <span class="badge badge--muted">As per Full Material Availability</span>
         </div>
         <div class="card__body">
           <div class="table-controls">
@@ -584,15 +584,15 @@
   <!-- Scripts (load order matters: util -> data -> engine -> xer -> ui).
        The ?v= query string is a cache-buster: bump it whenever js/ changes so
        browsers don't run a stale copy. -->
-  <script src="js/chainage_data.js?v=100"></script>
-  <script src="js/util.js?v=100"></script>
-  <script src="js/data.js?v=100"></script>
-  <script src="js/engine.js?v=100"></script>
-  <script src="js/xer.js?v=100"></script>
-  <script src="js/ui.js?v=100"></script>
+  <script src="js/chainage_data.js?v=103"></script>
+  <script src="js/util.js?v=103"></script>
+  <script src="js/data.js?v=103"></script>
+  <script src="js/engine.js?v=103"></script>
+  <script src="js/xer.js?v=103"></script>
+  <script src="js/ui.js?v=103"></script>
   <!-- Bluesky target-date back-planner (loads after ui.js so it can read the shared store). -->
-  <script src="js/bluesky.js?v=100"></script>
-  <script src="js/bluesky_ui.js?v=100"></script>
+  <script src="js/bluesky.js?v=103"></script>
+  <script src="js/bluesky_ui.js?v=103"></script>
 </body>
 </html>
 
