@@ -1169,9 +1169,14 @@
     blocked:    { c: "#e0563c", label: "Blocked (no material)" }
   };
   const MAP_CONTEXT = "#8593a3";   // boundary / other-priority lines (visible on dark map)
-  // Multi-select filter: a chainage's category shows when no filter is set, or when
-  // its category is among the selected ones.
-  function mapVisible(cat) { return !state.mapFilters.size || state.mapFilters.has(cat); }
+  // Multi-select filter: a chainage shows when no filter is set, or when ANY of its
+  // categories is among the selected ones (a chainage can be both "partial" and
+  // "scheduled this plan" at once — accepts a single category string or a Set).
+  function mapVisible(catOrSet) {
+    if (!state.mapFilters.size) return true;
+    if (catOrSet instanceof Set) { for (const c of catOrSet) if (state.mapFilters.has(c)) return true; return false; }
+    return state.mapFilters.has(catOrSet);
+  }
   let mapTipEl = null, mapGL = null, _ptTex = null;
 
   // Tooltip HTML for a chainage on the map.
@@ -1197,20 +1202,25 @@
   }
 
   // Shared model: status/info per chainage + projection bounds.
+  //
+  // A chainage can genuinely belong to MORE THAN ONE category at once — e.g. it had
+  // partial progress before this plan AND this plan schedules it this window. statusById
+  // still holds exactly one PRIMARY category (for the single line color a boundary segment
+  // can render), but catsById holds the FULL set so filtering/counting doesn't silently
+  // drop a chainage's other category. Primary-status priority (last wins, most specific
+  // first): base scope → blocked → partial → complete → scheduled-this-plan.
   function computeMapData() {
     const r = state.result;
     const feats = state.parsed.chainage ? state.parsed.chainage.features : [];
     const geoFeats = feats.filter((f) => f.seg);
-    const statusById = {}, infoById = {}, inPriority = {};
+    const statusById = {}, catsById = {}, infoById = {}, inPriority = {};
+    function addCat(id, cat) { (catsById[id] || (catsById[id] = new Set())).add(cat); }
     if (r) {
-      // Later assignments win. Order: base scope → blocked → partial → complete →
-      // scheduled-this-plan. So worked chainages always show as "scheduled", partials
-      // (progress but not finished, not scheduled) stay visible, complete = fully done.
-      r.candidates.forEach((c) => { statusById[c.id] = "planned"; inPriority[c.id] = true; });
-      r.blocked.forEach((b) => { statusById[b.id] = "blocked"; });
-      (r.partial || []).forEach((c) => { statusById[c.id] = "partial"; });      // started per progress, not finished
-      (r.completed || []).forEach((c) => { statusById[c.id] = "complete"; });   // fully done per progress history
-      r.worked.forEach((w) => { statusById[w.id] = "inprogress"; infoById[w.id] = w; });
+      r.candidates.forEach((c) => { statusById[c.id] = "planned"; inPriority[c.id] = true; addCat(c.id, "planned"); });
+      r.blocked.forEach((b) => { statusById[b.id] = "blocked"; addCat(b.id, "blocked"); });
+      (r.partial || []).forEach((c) => { statusById[c.id] = "partial"; addCat(c.id, "partial"); });      // started per progress, not finished
+      (r.completed || []).forEach((c) => { statusById[c.id] = "complete"; addCat(c.id, "complete"); });   // fully done per progress history
+      r.worked.forEach((w) => { statusById[w.id] = "inprogress"; infoById[w.id] = w; addCat(w.id, "inprogress"); });
     }
     let minLng = Infinity, maxLng = -Infinity, minLat = Infinity, maxLat = -Infinity;
     geoFeats.forEach((f) => f.seg.forEach((p) => {
@@ -1219,8 +1229,11 @@
     }));
     const lat0 = (minLat + maxLat) / 2, kx = Math.cos(lat0 * Math.PI / 180);
     return {
-      r, geoFeats, statusById, infoById, inPriority, minLng, maxLng, minLat, maxLat, kx,
-      catOf: (f) => inPriority[f.id] ? (statusById[f.id] || "planned") : "context"
+      r, geoFeats, statusById, catsById, infoById, inPriority, minLng, maxLng, minLat, maxLat, kx,
+      catOf: (f) => inPriority[f.id] ? (statusById[f.id] || "planned") : "context",
+      // All categories a chainage belongs to (for filter-visibility + legend counts);
+      // context (other-priority) chainages have no entry, so fall back to ["context"].
+      catsOf: (f) => catsById[f.id] || new Set(["context"])
     };
   }
 
@@ -1250,7 +1263,7 @@
   // three.js WebGL map renderer (orthographic pan/zoom, marker picking, filtering).
   function renderMapGL(data) {
     const host = $("#mapScroll"); U.clear(host);
-    const { geoFeats, infoById, minLng, maxLng, minLat, maxLat, kx, catOf } = data;
+    const { geoFeats, infoById, minLng, maxLng, minLat, maxLat, kx, catOf, catsOf } = data;
     const PX = (lng) => (lng - minLng) * kx, PY = (lat) => (lat - minLat);   // y up = north
     const dataW = (maxLng - minLng) * kx || 1e-6, dataH = (maxLat - minLat) || 1e-6;
     const W = Math.max(320, host.clientWidth || 880);
@@ -1276,12 +1289,17 @@
       boundaryPos.push(PX(a[0]), PY(a[1]), 0, PX(b[0]), PY(b[1]), 0);
       const cat = catOf(f);
       if (cat === "context") return;                  // other priorities live only in the boundary
-      segByCat[cat].push(PX(a[0]), PY(a[1]), 0, PX(b[0]), PY(b[1]), 0);
-      if (f.mid) {
-        const mx = PX(f.mid[0]), my = PY(f.mid[1]);
-        mkByCat[cat].push(mx, my, 0);
-        pickables.push({ id: f.id, wx: mx, wy: my, cat: cat, feature: f, info: infoById[f.id] });
-      }
+      const cats = catsOf(f);
+      const mx = f.mid ? PX(f.mid[0]) : null, my = f.mid ? PY(f.mid[1]) : null;
+      // Draw this chainage's segment/marker into EVERY category bucket it belongs to
+      // (not just its primary color category), so toggling any one of its filters
+      // (e.g. "Partially done" OR "Scheduled this plan") independently shows/hides it.
+      cats.forEach((c) => {
+        if (!segByCat[c]) return;
+        segByCat[c].push(PX(a[0]), PY(a[1]), 0, PX(b[0]), PY(b[1]), 0);
+        if (f.mid) mkByCat[c].push(mx, my, 0);
+      });
+      if (f.mid) pickables.push({ id: f.id, wx: mx, wy: my, cat: cat, cats: cats, feature: f, info: infoById[f.id] });
     });
     const objs = {};
     const add = (cat, o) => { (objs[cat] = objs[cat] || []).push(o); scene.add(o); };
@@ -1329,7 +1347,7 @@
     function pick(mx, my) {
       let best = null, bd = 144;
       for (const p of pickables) {
-        if (!mapVisible(p.cat)) continue;
+        if (!mapVisible(p.cats)) continue;
         const sc = w2s(p.wx, p.wy), d = (sc[0] - mx) * (sc[0] - mx) + (sc[1] - my) * (sc[1] - my);
         if (d < bd) { bd = d; best = p; }
       }
@@ -1340,7 +1358,7 @@
       if (!p) { selObj.visible = false; return; }
       selObj.geometry.attributes.position.setXYZ(0, p.wx, p.wy, 0);
       selObj.geometry.attributes.position.needsUpdate = true;
-      selObj.visible = mapVisible(p.cat);
+      selObj.visible = mapVisible(p.cats);
     }
 
     const cv = renderer.domElement; cv.style.cursor = "grab"; cv.style.touchAction = "none";
@@ -1382,7 +1400,7 @@
         const vis = cat === "boundary" ? true : mapVisible(cat);   // boundary is always shown
         objs[cat].forEach((o) => (o.visible = vis));
       });
-      if (state.mapSelected) { const ps = pickables.find((p) => p.id === state.mapSelected); selObj.visible = !!ps && mapVisible(ps.cat); }
+      if (state.mapSelected) { const ps = pickables.find((p) => p.id === state.mapSelected); selObj.visible = !!ps && mapVisible(ps.cats); }
       draw();
     }
     // Re-render the map only if the container width actually changed.
@@ -1409,7 +1427,7 @@
   /* ---- SVG renderer (fallback when WebGL is unavailable) ---- */
   function renderMapSVG(data) {
     const host = $("#mapScroll");
-    const { geoFeats, statusById, infoById, inPriority, minLng, maxLng, minLat, maxLat, kx } = data;
+    const { geoFeats, statusById, catsById, infoById, inPriority, minLng, maxLng, minLat, maxLat, kx } = data;
     const dataW = (maxLng - minLng) * kx || 1e-6, dataH = (maxLat - minLat) || 1e-6;
     const pad = 26, targetW = 880;
     const S = ((targetW - 2 * pad) / dataW) * state.mapZoom;
@@ -1422,12 +1440,14 @@
       s += '<line x1="' + X(a[0]).toFixed(1) + '" y1="' + Y(a[1]).toFixed(1) + '" x2="' + X(b[0]).toFixed(1) + '" y2="' + Y(b[1]).toFixed(1) + '" stroke="' + MAP_CONTEXT + '" stroke-width="1.5" stroke-linecap="round"/>';
     });
     geoFeats.forEach((f) => {
-      if (!inPriority[f.id]) return; const st = statusById[f.id] || "planned"; if (!mapVisible(st)) return;
+      // Visibility checks the chainage's FULL category set (a chainage can be both
+      // "partial" and "scheduled this plan" at once); color still uses its primary status.
+      if (!inPriority[f.id]) return; const st = statusById[f.id] || "planned"; if (!mapVisible(catsById[f.id] || st)) return;
       const col = (MAP_STATUS[st] || {}).c, a = f.seg[0], b = f.seg[1], sel = state.mapSelected === f.id ? " is-sel" : "";
       s += '<line class="map-seg' + sel + '" data-id="' + U.esc(f.id) + '" data-tip="' + mapTipText(f, st, infoById[f.id]) + '" x1="' + X(a[0]).toFixed(1) + '" y1="' + Y(a[1]).toFixed(1) + '" x2="' + X(b[0]).toFixed(1) + '" y2="' + Y(b[1]).toFixed(1) + '" stroke="' + col + '" stroke-width="' + (sel ? 6 : 3.5) + '" stroke-linecap="round"/>';
     });
     geoFeats.forEach((f) => {
-      if (!inPriority[f.id] || !f.mid) return; const st = statusById[f.id] || "planned"; if (!mapVisible(st)) return;
+      if (!inPriority[f.id] || !f.mid) return; const st = statusById[f.id] || "planned"; if (!mapVisible(catsById[f.id] || st)) return;
       const col = (MAP_STATUS[st] || {}).c;
       s += '<circle class="map-marker" data-id="' + U.esc(f.id) + '" data-tip="' + mapTipText(f, st, infoById[f.id]) + '" cx="' + X(f.mid[0]).toFixed(1) + '" cy="' + Y(f.mid[1]).toFixed(1) + '" r="' + (state.mapSelected === f.id ? 5.5 : 3.5) + '" fill="' + col + '" stroke="#fff" stroke-width="1"/>';
     });
@@ -1503,8 +1523,15 @@
   // Clickable legend = multi-select filter (toggle categories on/off; none = show all).
   function renderMapLegend(data) {
     const host = $("#mapLegend"); U.clear(host);
+    // Count a chainage under EVERY category it belongs to, not just its primary
+    // (display) one — otherwise a chainage that's e.g. both "partial" and "scheduled
+    // this plan" only ever gets tallied once, and the other legend count undercounts.
     const counts = { inprogress: 0, planned: 0, complete: 0, partial: 0, blocked: 0, context: 0 };
-    data.geoFeats.forEach((f) => { const cat = data.catOf(f); if (counts[cat] != null) counts[cat]++; });
+    data.geoFeats.forEach((f) => {
+      const cat = data.catOf(f);
+      if (cat === "context") { counts.context++; return; }
+      data.catsOf(f).forEach((c) => { if (counts[c] != null) counts[c]++; });
+    });
     const items = [];
     ["inprogress", "partial", "complete", "planned", "blocked"].forEach((k) => { if (counts[k]) items.push({ cat: k, c: MAP_STATUS[k].c, label: MAP_STATUS[k].label, n: counts[k] }); });
     items.push({ cat: "context", c: MAP_CONTEXT, label: "Other priorities", n: counts.context });
