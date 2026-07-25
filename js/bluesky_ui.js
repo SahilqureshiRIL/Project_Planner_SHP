@@ -58,6 +58,15 @@
       ctrl.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleMenu(); } });
     }
     document.addEventListener("click", (e) => { if (!e.target.closest("#bsPriorityMS")) closeMenu(); });
+
+    // Work Days / week pill dropdown (single-select, same look as the priority picker).
+    const wdCtrl = $("#bsWorkDaysControl");
+    if (wdCtrl) {
+      wdCtrl.addEventListener("click", () => toggleWorkDaysMenu());
+      wdCtrl.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleWorkDaysMenu(); } });
+    }
+    document.addEventListener("click", (e) => { if (!e.target.closest("#bsWorkDaysMS")) closeWorkDaysMenu(); });
+    buildWorkDaysDropdown();
   });
 
   /* ============================ 2. PANEL + DROPDOWN ============================ */
@@ -212,6 +221,51 @@
   function selectedPriorities() {
     return st_priorities().filter((p) => selected.has(p));
   }
+
+  /* ---- Work Days / week pill dropdown (single-select, same look/layout as the
+     Installation Planner's picker — plain text value, no pill chip or radio dot) --- */
+  const WORK_DAYS_OPTIONS = [
+    { value: "5", label: "5 (Mon–Fri)" },
+    { value: "6", label: "6 (Mon–Sat)" },
+    { value: "7", label: "7 (all days)" }
+  ];
+  function buildWorkDaysDropdown() {
+    const menu = $("#bsWorkDaysMenu"); if (!menu) return;
+    U.clear(menu);
+    WORK_DAYS_OPTIONS.forEach((o) => {
+      const opt = el("div", { class: "ms__opt", role: "option", dataset: { val: o.value }, "aria-selected": "false",
+        onclick: () => chooseWorkDays(o.value) });
+      opt.appendChild(el("span", { class: "ms__check", html:
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg>' }));
+      const body = el("span", { class: "ms__opt-body" });
+      body.appendChild(el("span", { class: "ms__opt-name", text: o.label }));
+      opt.appendChild(body);
+      menu.appendChild(opt);
+    });
+    syncWorkDays();
+  }
+  // Select a work-days value and close the menu.
+  function chooseWorkDays(v) {
+    $("#bsWorkDays").value = v;
+    closeWorkDaysMenu();
+    syncWorkDays();
+  }
+  // Repaint the plain-text value + menu selected state from #bsWorkDays' current value.
+  function syncWorkDays() {
+    const pills = $("#bsWorkDaysPills"); if (!pills) return;
+    const v = $("#bsWorkDays").value;
+    const cur = WORK_DAYS_OPTIONS.find((o) => o.value === v);
+    U.clear(pills);
+    pills.appendChild(el("span", { class: cur ? "" : "ms__placeholder", text: cur ? cur.label : "Select…" }));
+    U.$$("#bsWorkDaysMenu .ms__opt").forEach((o) => {
+      const on = o.dataset.val === v;
+      o.classList.toggle("is-sel", on); o.setAttribute("aria-selected", String(on));
+    });
+  }
+  // Open/close the work-days options popover.
+  function toggleWorkDaysMenu() { $("#bsWorkDaysMenu").hidden ? openWorkDaysMenu() : closeWorkDaysMenu(); }
+  function openWorkDaysMenu() { $("#bsWorkDaysMenu").hidden = false; $("#bsWorkDaysMS").classList.add("is-open"); $("#bsWorkDaysControl").setAttribute("aria-expanded", "true"); }
+  function closeWorkDaysMenu() { const m = $("#bsWorkDaysMenu"); if (!m) return; m.hidden = true; $("#bsWorkDaysMS").classList.remove("is-open"); $("#bsWorkDaysControl").setAttribute("aria-expanded", "false"); }
 
   /* ============================ 5. CALCULATE ============================ */
   // Validate inputs, run the compute engine, then play the loader before showing

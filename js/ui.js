@@ -73,6 +73,16 @@
       }
       document.addEventListener("click", (e) => { if (!e.target.closest("#pPriorityMS")) closePriorityMenu(); });
     }
+
+    // Work Days / week pill dropdown (single-select, same look as the priority picker).
+    { const ctrl = $("#pWorkDaysControl");
+      if (ctrl) {
+        ctrl.addEventListener("click", () => toggleWorkDaysMenu());
+        ctrl.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleWorkDaysMenu(); } });
+      }
+      document.addEventListener("click", (e) => { if (!e.target.closest("#pWorkDaysMS")) closeWorkDaysMenu(); });
+      buildWorkDaysDropdown();
+    }
     $("#pWorkDays").addEventListener("change", refreshHindranceCalendars);
 
     // Blocked-chainages popup: close via the button or by clicking the backdrop.
@@ -348,6 +358,53 @@
   function openPriorityMenu() { $("#pPriorityMenu").hidden = false; $("#pPriorityMS").classList.add("is-open"); $("#pPriorityControl").setAttribute("aria-expanded", "true"); }
   // Hide the priority popover (outside-click or after a pick).
   function closePriorityMenu() { const m = $("#pPriorityMenu"); if (!m) return; m.hidden = true; $("#pPriorityMS").classList.remove("is-open"); $("#pPriorityControl").setAttribute("aria-expanded", "false"); }
+
+  /* ---- Work Days / week pill dropdown (single-select, same look as priority) --- */
+  const WORK_DAYS_OPTIONS = [
+    { value: "5", label: "5 (Mon–Fri)" },
+    { value: "6", label: "6 (Mon–Sat)" },
+    { value: "7", label: "7 (all days)" }
+  ];
+  function buildWorkDaysDropdown() {
+    const menu = $("#pWorkDaysMenu"); if (!menu) return;
+    U.clear(menu);
+    WORK_DAYS_OPTIONS.forEach((o) => {
+      const opt = el("div", { class: "ms__opt", role: "option", dataset: { val: o.value }, "aria-selected": "false",
+        onclick: () => chooseWorkDays(o.value) });
+      opt.appendChild(el("span", { class: "ms__check", html:
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg>' }));
+      const body = el("span", { class: "ms__opt-body" });
+      body.appendChild(el("span", { class: "ms__opt-name", text: o.label }));
+      opt.appendChild(body);
+      menu.appendChild(opt);
+    });
+    syncWorkDays();
+  }
+  // Select a work-days value, close the menu, and fire a change event for listeners.
+  function chooseWorkDays(v) {
+    const input = $("#pWorkDays");
+    const changed = input.value !== v;
+    input.value = v;
+    closeWorkDaysMenu();
+    syncWorkDays();
+    if (changed) input.dispatchEvent(new Event("change"));
+  }
+  // Repaint the plain-text value + menu selected state from #pWorkDays' current value.
+  function syncWorkDays() {
+    const pills = $("#pWorkDaysPills"); if (!pills) return;
+    const v = $("#pWorkDays").value;
+    const cur = WORK_DAYS_OPTIONS.find((o) => o.value === v);
+    U.clear(pills);
+    pills.appendChild(el("span", { class: cur ? "" : "ms__placeholder", text: cur ? cur.label : "Select…" }));
+    U.$$("#pWorkDaysMenu .ms__opt").forEach((o) => {
+      const on = o.dataset.val === v;
+      o.classList.toggle("is-sel", on); o.setAttribute("aria-selected", String(on));
+    });
+  }
+  // Open/close the work-days options popover.
+  function toggleWorkDaysMenu() { $("#pWorkDaysMenu").hidden ? openWorkDaysMenu() : closeWorkDaysMenu(); }
+  function openWorkDaysMenu() { $("#pWorkDaysMenu").hidden = false; $("#pWorkDaysMS").classList.add("is-open"); $("#pWorkDaysControl").setAttribute("aria-expanded", "true"); }
+  function closeWorkDaysMenu() { const m = $("#pWorkDaysMenu"); if (!m) return; m.hidden = true; $("#pWorkDaysMS").classList.remove("is-open"); $("#pWorkDaysControl").setAttribute("aria-expanded", "false"); }
 
   // Show an auto-computed field greyed; when the planner edits it, turn it solid and
   // surface the original computed value in the hint below.
@@ -640,7 +697,7 @@
     const periodLbl = r.params.periodWeeks + " weeks";
     $("#planMeta").innerHTML =
       "<span>" + U.esc(r.params.priorities.join(", ")) + "</span><span>" + periodLbl + "</span>" +
-      "<span>" + U.fmtFriendly(r.planStart) + " → " + U.fmtShort(r.planEnd) + "</span>" +
+      "<span>" + U.fmtFriendly(r.planStart) + " → " + U.fmtFriendly(r.planEnd) + "</span>" +
       "<span>" + r.deployed + (r.deployed !== r.maxMachines ? "/" + r.maxMachines : "") + " machine" + (r.deployed === 1 ? "" : "s") + "</span>" +
       "<span>" + r.workingDayCount + " working days</span>";
 
@@ -836,8 +893,8 @@
 
     let s = '<svg class="daychart__svg" width="' + W + '" height="' + H + '" font-family="inherit">';
     s += '<defs><linearGradient id="barGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1c3a86"/><stop offset="1" stop-color="#0b1f66"/></linearGradient>' +
-      // Gold glow for the trend line (#d2ab67).
-      '<filter id="trendGlow" x="-10%" y="-80%" width="120%" height="260%"><feDropShadow dx="0" dy="0" stdDeviation="3.5" flood-color="#d2ab67" flood-opacity="0.9"/></filter></defs>';
+      // Gold glow for the trend line (#DDB871).
+      '<filter id="trendGlow" x="-10%" y="-80%" width="120%" height="260%"><feDropShadow dx="0" dy="0" stdDeviation="3.5" flood-color="#DDB871" flood-opacity="0.9"/></filter></defs>';
     // gridlines + y ticks
     ticks.forEach((tv) => {
       const gy = yOf(tv);
@@ -856,8 +913,8 @@
     });
     // trend line = 3-period moving average, gold + glow, with a marker per period
     const pts = ma.map((mv, i) => cxOf(i).toFixed(1) + "," + yOf(mv).toFixed(1));
-    s += '<polyline points="' + pts.join(" ") + '" fill="none" stroke="#d2ab67" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" filter="url(#trendGlow)"/>';
-    ma.forEach((mv, i) => { s += '<circle cx="' + cxOf(i).toFixed(1) + '" cy="' + yOf(mv).toFixed(1) + '" r="4.5" fill="#fff" stroke="#d2ab67" stroke-width="2.5"/>'; });
+    s += '<polyline points="' + pts.join(" ") + '" fill="none" stroke="#DDB871" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" filter="url(#trendGlow)"/>';
+    ma.forEach((mv, i) => { s += '<circle cx="' + cxOf(i).toFixed(1) + '" cy="' + yOf(mv).toFixed(1) + '" r="4.5" fill="#fff" stroke="#DDB871" stroke-width="2.5"/>'; });
     s += '</svg>';
     host.innerHTML = s;
     // One-shot slide/fade transition on paging or mode-switch (the SVG is a fresh

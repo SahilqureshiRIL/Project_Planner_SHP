@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Sheet Pile Installation Planner</title>
-  <link rel="stylesheet" href="styles.css?v=105" />
+  <link rel="stylesheet" href="styles.css?v=106" />
   <!--
     SheetJS (xlsx) is vendored locally in ./vendor so the app works fully offline.
     If you prefer the CDN, replace the src below with:
@@ -175,12 +175,17 @@
                   </div>
                   <div class="field-pair">
                     <div class="field">
-                      <label class="field__label" for="pWorkDays">Work Days / week</label>
-                      <select id="pWorkDays" class="input">
-                        <option value="5">5 (Mon&ndash;Fri)</option>
-                        <option value="6" selected>6 (Mon&ndash;Sat)</option>
-                        <option value="7">7 (all days)</option>
-                      </select>
+                      <span class="field__label">Work Days / week</span>
+                      <div class="ms ms--plain" id="pWorkDaysMS">
+                        <div class="ms__control" id="pWorkDaysControl" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false">
+                          <span class="ms__pills" id="pWorkDaysPills"></span>
+                          <span class="ms__arrow" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+                          </span>
+                        </div>
+                        <div class="ms__menu" id="pWorkDaysMenu" hidden role="listbox"></div>
+                      </div>
+                      <input type="hidden" id="pWorkDays" value="6" />
                     </div>
                     <div class="field">
                       <label class="field__label" for="pWorkhours">Workhours / day</label>
@@ -436,12 +441,17 @@
               <!-- Section 2 — pace -->
               <div class="bs-col">
                 <div class="field">
-                  <label class="field__label" for="bsWorkDays">Work Days / week</label>
-                  <select id="bsWorkDays" class="input">
-                    <option value="5">5 (Mon&ndash;Fri)</option>
-                    <option value="6" selected>6 (Mon&ndash;Sat)</option>
-                    <option value="7">7 (all days)</option>
-                  </select>
+                  <span class="field__label">Work Days / week</span>
+                  <div class="ms ms--plain" id="bsWorkDaysMS">
+                    <div class="ms__control" id="bsWorkDaysControl" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false">
+                      <span class="ms__pills" id="bsWorkDaysPills"></span>
+                      <span class="ms__arrow" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+                      </span>
+                    </div>
+                    <div class="ms__menu" id="bsWorkDaysMenu" hidden role="listbox"></div>
+                  </div>
+                  <input type="hidden" id="bsWorkDays" value="6" />
                 </div>
                 <div class="field">
                   <label class="field__label" for="bsWorkhours">Workhours / day</label>
