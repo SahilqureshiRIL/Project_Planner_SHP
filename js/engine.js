@@ -28,7 +28,8 @@
     const capApplied = p.machinesInput > cap;
 
     /* ---- 2. candidate chainages + prior progress + blocked detection ------- */
-    const candidates = chainage.features.filter((f) => f.priority === p.priority);
+    const prioritiesSet = new Set(p.priorities || []);
+    const candidates = chainage.features.filter((f) => prioritiesSet.has(f.priority));
 
     // Piles already installed per chainage (from progress history, current rows).
     const installedByChainage = (progress && progress.installedByChainage) || {};
@@ -149,12 +150,15 @@
       if (a == null) return Infinity;          // fresh profile → fall back to Chainage_Id order
       return Math.abs(f.sortKey - a);
     }
-    // Work-queue order: partials first, then nearest to the frontier, then Chainage_Id.
+    // Work-queue order: higher priority first (P-1a > P-1b > P-1c > P-2 > ...), then
+    // partials, then nearest to the frontier, then Chainage_Id.
     function queueCmp(x, y) {
+      const pr = U.priorityOrder(x.priority) - U.priorityOrder(y.priority);
+      if (pr !== 0) return pr;                             // (1) higher-priority chainage first
       const px = isPartial(x) ? 0 : 1, py = isPartial(y) ? 0 : 1;
-      if (px !== py) return px - py;                       // (1) partials first
-      if (px === 1) { const dx = distToAnchor(x), dy = distToAnchor(y); if (dx !== dy) return dx - dy; }  // (2) untouched: nearest to the latest-worked chainage
-      return x.sortKey - y.sortKey;                        // (3) then by Chainage_Id
+      if (px !== py) return px - py;                       // (2) partials first
+      if (px === 1) { const dx = distToAnchor(x), dy = distToAnchor(y); if (dx !== dy) return dx - dy; }  // (3) untouched: nearest to the latest-worked chainage
+      return x.sortKey - y.sortKey;                        // (4) then by Chainage_Id
     }
     // Material available within the window per code (for the capToMaterial adjustment).
     function availWindow(code) {
@@ -469,7 +473,7 @@
     if (hindHours > EPS) warnings.push({ code: "hindranceHours", level: "warn", text: U.fmtNum(hindHours, 1) + " work-hour(s) trimmed by hindrances on " + trimmedDays.map((d) => U.fmtShort(d)).join(", ") + "." });
     if (idleMachines > 0) warnings.push({ code: "idle", level: "warn", text: "Over-provisioned: only " + deployed + " machine(s) are needed — " + idleMachines + " of the " + maxMachines + " would sit idle (add zero piles). Beyond " + deployed + " machines the window is material/work limited at " + U.fmtInt(Math.round(maxInstalled)) + " piles. Recommend deploying " + deployed + "." });
     if (plan.idleMachineDays > 0 && idleMachines === 0) warnings.push({ code: "idleDays", level: "info", text: plan.idleMachineDays + " machine-day(s) idle within the window (ran out of queued work)." });
-    if (carryOver > 0) warnings.push({ code: "carryOver", level: "info", text: U.fmtInt(carryOver) + " piles of " + p.priority + " scope carry over beyond this window (" + U.fmtNum(pctComplete, 1) + "% completed)." });
+    if (carryOver > 0) warnings.push({ code: "carryOver", level: "info", text: U.fmtInt(carryOver) + " piles of " + p.priorities.join(", ") + " scope carry over beyond this window (" + U.fmtNum(pctComplete, 1) + "% completed)." });
     // Warnings the planner declined-but-acknowledged (no structural fix available, e.g.
     // carry-over / idle days) are suppressed so they clear from the list.
     if (p.suppressCodes && p.suppressCodes.length) {

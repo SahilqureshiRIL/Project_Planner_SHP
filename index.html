@@ -131,15 +131,15 @@
                 <!-- Column 1 — scope -->
                 <div class="bs-col">
                   <div class="field">
-                    <span class="field__label">Chainage Priority</span>
-                    <div class="ms ms--single" id="pPriorityMS">
+                    <span class="field__label">Chainage Priority <span class="field__tag">select one or more</span></span>
+                    <div class="ms" id="pPriorityMS">
                       <div class="ms__control" id="pPriorityControl" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false">
                         <span class="ms__pills" id="pPriorityPills"></span>
                         <span class="ms__arrow" aria-hidden="true">
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
                         </span>
                       </div>
-                      <div class="ms__menu" id="pPriorityMenu" hidden role="listbox"></div>
+                      <div class="ms__menu" id="pPriorityMenu" hidden role="listbox" aria-multiselectable="true"></div>
                     </div>
                   </div>
                   <div class="field">
@@ -284,7 +284,7 @@
             <div class="gantt-controls">
               <div class="seg" id="ganttColorMode">
                 <span class="seg__label">Color by:</span>
-                <button type="button" class="seg__btn is-active" data-mode="profile">Profile</button>
+                <button type="button" class="seg__btn is-active" data-mode="profile">Material</button>
                 <button type="button" class="seg__btn" data-mode="machine">Machine</button>
               </div>
               <div class="gantt-legend" id="ganttLegend"></div>

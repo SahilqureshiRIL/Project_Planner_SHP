@@ -15,7 +15,7 @@
     store: null, defaults: null, result: null,
     view: "gantt", ganttColor: "profile", mapZoom: 1, mapSelected: null, mapFilters: new Set()
   };
-  let selectedPriority = null;   // planner priority (single-select pill dropdown)
+  const selectedPriorities = new Set();   // planner priorities (multiselect pill dropdown)
   let progressMode = "week";     // recent-progress chart aggregation: "week" | "month"
   let progressOffset = 0;        // periods back from the latest that the 7-period window ends (paged by ‹ ›)
   let progressAnim = null;       // one-shot redraw transition: "older" | "newer" | "fade" (cleared after each draw)
@@ -65,7 +65,7 @@
     { const pt = $("#plannerPanelToggle");
       if (pt) pt.addEventListener("click", () => { const p = $("#paramsCard"); setSidebarCollapsed(!(p && p.classList.contains("is-collapsed"))); }); }
 
-    // Priority pill dropdown (single-select).
+    // Priority pill dropdown (multi-select).
     { const ctrl = $("#pPriorityControl");
       if (ctrl) {
         ctrl.addEventListener("click", (e) => { if (!e.target.closest(".ms__pill-x")) togglePriorityMenu(); });
@@ -140,7 +140,7 @@
     if (!summary) return;   // Chainage card removed from the UI; data still loads for the engine.
     const counts = ch.priorities.map((p) => p + " " + U.fmtInt(ch.priorityCounts[p])).join(" · ");
     summary.innerHTML = "<strong>" + U.fmtInt(ch.features.length) + "</strong> chainages · " +
-      ch.profiles.length + " profiles · " + counts;
+      ch.profiles.length + " materials · " + counts;
     // Build the read-only table lazily the first time the section is opened.
     const det = $("#chainageDetails");
     let built = false;
@@ -149,7 +149,7 @@
       built = true;
       const rows = ch.features.slice().sort((a, b) => a.sortKey - b.sortKey);
       const t = el("table", { class: "data" });
-      t.innerHTML = "<thead><tr><th>Chainage_Id</th><th>Priority</th><th>Profile</th><th class='num'>No. of Profiles</th><th>Item Code</th></tr></thead>";
+      t.innerHTML = "<thead><tr><th>Chainage_Id</th><th>Priority</th><th>Material</th><th class='num'>No. of Profiles</th><th>Item Code</th></tr></thead>";
       const tb = el("tbody");
       rows.forEach((f) => {
         const tr = el("tr");
@@ -193,7 +193,7 @@
 
   // Build the short one-line status summary shown for a loaded file.
   function summarize(kind, m) {
-    if (kind === "chainage") return "✓ " + U.fmtInt(m.features.length) + " chainages · " + m.priorities.length + " priorities · " + m.profiles.length + " profiles";
+    if (kind === "chainage") return "✓ " + U.fmtInt(m.features.length) + " chainages · " + m.priorities.length + " priorities · " + m.profiles.length + " materials";
     if (kind === "manpower") {
       const ds = m.machine.map((r) => r.date);
       const span = ds.length ? U.fmtShort(new Date(Math.min.apply(null, ds.map((d) => d.getTime())))) + "–" + U.fmtShort(m.latestShift) : "?";
@@ -261,7 +261,7 @@
   /* ============================ DEFAULTS -> FORM ============================ */
   function populateDefaults() {
     const d = state.defaults, ch = state.store.chainage;
-    buildPriorityDropdown(ch, selectedPriority);
+    buildPriorityDropdown(ch, Array.from(selectedPriorities));
 
     // Auto-computed fields show greyed (as defaults); once edited they turn solid and
     // the hint reveals the original auto value.
@@ -290,14 +290,15 @@
   // Set an input's value by selector (no-op if the element is missing).
   function setVal(sel, v) { const n = $(sel); if (n) n.value = v; }
 
-  /* ---- Priority pill dropdown (single-select) ------------------------------ */
+  /* ---- Priority pill dropdown (multi-select) -------------------------------- */
   function buildPriorityDropdown(ch, keep) {
     const menu = $("#pPriorityMenu"); if (!menu) return;
     U.clear(menu);
-    selectedPriority = (keep && ch.priorities.indexOf(keep) >= 0) ? keep : null;
+    selectedPriorities.clear();
+    (keep || []).forEach((p) => { if (ch.priorities.indexOf(p) >= 0) selectedPriorities.add(p); });
     ch.priorities.forEach((p) => {
       const opt = el("div", { class: "ms__opt", role: "option", dataset: { prio: p }, "aria-selected": "false",
-        onclick: () => choosePriority(p) });
+        onclick: () => togglePriority(p) });
       opt.appendChild(el("span", { class: "ms__check", html:
         '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg>' }));
       const body = el("span", { class: "ms__opt-body" });
@@ -308,25 +309,36 @@
     });
     syncPriority();
   }
-  // Select a single priority and close the menu.
-  function choosePriority(p) { selectedPriority = p; closePriorityMenu(); syncPriority(); }
-  // Clear the priority selection (pill x).
-  function clearPriority() { selectedPriority = null; syncPriority(); }
-  // Repaint the priority pill + menu radio state from selectedPriority.
+  // Add/remove a priority from the selection (menu row clicked).
+  function togglePriority(p) {
+    if (selectedPriorities.has(p)) selectedPriorities.delete(p); else selectedPriorities.add(p);
+    syncPriority();
+  }
+  // Remove a priority from the selection (pill x clicked).
+  function removePriority(p) { selectedPriorities.delete(p); syncPriority(); }
+  // Priorities in canonical (priority-ranked) order, e.g. P-1a > P-1b > P-1c > P-2.
+  function orderedSelectedPriorities(ch) {
+    return (ch.priorities || []).filter((p) => selectedPriorities.has(p));
+  }
+  // Repaint the priority pills + menu checked state from selectedPriorities.
   function syncPriority() {
     const pills = $("#pPriorityPills"); if (!pills) return;
+    const ch = state.parsed.chainage;
     U.clear(pills);
-    if (!selectedPriority) {
-      pills.appendChild(el("span", { class: "ms__placeholder", text: "Select priority…" }));
+    const ordered = ch ? orderedSelectedPriorities(ch) : Array.from(selectedPriorities);
+    if (!ordered.length) {
+      pills.appendChild(el("span", { class: "ms__placeholder", text: "Select priorities…" }));
     } else {
-      const pill = el("span", { class: "ms__pill" });
-      pill.appendChild(el("span", { text: selectedPriority }));
-      pill.appendChild(el("button", { type: "button", class: "ms__pill-x", title: "Clear", html: "&times;",
-        onclick: (e) => { e.stopPropagation(); clearPriority(); } }));
-      pills.appendChild(pill);
+      ordered.forEach((p) => {
+        const pill = el("span", { class: "ms__pill" });
+        pill.appendChild(el("span", { text: p }));
+        pill.appendChild(el("button", { type: "button", class: "ms__pill-x", title: "Remove " + p, html: "&times;",
+          onclick: (e) => { e.stopPropagation(); removePriority(p); } }));
+        pills.appendChild(pill);
+      });
     }
     U.$$("#pPriorityMenu .ms__opt").forEach((o) => {
-      const on = o.dataset.prio === selectedPriority;
+      const on = selectedPriorities.has(o.dataset.prio);
       o.classList.toggle("is-sel", on); o.setAttribute("aria-selected", String(on));
     });
   }
@@ -567,7 +579,7 @@
     }
 
     state.result = result;
-    writeStored(result.deployed, p.priority);   // §5.6 persist effective deployed count
+    writeStored(result.deployed, p.priorities.join(","));   // §5.6 persist effective deployed count
 
     const finish = () => {
       renderAll();
@@ -589,8 +601,9 @@
 
   // Read + validate the planner form into an engine params object (returns null on error).
   function gatherParams() {
-    const priority = selectedPriority;
-    if (!priority) { U.toast("Choose a chainage priority.", "bad"); openPriorityMenu(); return null; }
+    const ch = state.parsed.chainage;
+    const priorities = ch ? orderedSelectedPriorities(ch) : Array.from(selectedPriorities);
+    if (!priorities.length) { U.toast("Choose at least one chainage priority.", "bad"); openPriorityMenu(); return null; }
     const planStart = U.parseISODate($("#pStart").value);
     if (!planStart) { U.toast("Pick a plan start date.", "bad"); return null; }
     if (!U.isMonday(planStart)) { U.toast("Plan start must be a Monday.", "bad"); return null; }
@@ -610,7 +623,7 @@
     if (!(workhours > 0)) { U.toast("Workhours must be positive.", "bad"); return null; }
     if (!(productivity > 0)) { U.toast("Productivity must be greater than 0.", "bad"); return null; }
 
-    return { priority, periodWeeks, planStart, machinesInput, manpower, workDaysPerWeek, workhours,
+    return { priorities, periodWeeks, planStart, machinesInput, manpower, workDaysPerWeek, workhours,
              productivity, rampN, prevMachines, rampProfile: rampProfile.length ? rampProfile : [1],
              hindrances: readHindrances() };
   }
@@ -626,7 +639,7 @@
 
     const periodLbl = r.params.periodWeeks + " weeks";
     $("#planMeta").innerHTML =
-      "<span>" + U.esc(r.params.priority) + "</span><span>" + periodLbl + "</span>" +
+      "<span>" + U.esc(r.params.priorities.join(", ")) + "</span><span>" + periodLbl + "</span>" +
       "<span>" + U.fmtFriendly(r.planStart) + " → " + U.fmtShort(r.planEnd) + "</span>" +
       "<span>" + r.deployed + (r.deployed !== r.maxMachines ? "/" + r.maxMachines : "") + " machine" + (r.deployed === 1 ? "" : "s") + "</span>" +
       "<span>" + r.workingDayCount + " working days</span>";
@@ -670,7 +683,7 @@
     }
     try {
       const text = SPP.xer.build(state.result, state.store);
-      const name = ("SHP_" + state.result.params.priority + "_" + U.fmtISO(state.result.planStart))
+      const name = ("SHP_" + state.result.params.priorities.join("-") + "_" + U.fmtISO(state.result.planStart))
         .replace(/[^A-Za-z0-9_\-]/g, "_") + ".xer";
       downloadText(name, text);
       U.toast("Exported " + name + " (" + state.result.worked.length + " activities)", "ok");
@@ -704,7 +717,7 @@
     const priorTxt = prior > 0 ? " (<strong>" + U.fmtInt(prior) + "</strong> already installed)" : "";
     // One concise headline — the numbers live in the tiles below, so no finish clauses here.
     host.appendChild(el("p", { class: "plan-summary__lead", html:
-      "This <strong>" + r.params.periodWeeks + "-week</strong> plan for <strong>" + U.esc(r.params.priority) +
+      "This <strong>" + r.params.periodWeeks + "-week</strong> plan for <strong>" + U.esc(r.params.priorities.join(", ")) +
       "</strong> installs <strong>" + U.fmtInt(Math.round(r.totalInstalled)) + "</strong> piles" + priorTxt +
       ", bringing it to <strong>" + U.fmtNum(r.pctComplete, 1) + "%</strong> of the <strong>" + U.fmtInt(r.totalMTO) +
       "</strong>-pile scope — across <strong>" + U.fmtInt(covered) + "</strong> of " + U.fmtInt(totalCh) +
@@ -902,7 +915,7 @@
     computeDisplay(r.schedule);
     const groupBy = $("#tableGroup").value;
 
-    const cols = ["Date", "Day #", "Machine", "Chainage", "Profile", "Item Code", "Piles (day)", "Cum.", "MTO", "% Comp.", "Status", "Material left"];
+    const cols = ["Date", "Day #", "Machine", "Chainage", "Material", "Item Code", "Piles (day)", "Cum.", "MTO", "% Comp.", "Status", "Material left"];
     const NUM_COLS = { "Piles (day)": 1, "Cum.": 1, "MTO": 1, "% Comp.": 1, "Material left": 1 };
     const table = el("table", { class: "data" });
     const thead = el("thead");
@@ -995,7 +1008,7 @@
     const host = $("#materialScroll"); U.clear(host);
     const mp = r.materialPivot;
     if (!mp || !mp.rows.length) {
-      host.appendChild(el("div", { class: "emptystate", html: "<p>No material profiles in scope for this priority.</p>" }));
+      host.appendChild(el("div", { class: "emptystate", html: "<p>No materials in scope for this priority.</p>" }));
       $("#materialSummary").textContent = "";
       return;
     }
@@ -1005,7 +1018,7 @@
     // Two header rows: day (spans 3) over Avail / In / Cons.
     const thead = el("thead");
     const hDay = el("tr");
-    hDay.appendChild(el("th", { class: "mp-profile mp-corner", rowspan: 2, html: "Profile <span class='mp-dow'>Item Code</span>" }));
+    hDay.appendChild(el("th", { class: "mp-profile mp-corner", rowspan: 2, html: "Material <span class='mp-dow'>Item Code</span>" }));
     days.forEach((d) => {
       const off = !d.isWorking;
       hDay.appendChild(el("th", {
@@ -1026,7 +1039,7 @@
     thead.appendChild(hSub);
     table.appendChild(thead);
 
-    // Body: one row per profile.
+    // Body: one row per material.
     const tb = el("tbody");
     mp.rows.forEach((row) => {
       const tr = el("tr");
@@ -1047,7 +1060,7 @@
 
     const totalInbound = mp.rows.reduce((s, row) => s + row.cells.reduce((a, c) => a + c.inbound, 0), 0);
     $("#materialSummary").textContent =
-      mp.rows.length + " profile(s) · " + days.length + " days · " +
+      mp.rows.length + " material(s) · " + days.length + " days · " +
       (totalInbound > 0 ? U.fmtInt(Math.round(totalInbound)) + " piles inbound within window" : "no inbound within window");
   }
 
@@ -1573,7 +1586,7 @@
 
     // feasibility badge
     const badge = $("#feasibilityBadge");
-    badge.textContent = U.fmtNum(r.pctComplete, 1) + "% of " + r.params.priority + " scope";
+    badge.textContent = U.fmtNum(r.pctComplete, 1) + "% of " + r.params.priorities.join(", ") + " scope";
     badge.className = "badge " + (r.blocked.length ? "badge--warn" : "badge--ok");
 
     /* ---- Plan feasibility ---- (removed: its figures now live in the plan summary
@@ -1609,10 +1622,10 @@
     const prod = section("Productivity & ramp-up");
     prod.appendChild(statGrid([
       { label: "Productivity", value: U.fmtNum(r.params.productivity, 3), sub: "piles / machine / hour", kind: "" },
-      { label: "Steady-state / machine / day", value: U.fmtNum(r.steadyDaily, 2), sub: U.fmtNum(r.params.productivity, 3) + " × " + r.params.workhours + " h", kind: "" },
+      { label: "Steady-state Piles / machine / day", value: U.fmtNum(r.steadyDaily, 2), sub: U.fmtNum(r.params.productivity, 3) + " × " + r.params.workhours + " h", kind: "" },
       { label: "Effective daily capacity", value: U.fmtNum(r.effectiveDailyCapacity, 2), sub: r.deployed + " machine(s) at steady-state", kind: "" }
     ]));
-    prod.appendChild(el("div", { class: "kv", html: "Ramp: <strong>n = " + r.params.rampN + "</strong> · profile [" + r.rampProfile.map((x) => U.fmtNum(x, 2)).join(", ") + "] · machines 1–" + r.params.prevMachines + " start at steady-state; machines beyond ramp up." }));
+    prod.appendChild(el("div", { class: "kv", html: "Steady-state achieved in <strong>" + r.params.rampN + "</strong> day(s); machines 1–" + r.params.prevMachines + " start at steady-state; machines beyond ramp up." }));
     body.appendChild(prod);
 
     /* ---- Material ---- (per-profile table removed; see the Material tab for the
