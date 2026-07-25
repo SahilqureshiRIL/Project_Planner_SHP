@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Sheet Pile Installation Planner</title>
-  <link rel="stylesheet" href="styles.css?v=106" />
+  <link rel="stylesheet" href="styles.css?v=112" />
   <!--
     SheetJS (xlsx) is vendored locally in ./vendor so the app works fully offline.
     If you prefer the CDN, replace the src below with:
@@ -21,7 +21,7 @@
       </button>
       <span class="app-header__divider" aria-hidden="true"></span>
       <span class="app-header__mark" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="4" x2="6" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/><line x1="18" y1="4" x2="18" y2="20"/></svg>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="14" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="10" y2="18"/></svg>
       </span>
       <div>
         <h1>Sheet Pile Installation Planner</h1>
@@ -44,18 +44,22 @@
       <p class="home__sub">Two ways to plan sheet-pile installation.</p>
       <div class="home__cards">
         <button type="button" class="modcard" data-module="planner">
-          <span class="modcard__icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="14" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="10" y2="18"/></svg>
+          <span class="modcard__head">
+            <span class="modcard__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="14" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="10" y2="18"/></svg>
+            </span>
+            <span class="modcard__name">Installation Planner</span>
           </span>
-          <span class="modcard__name">Installation Planner</span>
           <span class="modcard__desc">Forward plan &mdash; set machines, manpower &amp; productivity, get a day-by-day Gantt, material accounting and a completion forecast.</span>
         </button>
         <button type="button" class="modcard modcard--bluesky" data-module="bluesky">
-          <span class="modcard__icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><line x1="12" y1="1" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="23"/><line x1="1" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="23" y2="12"/></svg>
+          <span class="modcard__head">
+            <span class="modcard__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><line x1="12" y1="1" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="23"/><line x1="1" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="23" y2="12"/></svg>
+            </span>
+            <span class="modcard__name">Bluesky <span class="modcard__tag">target-date</span></span>
           </span>
-          <span class="modcard__name">Bluesky <span class="modcard__tag">target-date</span></span>
-          <span class="modcard__desc">Back-calculate &mdash; set a target date, get how many machines &amp; how much manpower you need, with a profile-wise material gap check.</span>
+          <span class="modcard__desc">Back-calculate &mdash; set a target date, get how many machines &amp; how much manpower you need, with a material-wise gap check.</span>
         </button>
       </div>
     </div>
@@ -198,6 +202,10 @@
                     <label class="field__label" for="pProductivity">
                       Productivity <span class="field__tag">piles / machine / hour</span>
                       <span class="info" id="prodInfo" tabindex="0">&#9432;<span class="info__pop" id="prodInfoPop"></span></span>
+                      <span class="seg seg--tight" id="pProdWindowSeg">
+                        <button type="button" class="seg__btn is-active" data-window="7">Last 7 days</button>
+                        <button type="button" class="seg__btn" data-window="30">Last 30 days</button>
+                      </span>
                     </label>
                     <input type="number" id="pProductivity" class="input" min="0.001" step="0.001" />
                     <p class="field__hint" id="pProductivityHint">Onsite Avg (last 7 days)</p>
@@ -414,7 +422,7 @@
           <div id="bsForm" hidden>
             <div class="bs-cols">
               <!-- Section 1 — target & scope -->
-              <div class="bs-col">
+              <div class="bsp-col bsp-col--scope">
                 <div class="field">
                   <label class="field__label" for="bsTarget">Target Date <span class="field__tag">finish by</span></label>
                   <input type="date" id="bsTarget" class="input" />
@@ -434,12 +442,17 @@
                   </div>
                   <p class="field__hint" id="bsScopeHint"></p>
                 </div>
+
+                <div class="field">
+                  <label class="field__label">Ramp-up curve <span class="field__tag">live preview</span></label>
+                  <div class="ramp-chart" id="bsRampChart"></div>
+                </div>
               </div>
 
               <div class="bs-col__divider" aria-hidden="true"></div>
 
               <!-- Section 2 — pace -->
-              <div class="bs-col">
+              <div class="bsp-col">
                 <div class="field">
                   <span class="field__label">Work Days / week</span>
                   <div class="ms ms--plain" id="bsWorkDaysMS">
@@ -494,13 +507,13 @@
 
       <!-- Tab switcher for the two result panels -->
       <div class="bs-tabs" id="bsTabs" hidden role="tablist">
-        <button type="button" class="bs-tab is-active" data-bstab="material" role="tab">Priority &amp; Profile-wise Material Check</button>
-        <button type="button" class="bs-tab" data-bstab="plan" role="tab">Chainage-wise &amp; machine-wise plan</button>
+        <button type="button" class="bs-tab is-active" data-bstab="material" role="tab">Priority &amp; Material-wise Check</button>
+        <button type="button" class="bs-tab" data-bstab="plan" role="tab">Chainage-wise &amp; Machine-wise Plan</button>
       </div>
 
       <section class="card" id="bsProfileCard" hidden>
         <div class="card__head">
-          <h2 class="card__title">Priority & Profile-wise Material Check</h2>
+          <h2 class="card__title">Priority & Material-wise Check</h2>
           <span class="badge" id="bsProfileBadge"></span>
         </div>
         <div class="card__body">
@@ -601,13 +614,13 @@
        browsers don't run a stale copy. -->
   <script src="js/chainage_data.js?v=105"></script>
   <script src="js/util.js?v=105"></script>
-  <script src="js/data.js?v=105"></script>
+  <script src="js/data.js?v=107"></script>
   <script src="js/engine.js?v=105"></script>
   <script src="js/xer.js?v=105"></script>
-  <script src="js/ui.js?v=105"></script>
+  <script src="js/ui.js?v=107"></script>
   <!-- Bluesky target-date back-planner (loads after ui.js so it can read the shared store). -->
   <script src="js/bluesky.js?v=105"></script>
-  <script src="js/bluesky_ui.js?v=105"></script>
+  <script src="js/bluesky_ui.js?v=108"></script>
 </body>
 </html>
 

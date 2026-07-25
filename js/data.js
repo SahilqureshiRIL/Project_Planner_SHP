@@ -318,7 +318,11 @@
   }
 
   // Derive a ramp-up profile from the recent productivity window (fallback if sparse).
-  function deriveAdaptiveRamp(windowDays, mp, pr) {
+  // `edgeSample` = how many days at each end of the window are averaged for the
+  // first-vs-last trend check — scaled with window length (3 of 7 days is a
+  // meaningful slice; 3 of 30 would be too thin, so a 30-day window samples more).
+  function deriveAdaptiveRamp(windowDays, mp, pr, edgeSample) {
+    const edge = edgeSample || 3;
     const fallbackProfile = [0.45, 0.58, 0.70, 0.80, 0.88, 0.94, 0.98, 1.00];
     const daily = [];
     windowDays.forEach((d) => {
@@ -338,14 +342,14 @@
     const median = sorted.length % 2
       ? sorted[(sorted.length - 1) / 2]
       : (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2;
-    const first3 = daily.slice(0, Math.min(3, daily.length)).map((x) => x.productivity);
-    const last3 = daily.slice(-Math.min(3, daily.length)).map((x) => x.productivity);
-    const avgFirst3 = first3.length ? first3.reduce((s, x) => s + x, 0) / first3.length : median;
-    const avgLast3 = last3.length ? last3.reduce((s, x) => s + x, 0) / last3.length : median;
-    const trend = avgFirst3 > 0 ? (avgLast3 - avgFirst3) / avgFirst3 : 0;
+    const firstN = daily.slice(0, Math.min(edge, daily.length)).map((x) => x.productivity);
+    const lastN = daily.slice(-Math.min(edge, daily.length)).map((x) => x.productivity);
+    const avgFirstN = firstN.length ? firstN.reduce((s, x) => s + x, 0) / firstN.length : median;
+    const avgLastN_ = lastN.length ? lastN.reduce((s, x) => s + x, 0) / lastN.length : median;
+    const trend = avgFirstN > 0 ? (avgLastN_ - avgFirstN) / avgFirstN : 0;
 
-    const target = Math.max(median, Math.min(avgLast3, median * 1.25));
-    const initialFactor = U.clamp(avgFirst3 / Math.max(target, 1e-6), 0.35, 0.7);
+    const target = Math.max(median, Math.min(avgLastN_, median * 1.25));
+    const initialFactor = U.clamp(avgFirstN / Math.max(target, 1e-6), 0.35, 0.7);
     const hasClearRamp = daily.length >= 4 && trend > 0.1;
     const rampDays = hasClearRamp ? Math.min(7, Math.max(4, 4 + Math.round(Math.min(2, trend * 10)))) : 4;
 
@@ -362,7 +366,7 @@
       profile,
       rampN: Math.max(0, profile.length - 1),
       source: "adaptive",
-      explanation: "Derived from the recent 7-day productivity window using a conservative median-based peak and a mild trend check."
+      explanation: "Derived from the recent " + windowDays.length + "-day productivity window using a conservative median-based peak and a mild trend check."
     };
   }
 
@@ -429,6 +433,26 @@
     const productivity = machineHours > 0 ? U.round(pilesWindow / machineHours, 3) : 0;
     const ramp = deriveAdaptiveRamp(windowDays, mpI, pr);
 
+    // Alternate 30-day productivity basis (Installation Planner's Productivity field
+    // can be switched to this instead of the 7-day figure above). Machines/manpower/
+    // workhours always stay on the 7-day window, but the ramp-up curve gets its own
+    // 30-day-derived variant too, so it stays consistent with whichever productivity
+    // figure is currently shown instead of silently mixing two different time bases.
+    const window30Start = U.addDays(anchor, -29);
+    const window30Days = [];
+    for (let i = 0; i < 30; i++) window30Days.push(U.addDays(window30Start, i));
+    let machineHours30 = 0, pilesWindow30 = 0;
+    window30Days.forEach((d) => {
+      const iso = U.fmtISO(d);
+      const m = machineMap[iso] || 0;
+      const h = hourMap[iso] || 0;
+      machineHours30 += m * h;
+      pilesWindow30 += (pr.installedByDate[iso] || 0);
+    });
+    const productivity30 = machineHours30 > 0 ? U.round(pilesWindow30 / machineHours30, 3) : 0;
+    const prodDerivation30 = pilesWindow30 + " piles ÷ " + U.fmtNum(machineHours30, 0) + " machine-hours = " + U.fmtNum(productivity30, 3);
+    const ramp30 = deriveAdaptiveRamp(window30Days, mpI, pr, 7);   // wider edge sample for a 30-day span
+
     // Latest *actual* dated record across inputs (EXCLUDES future inbound forecasts).
     const candidates = [anchor];
     if (pr.maxDate) candidates.push(pr.maxDate);
@@ -440,11 +464,16 @@
       windowStart, windowEnd, windowDays,
       machines, manpower, workhours, productivity,
       sumMachine, sumMan, sumHour, machineHours, pilesWindow,
+      productivity30, prodDerivation30,
       latestDataDate, planStartDefault, imputedDays,
       rampProfile: ramp.profile,
       rampN: ramp.rampN,
       rampSource: ramp.source,
       rampExplanation: ramp.explanation,
+      rampProfile30: ramp30.profile,
+      rampN30: ramp30.rampN,
+      rampSource30: ramp30.source,
+      rampExplanation30: ramp30.explanation,
       prodDerivation:
         pilesWindow + " piles ÷ " + U.fmtNum(machineHours, 0) + " machine-hours = " + U.fmtNum(productivity, 3) +
         (imputedDays.length ? " (shift data imputed for " + imputedDays.length + " day(s) with installs but no machine/manpower entry, using the last-15-point average)" : "")

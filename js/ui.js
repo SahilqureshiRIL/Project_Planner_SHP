@@ -16,6 +16,7 @@
     view: "gantt", ganttColor: "profile", mapZoom: 1, mapSelected: null, mapFilters: new Set()
   };
   const selectedPriorities = new Set();   // planner priorities (multiselect pill dropdown)
+  let prodWindow = 7;            // productivity basis the planner has selected: 7 | 30 (days)
   let progressMode = "week";     // recent-progress chart aggregation: "week" | "month"
   let progressOffset = 0;        // periods back from the latest that the 7-period window ends (paged by ‹ ›)
   let progressAnim = null;       // one-shot redraw transition: "older" | "newer" | "fade" (cleared after each draw)
@@ -84,6 +85,14 @@
       buildWorkDaysDropdown();
     }
     $("#pWorkDays").addEventListener("change", refreshHindranceCalendars);
+
+    // Productivity basis toggle: Last 7 days / Last 30 days.
+    { const seg = $("#pProdWindowSeg");
+      if (seg) seg.addEventListener("click", (e) => {
+        const btn = e.target.closest(".seg__btn"); if (!btn) return;
+        setProdWindow(parseInt(btn.dataset.window, 10));
+      });
+    }
 
     // Blocked-chainages popup: close via the button or by clicking the backdrop.
     { const bx = $("#blockedCloseX"); if (bx) bx.addEventListener("click", closeBlockedModal); }
@@ -280,10 +289,9 @@
     markComputed("#pMachines", "#pMachinesHint", d.machines, "7-day onsite Avg");
     markComputed("#pManpower", "#pManpowerHint", d.manpower, "7-day onsite Avg");
     markComputed("#pWorkhours", "#pWorkhoursHint", d.workhours, "7-day onsite Avg");
-    markComputed("#pProductivity", "#pProductivityHint", U.fmtNum(d.productivity, 3), "Auto (adaptive, last 7-day actual window)");
-    setVal("#pRampN", d.rampN != null ? d.rampN : 7);
-    setVal("#pRampProfile", (d.rampProfile || [1]).join(", "));
-    $("#prodInfoPop").textContent = d.prodDerivation + " · " + (d.rampExplanation || "");
+    prodWindow = 7;
+    U.$$("#pProdWindowSeg .seg__btn").forEach((b) => b.classList.toggle("is-active", b.dataset.window === "7"));
+    applyProductivity();
 
     // Machines from previous plan: stored value, else equal to machines (no ramp on first plan).
     const stored = readStored();
@@ -299,6 +307,33 @@
   }
   // Set an input's value by selector (no-op if the element is missing).
   function setVal(sel, v) { const n = $(sel); if (n) n.value = v; }
+
+  // Switch the Productivity field's basis (7-day / 30-day) and re-populate it.
+  function setProdWindow(days) {
+    if (days !== 7 && days !== 30) return;
+    prodWindow = days;
+    U.$$("#pProdWindowSeg .seg__btn").forEach((b) => b.classList.toggle("is-active", parseInt(b.dataset.window, 10) === days));
+    applyProductivity();
+    renderRampChart();
+  }
+  // Fill #pProductivity + its hint/tooltip AND the ramp-up fields from state.defaults,
+  // both switched together to the selected window so the curve shown always matches
+  // the productivity basis currently displayed (never mixes a 7-day number with a
+  // 30-day-derived ramp or vice versa).
+  function applyProductivity() {
+    const d = state.defaults; if (!d) return;
+    const is30 = prodWindow === 30;
+    const value = is30 ? d.productivity30 : d.productivity;
+    const derivation = is30 ? d.prodDerivation30 : d.prodDerivation;
+    const rampN = is30 ? d.rampN30 : d.rampN;
+    const rampProfile = is30 ? d.rampProfile30 : d.rampProfile;
+    const rampExplanation = is30 ? d.rampExplanation30 : d.rampExplanation;
+    markComputed("#pProductivity", "#pProductivityHint", U.fmtNum(value, 3),
+      "Auto (adaptive, last " + prodWindow + "-day actual window)");
+    $("#prodInfoPop").textContent = derivation + " · " + (rampExplanation || "");
+    setVal("#pRampN", rampN != null ? rampN : 7);
+    setVal("#pRampProfile", (rampProfile || [1]).join(", "));
+  }
 
   /* ---- Priority pill dropdown (multi-select) -------------------------------- */
   function buildPriorityDropdown(ch, keep) {
@@ -1561,7 +1596,7 @@
 
     const table = el("table", { class: "data" });
     const thead = el("thead"), htr = el("tr");
-    ["Chainage", "Profile", "Item Code", "Piles (MTO)"].forEach((h) => htr.appendChild(el("th", { class: h === "Piles (MTO)" ? "num" : "", text: h })));
+    ["Chainage", "Material", "Item Code", "Piles (MTO)"].forEach((h) => htr.appendChild(el("th", { class: h === "Piles (MTO)" ? "num" : "", text: h })));
     thead.appendChild(htr); table.appendChild(thead);
     const tb = el("tbody");
     rows.forEach((f) => {

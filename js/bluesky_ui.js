@@ -192,6 +192,49 @@
     $("#bsPrevHint").textContent = "Auto (7-day onsite avg → " + d.machines + "). Machines beyond this ramp up before reaching full productivity.";
 
     buildPriorityMenu(st);
+    renderRampChart(d);
+  }
+
+  // Ramp-up curve preview — identical rendering to the Installation Planner's live
+  // preview, but driven by the auto-derived defaults (Bluesky has no manual ramp inputs).
+  function renderRampChart(d) {
+    const host = $("#bsRampChart");
+    if (!host) return;
+    const prod = d.productivity;
+    const ramp = d.rampProfile || [1];
+    const nDays = d.rampN;
+    if (!(prod > 0) || !ramp.length) { host.innerHTML = '<div class="field__hint">Productivity data unavailable.</div>'; return; }
+
+    const last = ramp[ramp.length - 1];
+    const maxDay = ramp.length - 1 + 2;                 // show 2 steady days past the profile
+    const pts = [];
+    for (let k = 0; k <= maxDay; k++) { const m = k < ramp.length ? ramp[k] : last; pts.push({ day: k, rate: prod * m, mult: m }); }
+    const yMax = Math.max.apply(null, pts.map((p) => p.rate)) * 1.12 || 1;
+
+    const W = 320, H = 124, ml = 40, mr = 12, mt = 12, mb = 24, plotW = W - ml - mr, plotH = H - mt - mb;
+    const X = (k) => ml + (maxDay ? (k / maxDay) * plotW : 0);
+    const Y = (r) => mt + plotH - (r / yMax) * plotH;
+    let s = '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" height="' + H + '" font-size="9" font-family="inherit">';
+    s += '<line x1="' + ml + '" y1="' + mt + '" x2="' + ml + '" y2="' + (mt + plotH) + '" stroke="#c3ccda"/>';
+    s += '<line x1="' + ml + '" y1="' + (mt + plotH) + '" x2="' + (ml + plotW) + '" y2="' + (mt + plotH) + '" stroke="#c3ccda"/>';
+    const ys = Y(prod * last);
+    s += '<line x1="' + ml + '" y1="' + ys + '" x2="' + (ml + plotW) + '" y2="' + ys + '" stroke="#1f8f5f" stroke-dasharray="3 3"/>';
+    s += '<text x="' + (ml + plotW) + '" y="' + (ys - 3) + '" text-anchor="end" fill="#1f8f5f">steady ' + U.fmtNum(prod * last, 2) + '</text>';
+    if (isFinite(nDays) && nDays >= 0 && nDays <= maxDay) {
+      const xn = X(nDays);
+      s += '<line x1="' + xn + '" y1="' + mt + '" x2="' + xn + '" y2="' + (mt + plotH) + '" stroke="#b6791f" stroke-dasharray="2 2"/>';
+      s += '<text x="' + (xn + 3) + '" y="' + (mt + 9) + '" fill="#b6791f">n=' + nDays + '</text>';
+    }
+    s += '<text x="' + (ml - 5) + '" y="' + (mt + plotH + 3) + '" text-anchor="end" fill="#8a96a5">0</text>';
+    s += '<text x="' + (ml - 5) + '" y="' + (mt + 8) + '" text-anchor="end" fill="#8a96a5">' + U.fmtNum(yMax, 2) + '</text>';
+    s += '<text x="' + ml + '" y="' + (H - 7) + '" text-anchor="middle" fill="#8a96a5">0</text>';
+    s += '<text x="' + (ml + plotW) + '" y="' + (H - 7) + '" text-anchor="middle" fill="#8a96a5">' + maxDay + '</text>';
+    s += '<text x="' + (ml + plotW / 2) + '" y="' + (H - 7) + '" text-anchor="middle" fill="#8a96a5">days from start</text>';
+    s += '<text transform="translate(10,' + (mt + plotH / 2) + ') rotate(-90)" text-anchor="middle" fill="#8a96a5">piles / mc / hr</text>';
+    s += '<polyline points="' + pts.map((p) => X(p.day) + ',' + Y(p.rate)).join(" ") + '" fill="none" stroke="#0f6e78" stroke-width="2"/>';
+    pts.forEach((p) => { s += '<circle cx="' + X(p.day) + '" cy="' + Y(p.rate) + '" r="2.5" fill="#0f6e78"><title>Day ' + p.day + ': ' + U.fmtNum(p.rate, 3) + ' piles/mc/hr (×' + U.fmtNum(p.mult, 2) + ')</title></circle>'; });
+    s += '</svg>';
+    host.innerHTML = s;
   }
 
   // Build the dropdown menu options (one per priority, with its scope meta) and
@@ -420,7 +463,7 @@
     const t = el("table", { class: "data bs-table" });
     const thead = el("thead");
     const htr = el("tr");
-    ["Priority", "Profile", "Required", "In Stock", "In Transit", "Gap / Shortage", "Work halts on"].forEach((h) =>
+    ["Priority", "Material", "Required", "In Stock", "In Transit", "Gap / Shortage", "Work halts on"].forEach((h) =>
       htr.appendChild(el("th", { text: h })));
     thead.appendChild(htr); t.appendChild(thead);
 
@@ -477,9 +520,9 @@
     computeDisplay(r.schedule);
     const groupBy = $("#bsTableGroup").value;
 
-    const cols = ["Date", "Day #", "Machine", "Chainage", "Profile", "Item Code", "Piles (day)", "Cum.", "MTO", "% Comp."];
+    const cols = ["Date", "Day #", "Machine", "Chainage", "Material", "Item Code", "Piles (day)", "Cum.", "MTO", "% Comp."];
     const NUM = { "Piles (day)": 1, "Cum.": 1, "MTO": 1, "% Comp.": 1 };
-    const table = el("table", { class: "data" });
+    const table = el("table", { class: "data bs-table" });
     const thead = el("thead"), htr = el("tr");
     cols.forEach((c) => htr.appendChild(el("th", { class: NUM[c] ? "num" : "", text: c })));
     thead.appendChild(htr); table.appendChild(thead);

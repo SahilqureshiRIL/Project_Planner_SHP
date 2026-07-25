@@ -255,7 +255,8 @@ button { font-family: inherit; }
   background: linear-gradient(180deg, var(--gold-300), var(--gold)); display: inline-block; flex: none;   /* gold tick pops on blue */
   box-shadow: 0 0 8px rgba(240,210,140,0.5);
 }
-.card__head-meta { font-size: 12px; color: rgba(219,226,244,0.82); display: flex; gap: var(--s-3); flex-wrap: wrap; }
+.card__head-meta { font-size: 12px; color: #ffffff; display: flex; gap: var(--s-3); flex-wrap: wrap; }
+.card__head-meta span:not(:first-child)::before { content: "\00b7"; margin-right: var(--s-3); color: rgba(255,255,255,0.4); }
 .card__head-meta strong { color: #ecd9ac; }
 .card__head-spacer { flex: 1; }
 .card__body { padding: var(--s-4); }
@@ -570,6 +571,7 @@ table.data thead th {
 table.data thead th.num { text-align: right; }
 table.data tbody td { padding: 6px 10px; border-bottom: 1px solid var(--surface-3); white-space: nowrap; }
 table.data tbody td.num { text-align: right; font-variant-numeric: tabular-nums; }
+table.data.bs-table thead th.num, table.data.bs-table tbody td.num { text-align: left; }
 table.data tbody tr:nth-child(even) td { background: var(--surface-2); }
 table.data tbody tr:hover td { background: var(--accent-100); }
 table.data tr.row-group td { background: var(--surface-3) !important; font-weight: 650; color: var(--text); position: sticky; }
@@ -625,6 +627,9 @@ table.data tr.row-completed td { color: var(--success); }
 .seg__btn:first-of-type { border-radius: var(--r-sm) 0 0 var(--r-sm); }
 .seg__btn:last-of-type { border-radius: 0 var(--r-sm) var(--r-sm) 0; border-left: none; }
 .seg__btn.is-active { background: var(--accent); color: #fff; border-color: var(--accent); }
+/* Compact variant for inline use next to a field label (e.g. productivity window toggle). */
+.seg--tight { margin-left: auto; }
+.seg--tight .seg__btn { padding: 2px 8px; font-size: 10px; font-weight: 600; text-transform: none; letter-spacing: 0; }
 .gantt-scroll { overflow: auto; max-height: 62vh; border: 1px solid var(--border); border-radius: var(--r-md); }
 .gantt-scroll svg { display: block; }
 .gantt-tip {
@@ -834,10 +839,10 @@ table.data tr.row-completed td { color: var(--success); }
 .home__inner { width: 100%; max-width: 860px; text-align: center; }
 .home__title { font-family: var(--display); font-size: 30px; font-weight: 800; color: var(--navy); letter-spacing: -.02em; margin: 0 0 6px; }
 .home__sub { font-size: 14.5px; color: var(--text-muted); margin: 0 0 var(--s-6); }
-.home__cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: var(--s-4); }
+.home__cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: var(--s-6); }
 .modcard {
-  display: flex; flex-direction: column; align-items: flex-start; gap: 10px; text-align: left;
-  padding: var(--s-5); border-radius: var(--r-lg); cursor: pointer;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 14px; text-align: left;
+  padding: var(--s-6); border-radius: var(--r-lg); cursor: pointer;
   background: linear-gradient(180deg, #ffffff 0%, var(--surface-2) 100%);
   border: 1px solid var(--border); border-top: 4px solid var(--gold);
   box-shadow: var(--shadow-sm); transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease;
@@ -845,12 +850,13 @@ table.data tr.row-completed td { color: var(--success); }
 .modcard:hover { transform: translateY(-3px); box-shadow: var(--shadow-md); border-top-color: var(--gold-600); }
 .modcard--bluesky { border-top-color: var(--t-sky); }
 .modcard--bluesky:hover { border-top-color: var(--t-sky-ink); }
+.modcard__head { display: flex; align-items: center; gap: 12px; }
 .modcard__icon {
-  width: 46px; height: 46px; border-radius: 10px; display: grid; place-items: center;
+  width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; flex: none;
   background: var(--accent-100); color: var(--accent);
 }
 .modcard--bluesky .modcard__icon { background: var(--t-sky-bg1); color: var(--t-sky-ink); }
-.modcard__icon svg { width: 26px; height: 26px; }
+.modcard__icon svg { width: 22px; height: 22px; }
 .modcard__name { font-family: var(--display); font-size: 18px; font-weight: 750; color: var(--navy); display: flex; align-items: center; gap: 8px; }
 .modcard__tag { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--t-sky-ink); background: var(--t-sky-bg1); border-radius: 999px; padding: 2px 9px; }
 .modcard__desc { font-size: 12.5px; line-height: 1.55; color: var(--text-muted); }
@@ -918,9 +924,15 @@ table.data tr.row-completed td { color: var(--success); }
 .bs-shell { display: flex; flex-direction: column; gap: var(--s-5); }
 .bs-panel[aria-disabled="true"] .bs-panel__body { opacity: .55; pointer-events: none; }
 
-/* Planner: three side-by-side field columns inside the top panel. */
+/* Planner: three side-by-side field columns inside the top panel.
+   Uses its own spacing variables (--pl-row-gap / --pl-row-min-h), kept independent
+   of Bluesky's .bs-cols/.bsp-col values so the two panels can be tuned separately. */
+:root {
+  --pl-row-gap: var(--s-6);
+  --pl-row-min-h: 112px;
+}
 .pl-cols { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; gap: var(--s-5); align-items: start; }
-.pl-cols .bs-col { gap: var(--s-4); }
+.pl-cols .bs-col { gap: var(--pl-row-gap); }
 /* Kill the global .field bottom margin inside the panel — spacing is owned by the
    column gap here, otherwise it stacks with the gap and throws rows out of line. */
 .pl-cols .field { margin-bottom: 0; }
@@ -928,7 +940,7 @@ table.data tr.row-completed td { color: var(--success); }
 .pl-cols .field-pair { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-3); }
 /* Uniform slot height so row tops line up across the columns (col 1 single fields
    vs col 2 paired rows). Tall content (e.g. the ramp curve) simply grows past it. */
-.pl-cols .bs-col > .field, .pl-cols .bs-col > .field-pair { min-height: 86px; }
+.pl-cols .bs-col > .field, .pl-cols .bs-col > .field-pair { min-height: var(--pl-row-min-h); }
 @media (max-width: 980px) {
   .pl-cols { grid-template-columns: 1fr; gap: var(--s-4); }
   .pl-cols .bs-col__divider { display: none; }
@@ -959,12 +971,33 @@ table.data tr.row-completed td { color: var(--success); }
 .bs-panel.is-collapsed .bs-panel__wrap { max-height: 0; opacity: 0; }
 .bs-panel__body { padding: var(--s-5); }
 
-/* ---- Two side-by-side sections ---- */
-.bs-cols { display: grid; grid-template-columns: 1fr auto 1fr; gap: var(--s-5); align-items: start; }
+/* ---- Two side-by-side sections ----
+   Column 1 (Target Date / Priorities / Ramp-up curve) and column 2 (Work Days /
+   Workhours / Productivity / Already Installed Machines) have different field
+   counts, so plain stacking wouldn't align rows. Both columns share the same grid
+   row tracks instead: rows 1-2 line up 1:1 (Target Date↔Work Days,
+   Priorities↔Workhours); column 1's Ramp-up curve then spans rows 3-4, aligning
+   its bottom edge with column 2's Productivity + Already Installed Machines pair. */
 .bs-col { display: flex; flex-direction: column; gap: var(--s-4); min-width: 0; }
+/* Bluesky's Target & Scope panel columns — fully separate from the Installation
+   Planner's .pl-cols/.bs-col so future layout changes to one never leak into the
+   other. Column 1 (Target Date / Priorities / Ramp-up curve) and column 2 (Work
+   Days / Workhours / Productivity / Already Installed Machines) have different
+   field counts, so both share the same grid row tracks: rows 1-2 line up 1:1
+   (Target Date↔Work Days, Priorities↔Workhours); column 1's Ramp-up curve then
+   spans rows 3-4, aligning its bottom edge with column 2's last two fields. */
+.bs-cols {
+  display: grid; grid-template-columns: 1fr auto 1fr; grid-auto-rows: min-content;
+  gap: var(--s-3) var(--s-5); align-items: start;
+}
+.bsp-col { display: grid; grid-template-rows: subgrid; grid-row: span 4; gap: var(--s-3); min-width: 0; }
+.bs-cols .field { margin-bottom: 0; }
+.bsp-col--scope > .field:nth-child(3) { grid-row: 3 / 5; }
 .bs-col__divider { width: 1px; align-self: stretch; background: linear-gradient(180deg, transparent, var(--border) 12%, var(--border) 88%, transparent); }
 @media (max-width: 760px) {
   .bs-cols { grid-template-columns: 1fr; gap: var(--s-4); }
+  .bsp-col { grid-template-rows: none; grid-row: auto; }
+  .bsp-col--scope > .field:nth-child(3) { grid-row: auto; }
   .bs-col__divider { display: none; }
 }
 
