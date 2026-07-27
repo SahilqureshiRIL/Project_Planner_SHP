@@ -250,10 +250,31 @@
       const st = {};
       workable.forEach((f) => { st[f.id] = { done: 0, started: false, startDate: null, lastDate: null, completed: false, completedDate: null, machine: null }; });
       const assign = new Array(M).fill(null);
-      let qptr = 0, totalInstalled = 0, idleMachineDays = 0, workingOrdinal = -1;
+      let totalInstalled = 0, idleMachineDays = 0, workingOrdinal = -1;
       let lastInstallDate = null;
       const schedule = [];
       const consumedByCode = {};
+
+      // Pending work pool = queue order (priority → material → frontier → Chainage_Id),
+      // consumed lazily. Instead of a single forward cursor we scan for the first chainage
+      // that (a) still has remaining scope and (b) has usable material RIGHT NOW, so a crew
+      // never sits idle while a lower-priority selected chainage has stock. `taken` guards
+      // against assigning the same chainage to two machines on the same day.
+      const pending = q.map((f) => f.id);
+      // Pull the next assignable chainage id whose code has stock > 0 today (highest queue
+      // order first). Returns null when nothing in the pool can be worked right now — the
+      // machine then goes idle for the day, but the skipped work stays in `pending` so it
+      // resumes on a later day once its material arrives.
+      function nextWorkable(taken) {
+        for (let k = 0; k < pending.length; k++) {
+          const id = pending[k];
+          if (id == null || taken.has(id)) continue;
+          const s = st[id];
+          if (s.completed || (remainingById[id] - s.done) <= EPS) { pending[k] = null; continue; }
+          if ((stock[chById[id].code] || 0) > EPS) { pending[k] = null; return id; }
+        }
+        return null;
+      }
 
       days.forEach((day) => {
         // material arrives on its calendar date regardless of working status
@@ -262,7 +283,24 @@
         }
         if (!day.isWorking) return;
         workingOrdinal++;
-        for (let i = 0; i < M; i++) if (assign[i] == null && qptr < q.length) assign[i] = q[qptr++].id;
+
+        // Release any machine whose current chainage can't progress today (finished, or its
+        // material is exhausted) so it can pick up other in-scope work with material. A
+        // starved-but-unfinished chainage returns to the pool for a later day.
+        const taken = new Set();
+        for (let i = 0; i < M; i++) {
+          const id = assign[i];
+          if (id == null) continue;
+          const s = st[id], remaining = remainingById[id] - s.done;
+          if (remaining <= EPS) { assign[i] = null; continue; }
+          if ((stock[chById[id].code] || 0) <= EPS) {           // starved → requeue for later
+            if (pending.indexOf(id) < 0) pending.push(id);
+            assign[i] = null; continue;
+          }
+          taken.add(id);                                        // keep working this chainage
+        }
+        // Fill idle machines from the pool (skipping no-material chainages).
+        for (let i = 0; i < M; i++) if (assign[i] == null) { const nid = nextWorkable(taken); if (nid != null) { assign[i] = nid; taken.add(nid); } }
 
         for (let i = 0; i < M; i++) {
           const id = assign[i];

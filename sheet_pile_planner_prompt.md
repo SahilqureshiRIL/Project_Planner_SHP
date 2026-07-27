@@ -137,7 +137,7 @@ Days in the 2/3-week span matching Work-Days/week; hours = Workhours; hindrances
 per §5.5.
 
 ### 5.2 Candidates, prior-progress netting & sequencing
-- Candidates = chainages of the selected priority.
+- Candidates = chainages of the selected **priorities** (one or more; multi-select).
 - **Prior progress netting:** per chainage, `remaining = MTO − alreadyInstalled`
   (from §3.4). **Completed** (remaining ≤ 0) chainages **drop out** of the plan;
   **active** (remaining > 0) are planned for their *remaining* piles only; **partial** =
@@ -146,12 +146,22 @@ per §5.5.
 - **Sequencing (queue order):**
   1. **Profiles ranked by material availability** — net on-site (Accepted-at-Site)
      descending;
-  2. within a profile, **partially-installed chainages first** (finish started work);
-  3. then **untouched chainages nearest to the work-front anchor** — the chainage with the
+  2. within a profile, **higher priority first** (`P-1a > P-1b > P-1c > P-2 > …`), so when
+     several priorities are selected the crew works the top priority before the next;
+  3. then **partially-installed chainages first** (finish started work);
+  4. then **untouched chainages nearest to the work-front anchor** — the chainage with the
      **most recent progress date** (`lastInstallByChainage`); so the crew advances
      contiguously from where it last worked;
-  4. ties broken by `Chainage_Id`.
+  5. ties broken by `Chainage_Id`.
 - **One machine per chainage**; up to *deployed* chainages progress in parallel.
+- **No idling while other selected work has material.** A machine only stays on its
+  chainage while that chainage still has scope **and** usable material for the day. If its
+  material runs out (or the chainage completes), it is **released** and immediately pulls the
+  next queued chainage — of **any** selected priority — that has stock right now (skipping
+  starved ones). A starved-but-unfinished chainage returns to the pool and resumes on a
+  later day once its material arrives. So the higher priority is worked first, but the crew
+  spills into lower selected priorities rather than sitting idle when the top one is
+  material-starved and other selected priorities still have material.
 
 ### 5.3 Material model
 - **"Accepted at Site" is gross received**, so **net on-site** for a code =
