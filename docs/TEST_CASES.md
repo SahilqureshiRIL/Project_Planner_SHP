@@ -139,7 +139,7 @@
 |---|---|---|---|
 | **T-C7-01-E** | 🟠 | clean plan | single `ok` warning ("No blocking issues detected"). |
 | **T-C7-02-E** | 🟠 | `suppressCodes=["carryOver"]` | carry-over warning removed from the list. |
-| **T-C7-03-E** | 🟠 | each trigger | correct `code` emitted: `noManpower/cap/blocked/shortfall/hindranceDays/hindranceHours/idle/idleDays/carryOver`. |
+| **T-C7-03-E** | 🟠 | each trigger (e.g. P-1a+1b+1c, 10 machines, prod 6, 7 work-days ⇒ over-provisioned + blocked + carry-over) | correct `code` emitted: `noManpower/cap/blocked/shortfall/hindranceDays/hindranceHours/idle/idleDays/carryOver`. Note the `idle` warning only fires when capacity outruns material (high prod/work-days); at the low default productivity all 10 machines are needed, so `idle` is absent — that is correct. |
 
 ---
 
