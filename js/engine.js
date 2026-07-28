@@ -178,8 +178,11 @@
         sorted.forEach((f) => queue.push(f));
       }
     });
+    // chById / st cover ALL active chainages (workable + blocked). In the normal
+    // (material-constrained) run the blocked ones simply never have stock so they're
+    // never worked — output is unchanged.
     const chById = {};
-    workable.forEach((f) => { chById[f.id] = f; });
+    active.forEach((f) => { chById[f.id] = f; });
 
     /* ---- 5. working calendar + hindrances (§5.1 / §5.5) -------------------- */
     const cal = [];
@@ -242,13 +245,14 @@
     // The window plan runs over `cal` with the (optionally material-capped) `queue`.
     // The finish projection (§11) reuses this over a longer calendar with the full
     // uncapped queue — hence the optional calDays / queueArr parameters.
-    function simulate(M, calDays, queueArr) {
+    function simulate(M, calDays, queueArr, opts) {
       const days = calDays || cal;
       const q = queueArr || queue;
+      const unlimited = !!(opts && opts.unlimited);   // treat material as infinite (capacity-only ceiling)
       const stock = Object.assign({}, startStock);
       const repl = replen.map((r) => ({ usable: r.usable, code: r.code, qty: r.qty }));
       const st = {};
-      workable.forEach((f) => { st[f.id] = { done: 0, started: false, startDate: null, lastDate: null, completed: false, completedDate: null, machine: null }; });
+      active.forEach((f) => { st[f.id] = { done: 0, started: false, startDate: null, lastDate: null, completed: false, completedDate: null, machine: null }; });
       const assign = new Array(M).fill(null);
       let totalInstalled = 0, idleMachineDays = 0, workingOrdinal = -1;
       let lastInstallDate = null;
@@ -256,22 +260,21 @@
       const consumedByCode = {};
 
       // Pending work pool = queue order (priority → material → frontier → Chainage_Id),
-      // consumed lazily. Instead of a single forward cursor we scan for the first chainage
-      // that (a) still has remaining scope and (b) has usable material RIGHT NOW, so a crew
-      // never sits idle while a lower-priority selected chainage has stock. `taken` guards
-      // against assigning the same chainage to two machines on the same day.
+      // consumed lazily. We scan for the first chainage that (a) still has remaining scope
+      // and (b) has usable material RIGHT NOW (skipped when `unlimited`), so a crew never
+      // sits idle while a lower-priority selected chainage has stock. `taken` guards against
+      // assigning the same chainage to two machines on the same day.
       const pending = q.map((f) => f.id);
-      // Pull the next assignable chainage id whose code has stock > 0 today (highest queue
-      // order first). Returns null when nothing in the pool can be worked right now — the
-      // machine then goes idle for the day, but the skipped work stays in `pending` so it
-      // resumes on a later day once its material arrives.
+      // Pull the next assignable chainage id (highest queue order first) that still has scope
+      // and — unless material is unlimited — usable stock right now. Returns null when nothing
+      // is workable; skipped work stays in `pending` and resumes once its material arrives.
       function nextWorkable(taken) {
         for (let k = 0; k < pending.length; k++) {
           const id = pending[k];
           if (id == null || taken.has(id)) continue;
           const s = st[id];
           if (s.completed || (remainingById[id] - s.done) <= EPS) { pending[k] = null; continue; }
-          if ((stock[chById[id].code] || 0) > EPS) { pending[k] = null; return id; }
+          if (unlimited || (stock[chById[id].code] || 0) > EPS) { pending[k] = null; return id; }
         }
         return null;
       }
@@ -284,49 +287,64 @@
         if (!day.isWorking) return;
         workingOrdinal++;
 
-        // Release any machine whose current chainage can't progress today (finished, or its
-        // material is exhausted) so it can pick up other in-scope work with material. A
-        // starved-but-unfinished chainage returns to the pool for a later day.
+        // Reserve chainages still in progress (unfinished) so two machines never work the
+        // same chainage on the same day; drop any that finished on an earlier day.
         const taken = new Set();
         for (let i = 0; i < M; i++) {
           const id = assign[i];
           if (id == null) continue;
-          const s = st[id], remaining = remainingById[id] - s.done;
-          if (remaining <= EPS) { assign[i] = null; continue; }
-          if ((stock[chById[id].code] || 0) <= EPS) {           // starved → requeue for later
-            if (pending.indexOf(id) < 0) pending.push(id);
-            assign[i] = null; continue;
-          }
-          taken.add(id);                                        // keep working this chainage
+          if ((remainingById[id] - st[id].done) <= EPS) { assign[i] = null; continue; }
+          taken.add(id);
         }
-        // Fill idle machines from the pool (skipping no-material chainages).
-        for (let i = 0; i < M; i++) if (assign[i] == null) { const nid = nextWorkable(taken); if (nid != null) { assign[i] = nid; taken.add(nid); } }
 
+        // Each machine spends a FULL day's capacity, flowing across chainages: when it
+        // finishes its current chainage (or that chainage runs out of material) and capacity
+        // remains, it picks up the next workable chainage with material and keeps going.
         for (let i = 0; i < M; i++) {
-          const id = assign[i];
-          if (id == null) { idleMachineDays++; continue; }
-          const ch = chById[id], s = st[id];
-          if (!s.started) { s.started = true; s.startDate = day.date; s.machine = i + 1; }
           const isNew = i >= p.prevMachines;
           const factor = isNew ? rampFactor(workingOrdinal) : 1.0;
-          const capacity = p.productivity * factor * day.hours;
-          const avail = stock[ch.code] || 0;
-          const prior = priorById[id] || 0;
-          const remaining = remainingById[id] - s.done;   // piles left to install this plan
-          let install = Math.min(capacity, remaining, avail);
-          if (install < 0) install = 0;
-          s.done += install; stock[ch.code] = avail - install; s.lastDate = day.date;
-          totalInstalled += install;
-          if (install > EPS) lastInstallDate = day.date;
-          consumedByCode[ch.code] = (consumedByCode[ch.code] || 0) + install;
-          schedule.push({
-            date: day.date, dayNum: day.dayNum, machine: i + 1, chId: id,
-            profile: ch.profile, code: ch.code, install: install,
-            cum: prior + s.done, mto: ch.mto, priorInstalled: prior,   // cum/mto are TOTALS
-            stockEnd: stock[ch.code], capacity: capacity,
-            waiting: install <= EPS && capacity > EPS    // assigned but starved of material
-          });
-          if (s.done >= remainingById[id] - EPS) { s.completed = true; s.completedDate = day.date; assign[i] = null; }
+          // Whole-pile daily budget: a pile can't be partially installed, so a machine's
+          // capacity for the day is the CEIL of productivity × workhours × ramp factor
+          // (e.g. ceil(2.936 × 9) = 27). All installs below are therefore whole piles,
+          // and the budget flows across chainages in whole piles.
+          const dayCap = Math.ceil(p.productivity * factor * day.hours);   // this machine's capacity for the day
+          let budget = dayCap, workedToday = false, guard = 0;
+
+          while (budget > EPS && guard++ < 100000) {
+            let id = assign[i];
+            const done = id != null && (remainingById[id] - st[id].done) <= EPS;
+            const starved = id != null && !done && !unlimited && (stock[chById[id].code] || 0) <= EPS;
+            if (id == null || done || starved) {
+              if (starved && pending.indexOf(id) < 0) pending.push(id);   // resume later when material arrives
+              if (id != null) assign[i] = null;
+              const nid = nextWorkable(taken);
+              if (nid == null) break;                            // nothing workable → machine stops for the day
+              assign[i] = nid; taken.add(nid); id = nid;
+            }
+            const ch = chById[id], s = st[id];
+            if (!s.started) { s.started = true; s.startDate = day.date; s.machine = i + 1; }
+            const avail = unlimited ? Infinity : (stock[ch.code] || 0);
+            const prior = priorById[id] || 0;
+            const remaining = remainingById[id] - s.done;
+            const install = Math.min(budget, remaining, avail);
+            if (install <= EPS) break;                           // safety: nothing installable
+            s.done += install; budget -= install;
+            if (!unlimited) stock[ch.code] = avail - install;
+            s.lastDate = day.date;
+            totalInstalled += install; workedToday = true;
+            lastInstallDate = day.date;
+            consumedByCode[ch.code] = (consumedByCode[ch.code] || 0) + install;
+            schedule.push({
+              date: day.date, dayNum: day.dayNum, machine: i + 1, chId: id,
+              profile: ch.profile, code: ch.code, install: install,
+              cum: prior + s.done, mto: ch.mto, priorInstalled: prior,   // cum/mto are TOTALS
+              stockEnd: unlimited ? Infinity : stock[ch.code], capacity: dayCap,
+              waiting: false
+            });
+            if (s.done >= remainingById[id] - EPS) { s.completed = true; s.completedDate = day.date; assign[i] = null; }
+            // budget may remain → loop continues onto the next workable chainage
+          }
+          if (!workedToday) idleMachineDays++;
         }
       });
       const allWorkableDone = workable.every((f) => st[f.id].completed);
@@ -484,6 +502,31 @@
     const steadyDaily = p.productivity * p.workhours;
     const effectiveDailyCapacity = steadyDaily * deployed;
 
+    /* ---- 10b. capacity-only run (isolates the material-caused shortfall) -----
+       Re-run the SAME crew (`deployed`), calendar (hindrances applied), ramp curve,
+       mid-day flow AND the SAME work queue as the real plan, but with material
+       treated as UNLIMITED. Using the identical queue means the only thing that can
+       differ is material, so comparing chainage-by-chainage cleanly splits the gap:
+         materialShortfall = piles the crew could have reached this window but
+                             didn't, purely because material wasn't available;
+         timeShortfall     = scope that wouldn't fit this window even with unlimited
+                             material (pure time/machine limit).
+       The two always sum to carryOver. */
+    let capacityOnly = 0, materialShortfall = 0, timeShortfall = carryOver;
+    const materialAffected = [];   // chainages held back THIS WINDOW by material
+    if (deployed > 0 && remainingMTO > EPS) {
+      const capPlan = simulate(deployed, null, null, { unlimited: true });
+      capacityOnly = Math.min(capPlan.totalInstalled, remainingMTO);
+      materialShortfall = Math.max(0, capacityOnly - installable);
+      timeShortfall = Math.max(0, remainingMTO - capacityOnly);
+      active.forEach((f) => {
+        const capDone = (capPlan.state[f.id] && capPlan.state[f.id].done) || 0;
+        const realDone = (plan.state[f.id] && plan.state[f.id].done) || 0;
+        const lost = capDone - realDone;
+        if (lost > EPS) materialAffected.push({ id: f.id, lost, realDone, fully: realDone <= EPS });
+      });
+    }
+
     /* ---- 11. rate-only finish (ASSUME ALL MATERIAL ARRIVES) ----------------
        Ignoring material constraints entirely, how long to install the whole
        remaining priority purely at the steady daily capacity
@@ -502,16 +545,38 @@
     // Each warning carries a `code` so the per-warning confirmation flow knows how a
     // "decline" should adjust the plan to clear it (see ui.js applyAdjustment).
     const warnings = [];
-    if (cap === 0) warnings.push({ code: "noManpower", level: "bad", text: "Manpower (" + p.manpower + ") supports 0 machines (6 per machine). No installation is possible — increase manpower." });
-    else if (capApplied) warnings.push({ code: "cap", level: "warn", text: "Machine cap applied: input " + p.machinesInput + " capped to " + cap + " (manpower " + p.manpower + " ÷ 6 = " + cap + " × 6 = " + (cap * 6) + " people)." });
-    if (blocked.length) warnings.push({ code: "blocked", level: "bad", text: blocked.length + " chainage(s) blocked — no usable material (nothing Accepted at Site and none arriving in-window; overdue on-hold stock is excluded) (" + U.fmtInt(blockedMTO) + " piles of scope, carried over)." });
+    if (cap === 0) warnings.push({ code: "noManpower", level: "bad", text: "Not enough manpower to run even one machine (need at least 6 people per machine). Add more manpower to continue." });
+    else if (capApplied) warnings.push({ code: "cap", level: "warn", text: "You asked for " + p.machinesInput + " machines, but your manpower (" + p.manpower + " people) only supports " + cap + ". The plan uses " + cap + " machines instead." });
+    // Chainages the crew WOULD have reached this window but couldn't (fully) install
+    // because material wasn't available — a chainage-level attribution of
+    // `materialShortfall` (§10b), scoped strictly to THIS plan window (not the whole
+    // dataset). `fully` = couldn't be touched at all; otherwise only partly done.
+    if (materialAffected.length && materialShortfall >= 0.5) {
+      const fullyCount = materialAffected.filter((x) => x.fully).length;
+      const partialCount = materialAffected.length - fullyCount;
+      let blockedText = materialAffected.length + " chainage(s) can't be fully installed in this plan due to material shortage (" +
+        U.fmtInt(Math.round(materialShortfall)) + " piles held back)";
+      if (fullyCount > 0 && partialCount > 0) blockedText += " — " + fullyCount + " not started at all, " + partialCount + " only partly done";
+      else if (partialCount > 0) blockedText += " — all only partly done, the rest still installs";
+      blockedText += ".";
+      warnings.push({ code: "blocked", level: "bad", text: blockedText });
+    }
     const shortfalls = profileRows.filter((r) => r.startedCount > 0 && r.shortfall > 0);
-    if (shortfalls.length) warnings.push({ code: "shortfall", level: "warn", text: shortfalls.length + " profile(s) cannot fully cover their in-progress chainages from window material (shortfall total " + U.fmtInt(shortfalls.reduce((s, r) => s + r.shortfall, 0)) + " piles)." });
-    if (lostDays.length) warnings.push({ code: "hindranceDays", level: "warn", text: lostDays.length + " working day(s) removed by hindrances (" + lostDays.map((d) => U.fmtShort(d)).join(", ") + "); installation shifts past them." });
-    if (hindHours > EPS) warnings.push({ code: "hindranceHours", level: "warn", text: U.fmtNum(hindHours, 1) + " work-hour(s) trimmed by hindrances on " + trimmedDays.map((d) => U.fmtShort(d)).join(", ") + "." });
-    if (idleMachines > 0) warnings.push({ code: "idle", level: "warn", text: "Over-provisioned: only " + deployed + " machine(s) are needed — " + idleMachines + " of the " + maxMachines + " would sit idle (add zero piles). Beyond " + deployed + " machines the window is material/work limited at " + U.fmtInt(Math.round(maxInstalled)) + " piles. Recommend deploying " + deployed + "." });
-    if (plan.idleMachineDays > 0 && idleMachines === 0) warnings.push({ code: "idleDays", level: "info", text: plan.idleMachineDays + " machine-day(s) idle within the window (ran out of queued work)." });
-    if (carryOver > 0) warnings.push({ code: "carryOver", level: "info", text: U.fmtInt(carryOver) + " piles of " + p.priorities.join(", ") + " scope carry over beyond this window (" + U.fmtNum(pctComplete, 1) + "% completed)." });
+    if (shortfalls.length) warnings.push({ code: "shortfall", level: "warn", text: shortfalls.length + " pile type(s) don't have enough material to finish the chainages already in progress — short by " + U.fmtInt(shortfalls.reduce((s, r) => s + r.shortfall, 0)) + " piles." });
+    if (lostDays.length) warnings.push({ code: "hindranceDays", level: "warn", text: lostDays.length + " working day(s) are lost to hindrances (" + lostDays.map((d) => U.fmtShort(d)).join(", ") + ") — the plan skips these days." });
+    if (hindHours > EPS) warnings.push({ code: "hindranceHours", level: "warn", text: U.fmtNum(hindHours, 1) + " work hour(s) are lost to a hindrance on " + trimmedDays.map((d) => U.fmtShort(d)).join(", ") + "." });
+    if (idleMachines > 0) warnings.push({ code: "idle", level: "warn", text: "You only need " + deployed + " machine(s) — the other " + idleMachines + " would sit idle and add no extra piles. We recommend using just " + deployed + "." });
+    if (plan.idleMachineDays > 0 && idleMachines === 0) warnings.push({ code: "idleDays", level: "info", text: "Machines will sit idle for " + plan.idleMachineDays + " day(s) in total because there's no more work lined up for them." });
+    if (carryOver > 0) {
+      // Split the shortfall into its two causes: held back by material shortage
+      // (materialShortfall) vs. simply left for a future plan because this window's
+      // crew/time can't reach it even with full material (timeShortfall). The two
+      // always add up to carryOver (§10b).
+      let carryText = U.fmtInt(Math.round(installable)) + " of " + U.fmtInt(totalMTO) + " piles can be installed in this plan for " + p.priorities.join(", ") + ".";
+      if (materialShortfall > EPS) carryText += " " + U.fmtInt(Math.round(materialShortfall)) + " piles held back by material shortage;";
+      if (timeShortfall > EPS) carryText += (materialShortfall > EPS ? " " : " ") + U.fmtInt(Math.round(timeShortfall)) + " piles left for future plans due to limited time/machines.";
+      warnings.push({ code: "carryOver", level: "info", text: carryText });
+    }
     // Warnings the planner declined-but-acknowledged (no structural fix available, e.g.
     // carry-over / idle days) are suppressed so they clear from the list.
     if (p.suppressCodes && p.suppressCodes.length) {
@@ -530,7 +595,8 @@
       startStock, windowArrivals, profileRows, materialPivot,
       perM, schedule: plan.schedule, totalInstalled: installable, idleMachineDays: plan.idleMachineDays,
       steadyDaily, effectiveDailyCapacity,
-      pctComplete, carryOver, hindDays: lostDays.length, hindHours, lostDays, trimmedDays,
+      pctComplete, carryOver, capacityOnly, materialShortfall, timeShortfall,
+      hindDays: lostDays.length, hindHours, lostDays, trimmedDays,
       rampProfile, warnings
     };
   };

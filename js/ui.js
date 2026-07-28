@@ -981,23 +981,20 @@
   // "Piles (day)" value. Rounding the CUMULATIVE total each day (old approach) could
   // show non-monotonic values like 26, 27, 26 even under flat capacity, because
   // independent day-to-day rounding error was carried through the running total.
-  // Fix: ceil every non-final day's raw install (so a flat/rising capacity series
-  // never dips), then on the chainage's last day, net the display against MTO so
-  // the displayed total still ties out exactly (absorbing the rounding surplus).
+  // The engine now installs whole piles per day (a machine's daily budget is the
+  // ceil of its capacity, flowed across chainages in whole piles — §5.4/§5.5), so
+  // the table just shows those figures directly. Per (machine, chainage, day):
+  //   dispInstall = that day's whole-pile install on the chainage — this is the
+  //     machine's per-day productivity when the chainage's remaining scope is larger,
+  //     or exactly the remaining piles when it's smaller (the engine already caps it
+  //     at min(budget, remaining, stock), and any leftover budget flowed to the next
+  //     chainage as its own row);
+  //   dispCum = the chainage's running total (prior + installed so far), used only to
+  //     read off "remaining scope".
   function computeDisplay(schedule) {
-    const byCh = {};
-    schedule.forEach((e) => (byCh[e.chId] || (byCh[e.chId] = [])).push(e));
-    Object.values(byCh).forEach((list) => {
-      list.sort((a, b) => a.date - b.date);
-      // cum already includes piles installed before this plan, so seed prev with that
-      // so the per-day install (dispInstall) reflects only THIS plan's daily work.
-      let prev = Math.round(list.length ? (list[0].priorInstalled || 0) : 0);
-      list.forEach((e, idx) => {
-        const isLastDay = idx === list.length - 1 || e.cum >= e.mto - 1e-6;
-        e.dispInstall = isLastDay ? Math.max(0, Math.round(e.mto) - prev) : Math.ceil(e.install);
-        prev += e.dispInstall;
-        e.dispCum = prev;
-      });
+    schedule.forEach((e) => {
+      e.dispInstall = Math.round(e.install);
+      e.dispCum = Math.round(e.cum);
     });
   }
 
@@ -1711,11 +1708,16 @@
     body.appendChild(res);
 
     /* ---- Productivity ---- */
+    // Daily budget is rounded UP to whole piles (a pile can't be partly installed),
+    // so we show the raw steady rate with its ceil alongside, and the effective
+    // capacity uses that whole-pile rate (ceil × machines) — matching what the plan
+    // actually installs per day.
     const prod = section("Productivity & ramp-up");
+    const ceilDaily = Math.ceil(r.steadyDaily);
     prod.appendChild(statGrid([
       { label: "Productivity", value: U.fmtNum(r.params.productivity, 3), sub: "piles / machine / hour", kind: "" },
-      { label: "Steady-state Piles / machine / day", value: U.fmtNum(r.steadyDaily, 2), sub: U.fmtNum(r.params.productivity, 3) + " × " + r.params.workhours + " h", kind: "" },
-      { label: "Effective daily capacity", value: U.fmtNum(r.effectiveDailyCapacity, 2), sub: r.deployed + " machine(s) at steady-state", kind: "" }
+      { label: "Steady-state Piles / machine / day", value: U.fmtNum(r.steadyDaily, 2) + " ≈ " + ceilDaily, sub: U.fmtNum(r.params.productivity, 3) + " × " + r.params.workhours + " h → ceil", kind: "" },
+      { label: "Effective daily capacity", value: U.fmtInt(ceilDaily * r.deployed), sub: ceilDaily + " × " + r.deployed + " machine(s)", kind: "" }
     ]));
     prod.appendChild(el("div", { class: "kv", html: "Steady-state achieved in <strong>" + r.params.rampN + "</strong> day(s); machines 1–" + r.params.prevMachines + " start at steady-state; machines beyond ramp up." }));
     body.appendChild(prod);
