@@ -32,6 +32,19 @@
     return new Date(+m[1], +m[2] - 1, +m[3]);
   };
 
+  // Parse US "M/D/YYYY" (or M/D/YY) numeric slash dates at LOCAL midnight.
+  // Deterministic month-first reading so it never depends on the JS engine's
+  // Date.parse heuristics. Returns null for anything that isn't a valid M/D
+  // (e.g. month > 12) so the caller can fall through to other parsers.
+  U.parseMDY = function (s) {
+    const m = String(s).trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+    if (!m) return null;
+    let mo = +m[1], da = +m[2], yr = +m[3];
+    if (mo < 1 || mo > 12 || da < 1 || da > 31) return null;
+    if (yr < 100) yr += 2000;
+    return new Date(yr, mo - 1, da);
+  };
+
   // Excel serial number -> local-midnight Date (date-only). Excel epoch 1899-12-30.
   U.excelSerialToDate = function (serial) {
     const days = Math.floor(serial - 25569); // days since 1970-01-01
@@ -45,7 +58,7 @@
     if (v instanceof Date && !isNaN(v)) return new Date(v.getFullYear(), v.getMonth(), v.getDate());
     if (typeof v === "number" && isFinite(v)) return U.excelSerialToDate(v);
     if (typeof v === "string") {
-      return U.parseISODate(v) || U.parseDMY(v) || (function () {
+      return U.parseISODate(v) || U.parseDMY(v) || U.parseMDY(v) || (function () {
         const t = Date.parse(v);
         return isNaN(t) ? null : (function (d) { return new Date(d.getFullYear(), d.getMonth(), d.getDate()); })(new Date(t));
       })();

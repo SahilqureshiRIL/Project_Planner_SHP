@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/Sahil2.Qureshi/Documents/Project_Planner_SHP/data/**)",
+      "Bash(python)",
+      "Bash(cat)",
+      "Bash(node \"C:/Users/SAHIL2~1.QUR/AppData/Local/Temp/claude/c--Users-Sahil2-Qureshi-Documents-Project-Planner-SHP/7446d26f-b435-44a8-9ab8-85717e9dc375/scratchpad/coerce.js\")"
+    ]
+  }
+}

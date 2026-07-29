@@ -220,29 +220,30 @@
   /* =====================================================================
      3.3  Material logistics
      ===================================================================== */
-  /* The material file carries a two-row header: row 1 has the top-level column
-     names ("Actual Arrived Quantity" spans two sub-columns) and row 2 the
-     sub-headers ("Accepted at site" / "Damaged"). readSheet() keys off row 1,
-     so "Actual Arrived Quantity" IS the accepted-at-site column, and Damaged is
-     the (unlabelled) column immediately to its right. The sub-header row has no
-     Item Code, so it is skipped by the empty-code guard below.
+  /* Updated sheet layout (single header row). Columns are resolved BY NAME, so
+     order is irrelevant; only the header text and the Status vocabulary changed.
+       A Item Code · B Item Name · C "Quantity in transit" ·
+       D "Expected date of arrival on site" · E "Actual Arrival Date on Site" ·
+       F "Actual Qty on Site" · G "Status" ("On Site" / "In Transit").
 
-     Availability is driven by Status:
-       • "Delivered"     -> material is on site NOW. Usable = "Accepted at site"
-                            (damaged qty excluded). When that cell is blank we
-                            fall back to the ordered "Quantity" (data often
-                            arrives before the accepted qty is recorded).
-       • anything else   -> still awaited; treated as inbound. We expect the
-                            ordered "Quantity" to land on the Expected Arrival
-                            date (usable on arrival + 1 day, keeping the buffer).
+     Availability logic is UNCHANGED — only the source columns/status label differ:
+       • Status "On Site"  -> material is on site NOW. Usable on-site stock =
+                              "Actual Qty on Site" (F).
+       • anything else     -> still awaited (e.g. "In Transit"); treated as
+         (e.g. "In Transit")  inbound. We expect "Quantity in transit" (C) to land
+                              on the "Expected date of arrival on site" (D), usable
+                              on arrival + 1 day (keeping the buffer).
+     Dates in D/E may be Excel serials OR US "M/D/YYYY" text; U.coerceDate
+     normalizes both to the exact same calendar date (see util.js). Nothing is
+     inferred: a blank quantity is 0 and an inbound row with no expected date is
+     dropped from the calendar (counted in inboundNoDate), exactly as before.
   */
   function parseMaterial(wb) {
     const ws = getSheet(wb, "Planner tool Input") || getSheet(wb, "Material Logistics");
     if (!ws) throw new Error("Need sheet 'Planner tool Input'.");
     const sh = readSheet(ws);
-    const [cCode, cName, cQty, cExpArr, cActArr, cAccepted] =
-      requireCols(sh, ["Item Code", "Item Name", "Quantity", "Expected Arrival", "Actual Arrived Date", "Actual Arrived Quantity"], "Planner tool Input");
-    const cStatus = sh.col[norm("Status")];
+    const [cCode, cName, cInTransit, cExpArr, cActArr, cOnSiteQty, cStatus] =
+      requireCols(sh, ["Item Code", "Item Name", "Quantity in transit", "Expected date of arrival on site", "Actual Arrival Date on Site", "Actual Qty on Site", "Status"], "Planner tool Input");
 
     const byCode = {};
     let maxReceipt = null;
@@ -251,23 +252,20 @@
     sh.rows.forEach((r) => {
       const code = r[cCode] == null ? "" : String(r[cCode]).trim();
       if (!code) return;
-      const qty = U.toNum(r[cQty]) || 0;
-      const status = cStatus == null ? "" : norm(r[cStatus]);
+      const status = norm(r[cStatus]);
       const rec = byCode[code] || (byCode[code] = { code, name: r[cName] || code, onsite: 0, inbound: [] });
       if (r[cName] && rec.name === code) rec.name = r[cName];
 
-      if (status === "delivered") {
-        // On site now. Usable = accepted-at-site; blank cell -> ordered Quantity.
-        const accCell = r[cAccepted];
-        const usable = (accCell == null || accCell === "") ? qty : (U.toNum(accCell) || 0);
-        rec.onsite += usable; onsiteRows++;
+      if (status === "on site") {
+        // On site now. Usable = "Actual Qty on Site" (blank -> 0, never inferred).
+        rec.onsite += U.toNum(r[cOnSiteQty]) || 0; onsiteRows++;
         const arrived = U.coerceDate(r[cActArr]);
         if (arrived && (!maxReceipt || arrived > maxReceipt)) maxReceipt = arrived;
       } else {
-        // Still awaited -> inbound. Expect ordered Quantity on Expected Arrival.
+        // Still awaited -> inbound. Expect "Quantity in transit" on the expected date.
         const arrival = U.coerceDate(r[cExpArr]);
         if (!arrival) { inboundNoDate++; return; }   // can't place on the calendar
-        rec.inbound.push({ arrival, usable: U.addDays(arrival, 1), qty });
+        rec.inbound.push({ arrival, usable: U.addDays(arrival, 1), qty: U.toNum(r[cInTransit]) || 0 });
         inboundRows++;
       }
     });
