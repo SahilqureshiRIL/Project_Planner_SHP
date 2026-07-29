@@ -693,7 +693,9 @@ table.data tr.row-completed td { color: var(--success); }
 /* Recent-progress ("Submissions"-style) chart: header, Week/Month toggle,
    ‹ › paging and legend — all on the light card body. */
 .subm-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s-3); margin-bottom: var(--s-3); }
-.subm-title { font-family: var(--display); font-size: 15px; font-weight: 750; color: var(--navy); margin: 0; }
+.subm-title { font-family: var(--display); font-size: 15px; font-weight: 750; color: var(--navy); margin: 0; display: flex; align-items: center; gap: 6px; }
+.subm-title__help { display: inline-flex; color: var(--text-muted); cursor: help; transition: color .14s; }
+.subm-title__help:hover, .subm-title__help:focus-visible { color: var(--navy); outline: none; }
 .subm-sub { font-size: 12px; color: var(--text-muted); margin: 3px 0 0; }
 .subm-controls { display: flex; align-items: center; gap: var(--s-2); flex: none; }
 

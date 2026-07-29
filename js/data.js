@@ -384,8 +384,16 @@
 
   D.computeDefaults = function (store) {
     const mp = store.manpower, mat = store.material, pr = store.progress;
-    const anchor = mp.latestShift;
-    if (!anchor) throw new Error("No shift dates found in manpower file.");
+    if (!mp.latestShift) throw new Error("No shift dates found in manpower file.");
+    // Anchor = max(latest Machine Status date, latest Sheet-Pile-Installed date)
+    // — so a day with piles logged but no machine-status entry yet (progress
+    // recorded a day after the last shift update) still falls inside the
+    // 7-day/30-day windows below. That day's machine-hours get imputed the
+    // same way any other gap day already is (§ below); piles themselves are
+    // never imputed — installedByDate is read as-is.
+    const pileISO = Object.keys(pr.installedByDate || {}).sort();
+    const lastPileDate = pileISO.length ? U.parseISODate(pileISO[pileISO.length - 1]) : null;
+    const anchor = (lastPileDate && lastPileDate > mp.latestShift) ? lastPileDate : mp.latestShift;
 
     /* Human-input-error correction: on a day where piles WERE installed but the shift
        record (machines / manpower / manhours) is missing, treat it as a forgotten

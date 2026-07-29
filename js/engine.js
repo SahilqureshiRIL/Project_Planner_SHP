@@ -574,7 +574,7 @@
       // always add up to carryOver (§10b).
       let carryText = U.fmtInt(Math.round(installable)) + " of " + U.fmtInt(totalMTO) + " piles can be installed in this plan for " + p.priorities.join(", ") + ".";
       if (materialShortfall > EPS) carryText += " " + U.fmtInt(Math.round(materialShortfall)) + " piles held back by material shortage;";
-      if (timeShortfall > EPS) carryText += (materialShortfall > EPS ? " " : " ") + U.fmtInt(Math.round(timeShortfall)) + " piles left for future plans due to limited time/machines.";
+      if (timeShortfall > EPS) carryText += " Remaining " + (materialShortfall > EPS ? " " : " ") + U.fmtInt(Math.round(timeShortfall)) + " piles left for future plans due to limited time/machines.";
       warnings.push({ code: "carryOver", level: "info", text: carryText });
     }
     // Warnings the planner declined-but-acknowledged (no structural fix available, e.g.

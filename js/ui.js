@@ -575,7 +575,10 @@
     const maxDay = ramp.length - 1 + 2;                 // show 2 steady days past the profile
     const pts = [];
     for (let k = 0; k <= maxDay; k++) { const m = k < ramp.length ? ramp[k] : last; pts.push({ day: k, rate: prod * m, mult: m }); }
-    const yMax = Math.max.apply(null, pts.map((p) => p.rate)) * 1.12 || 1;
+    // Y-axis ceiling = the steady-state rate itself (prod × last ramp
+    // multiplier), not curve-max + headroom — the axis top lines up exactly
+    // with the steady-state dashed line.
+    const yMax = (prod * last) || 1;
 
     const W = 320, H = 124, ml = 40, mr = 12, mt = 12, mb = 24, plotW = W - ml - mr, plotH = H - mt - mb;
     const X = (k) => ml + (maxDay ? (k / maxDay) * plotW : 0);
@@ -870,15 +873,22 @@
     const WIN = 7;                          // periods shown at once (7 weeks or 7 months)
     const isMonth = progressMode === "month";
 
-    // Aggregate daily installs into week (Monday-started) or month buckets; keep
-    // only non-empty periods, sorted oldest → newest.
+    // Aggregate daily installs into week (Monday-to-next-Monday excluding next Monday)
+    // or month buckets; keep only non-empty periods, sorted oldest → newest.
     const buckets = {};
     Object.keys(map).forEach((iso) => {
       const v = map[iso] || 0; if (v <= 0) return;
       const d = parseISO(iso);
       let key, rep;
       if (isMonth) { key = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0"); rep = new Date(d.getFullYear(), d.getMonth(), 1); }
-      else { const m = new Date(d); m.setDate(m.getDate() - ((m.getDay() === 0 ? 7 : m.getDay()) - 1)); key = U.fmtISO(m); rep = m; }
+      else {
+        const m = new Date(d);
+        const dayOfWeek = m.getDay();
+        const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+        m.setDate(m.getDate() - daysToMonday);
+        key = U.fmtISO(m);
+        rep = m;
+      }
       (buckets[key] || (buckets[key] = { sum: 0, date: rep })).sum += v;
     });
     const keys = Object.keys(buckets).sort();
@@ -910,6 +920,7 @@
     if (sub) sub.textContent = U.fmtInt(total) + " piles across " + wKeys.length + " " +
       (isMonth ? "month" : "week") + (wKeys.length === 1 ? "" : "s") + " shown · x-axis shows each " +
       (isMonth ? "month" : "week’s starting date");
+    { const tl = $("#progressTrendLabel"); if (tl) tl.textContent = "Moving avg (3-" + (isMonth ? "month" : "week") + ")"; }
 
     // "nice" y-axis: round tick step so labels read 0/4/8/12… not odd values.
     const rough = dataMax / 4, pw = Math.pow(10, Math.floor(Math.log10(rough))), rf = rough / pw;
@@ -937,9 +948,11 @@
       s += '<text x="' + (padL - 8) + '" y="' + (gy + 3.5).toFixed(1) + '" text-anchor="end" font-size="10" fill="#9aa3bd">' + U.fmtInt(tv) + '</text>';
     });
     // bars + x-axis labels (each period's starting date)
+    const endDateOf = (d) => isMonth ? new Date(d.getFullYear(), d.getMonth() + 1, 0) : new Date(d.getFullYear(), d.getMonth(), d.getDate() + 6);
     wKeys.forEach((k, i) => {
       const v = vals[i], cxp = cxOf(i), bx = cxp - barW / 2, by = yOf(v), bh = Math.max(0, padT + plotH - by), d = dates[i];
-      const tip = xLabel(d) + " — <strong>" + U.fmtInt(v) + "</strong> pile" + (v === 1 ? "" : "s");
+      const dEnd = endDateOf(d);
+      const tip = xLabel(d) + " – " + xLabel(dEnd) + " — <strong>" + U.fmtInt(v) + "</strong> pile" + (v === 1 ? "" : "s");
       s += '<g class="daybar" data-tip="' + U.esc(tip) + '">';
       s += '<rect class="daybar__hit" x="' + (cxp - slot / 2).toFixed(1) + '" y="' + padT + '" width="' + slot.toFixed(1) + '" height="' + plotH + '" fill="transparent"/>';
       s += '<rect class="daybar__bar" x="' + bx.toFixed(1) + '" y="' + by.toFixed(1) + '" width="' + barW.toFixed(1) + '" height="' + bh.toFixed(1) + '" rx="3" fill="url(#barGrad)"/>';

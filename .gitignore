@@ -55,3 +55,8 @@ _verify*.html        # throwaway headless-test harnesses
 
 # ---- Excel lock files (created while a .xlsx is open) -----------------------
 ~$*.xlsx
+
+# ---- Standalone productivity analysis (local exploration, not shipped) ------
+productivity_trend.html
+js/productivity_trend.js
+productivity_anchor_calculations.md
