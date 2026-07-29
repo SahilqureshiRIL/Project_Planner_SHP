@@ -462,11 +462,17 @@
     const ramp30 = deriveAdaptiveRamp(window30Days, mpI, pr, 7);   // wider edge sample for a 30-day span
 
     // Latest *actual* dated record across inputs (EXCLUDES future inbound forecasts).
+    // Still tracked/exposed for display, but no longer drives the plan-start
+    // default (see planStartDefault below).
     const candidates = [anchor];
     if (pr.maxDate) candidates.push(pr.maxDate);
     if (mat.maxReceipt) candidates.push(mat.maxReceipt);
     const latestDataDate = new Date(Math.max.apply(null, candidates.map((d) => d.getTime())));
-    const planStartDefault = U.firstMondayAfter(latestDataDate);
+    // Plan start always defaults to the next Monday on/after TODAY (real
+    // wall-clock date) — never backdated, and never tied to how recent the
+    // source data is. Same convention Bluesky already uses for its own
+    // target-date back-planning (U.nextMondayFromToday).
+    const planStartDefault = U.nextMondayFromToday();
 
     return {
       windowStart, windowEnd, windowDays,

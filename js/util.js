@@ -70,6 +70,16 @@
     return x;
   };
 
+  // Next Monday on/after TODAY (real wall-clock date, local midnight) — today
+  // itself if today is already Monday. This is the floor a plan start can
+  // never go earlier than (a plan can't be backdated).
+  U.nextMondayFromToday = function () {
+    const t = new Date();
+    let d = new Date(t.getFullYear(), t.getMonth(), t.getDate());
+    while (U.isoDow(d) !== 1) d = U.addDays(d, 1);
+    return d;
+  };
+
   U.fmtISO = function (d) {
     if (!d) return "";
     const p = (n) => String(n).padStart(2, "0");

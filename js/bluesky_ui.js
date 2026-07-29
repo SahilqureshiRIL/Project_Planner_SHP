@@ -176,11 +176,10 @@
   function defaults() { return SPP.app && SPP.app.getDefaults ? SPP.app.getDefaults() : null; }
 
   // Bluesky plans forward from the next Monday on/after TODAY (never backdated).
+  // Same floor the Installation Planner's Plan Start Date now enforces
+  // (U.nextMondayFromToday) — kept as a thin wrapper so call sites here don't change.
   function planStartFromToday() {
-    const t = new Date();
-    let d = new Date(t.getFullYear(), t.getMonth(), t.getDate());   // today at local midnight
-    while (U.isoDow(d) !== 1) d = U.addDays(d, 1);                  // advance to Monday (today if already Monday)
-    return d;
+    return U.nextMondayFromToday();
   }
 
   // Fill the input defaults (target date, workhours, productivity) and build the
@@ -203,7 +202,7 @@
 
     if (d.workhours) $("#bsWorkhours").value = d.workhours;
     if (d.productivity) $("#bsProductivity").value = U.fmtNum(d.productivity, 3);
-    $("#bsProdHint").textContent = d.prodDerivation || "";
+    $("#bsProdInfoPop").textContent = d.prodDerivation || "";
 
     // Already-installed (steady-state) machines default to the 7-day onsite
     // average — same baseline the planner uses for its ramp's prevMachines.

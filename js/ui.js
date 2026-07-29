@@ -7,7 +7,6 @@
   const SPP = window.SPP;
   const U = SPP.util;
   const $ = U.$, el = U.el;
-  const LS_KEY = "spp_machines_prev";
   const MACHINE_COLORS = ["#4f46e5", "#0d9488", "#e11d48", "#d97706", "#7c3aed", "#0284c7", "#059669", "#db2777"];
 
   const state = {
@@ -53,7 +52,6 @@
     $("#exportPlanBtn").addEventListener("click", onExportXer);
     $("#generateBtn2").addEventListener("click", onGenerate);
     $("#addHindranceBtn").addEventListener("click", () => addHindranceRow());
-    $("#resetHistoryBtn").addEventListener("click", resetHistory);
     $("#pStart").addEventListener("change", enforceMonday);
     $("#pStart").addEventListener("change", refreshHindranceCalendars);
     $("#pMachines").addEventListener("input", refreshCapNotice);
@@ -128,7 +126,6 @@
       setMapZoom(state.mapZoom * (e.deltaY < 0 ? 1.15 : 1 / 1.15));
     }, { passive: false });
 
-    updateStoredHistoryHint();
     refresh();
     tryBundled();   // auto-load the three files from ./data/ so the app opens on the Plan Parameters screen
   }
@@ -322,7 +319,10 @@
     // Auto-computed fields show greyed (as defaults); once edited they turn solid and
     // the hint reveals the original auto value.
     markComputed("#pStart", "#pStartHint", U.fmtISO(d.planStartDefault),
-      "Auto: " + U.fmtFriendly(d.planStartDefault) + " (first Monday after latest record " + U.fmtShort(d.latestDataDate) + ")");
+      "Auto: " + U.fmtFriendly(d.planStartDefault) + " (next Monday from today)");
+    // Never allow backdating: the earliest selectable date is always the next
+    // Monday on/after today, regardless of what's already typed/computed.
+    $("#pStart").min = U.fmtISO(d.planStartDefault);
     markComputed("#pMachines", "#pMachinesHint", d.machines, "7-day onsite Avg");
     markComputed("#pManpower", "#pManpowerHint", d.manpower, "7-day onsite Avg");
     markComputed("#pWorkhours", "#pWorkhoursHint", d.workhours, "7-day onsite Avg");
@@ -330,10 +330,14 @@
     U.$$("#pProdWindowSeg .seg__btn").forEach((b) => b.classList.toggle("is-active", b.dataset.window === "7"));
     applyProductivity();
 
-    // Machines from previous plan: stored value, else equal to machines (no ramp on first plan).
-    const stored = readStored();
-    setVal("#pPrevMachines", stored ? stored.machines : d.machines);
-    $("#pPrevHint").textContent = stored ? ("from last plan (" + U.fmtShort(new Date(stored.ts)) + ")") : "first run = machines (no ramp)";
+    // Machines from previous plan: always defaults to the current machines count
+    // (i.e. treat the current crew as already-deployed, no ramp), so the SAME
+    // visible configuration always yields the SAME plan. Previously this was
+    // auto-filled from a localStorage count persisted by the last Process Plan
+    // click, which silently changed results between otherwise-identical runs.
+    // The planner can still edit this field manually for a real sequential plan.
+    setVal("#pPrevMachines", d.machines);
+    $("#pPrevHint").textContent = "defaults to machines (no ramp); edit for a follow-on plan";
 
     $("#paramsPlaceholder").hidden = true;
     $("#paramsForm").hidden = false;
@@ -507,8 +511,16 @@
   function enforceMonday(e) {
     const d = U.parseISODate(e.target.value);
     if (!d) return;
+    const monday = U.isMonday(d) ? d : U.addDays(d, -(U.isoDow(d) - 1)); // back to Monday of that week
+    // Backdating guard first — the `min` attribute stops the native picker, but
+    // a typed/pasted value can bypass it, so re-check here too.
+    const floor = U.nextMondayFromToday();
+    if (U.cmpDate(monday, floor) < 0) {
+      e.target.value = U.fmtISO(floor);
+      U.toast("Plan start can't be backdated — snapped to " + U.fmtFriendly(floor), "");
+      return;
+    }
     if (!U.isMonday(d)) {
-      const monday = U.addDays(d, -(U.isoDow(d) - 1)); // back to Monday of that week
       e.target.value = U.fmtISO(monday);
       U.toast("Plan start must be a Monday — snapped to " + U.fmtFriendly(monday), "");
     }
@@ -649,27 +661,6 @@
     host.innerHTML = s;
   }
 
-  /* ============================ STORAGE ============================ */
-  function readStored() { try { return JSON.parse(localStorage.getItem(LS_KEY)); } catch (e) { return null; } }
-  // Persist the effective deployed machine count (+ priority/decisions) to localStorage.
-  function writeStored(machines, priority, decisions) {
-    const compact = (decisions || []).map((d) => ({ code: d.code, decision: d.decision }));
-    try { localStorage.setItem(LS_KEY, JSON.stringify({ machines, priority, ts: Date.now(), decisions: compact })); } catch (e) {}
-    updateStoredHistoryHint();
-  }
-  // Clear the stored machine-count history.
-  function resetHistory() {
-    try { localStorage.removeItem(LS_KEY); } catch (e) {}
-    if (state.defaults) setVal("#pPrevMachines", $("#pMachines").value || state.defaults.machines);
-    $("#pPrevHint").textContent = "reset — first run = machines (no ramp)";
-    updateStoredHistoryHint();
-    U.toast("Stored machine history cleared.", "ok");
-  }
-  // Update the 'stored machine history' hint text below the ramp settings.
-  function updateStoredHistoryHint() {
-    const s = readStored();
-    $("#storedHistoryHint").textContent = s ? ("Stored: " + s.machines + " machines · " + (s.priority || "") + " · " + U.fmtShort(new Date(s.ts))) : "Nothing stored yet.";
-  }
 
   /* ============================ GENERATE ============================ */
   // Show all warnings together; the planner either Proceeds (plan is shown as-is with
@@ -711,7 +702,6 @@
     }
 
     state.result = result;
-    writeStored(result.deployed, p.priorities.join(","));   // §5.6 persist effective deployed count
 
     const finish = () => {
       renderAll();
@@ -739,6 +729,7 @@
     const planStart = U.parseISODate($("#pStart").value);
     if (!planStart) { U.toast("Pick a plan start date.", "bad"); return null; }
     if (!U.isMonday(planStart)) { U.toast("Plan start must be a Monday.", "bad"); return null; }
+    if (U.cmpDate(planStart, U.nextMondayFromToday()) < 0) { U.toast("Plan start can't be backdated.", "bad"); return null; }
 
     const periodWeeks = parseInt((document.querySelector('input[name="period"]:checked') || {}).value || "2", 10);
     const machinesInput = parseInt($("#pMachines").value, 10);

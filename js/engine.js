@@ -566,15 +566,18 @@
     if (lostDays.length) warnings.push({ code: "hindranceDays", level: "warn", text: lostDays.length + " working day(s) are lost to hindrances (" + lostDays.map((d) => U.fmtShort(d)).join(", ") + ") — the plan skips these days." });
     if (hindHours > EPS) warnings.push({ code: "hindranceHours", level: "warn", text: U.fmtNum(hindHours, 1) + " work hour(s) are lost to a hindrance on " + trimmedDays.map((d) => U.fmtShort(d)).join(", ") + "." });
     if (idleMachines > 0) warnings.push({ code: "idle", level: "warn", text: "You only need " + deployed + " machine(s) — the other " + idleMachines + " would sit idle and add no extra piles. We recommend using just " + deployed + "." });
-    if (plan.idleMachineDays > 0 && idleMachines === 0) warnings.push({ code: "idleDays", level: "info", text: "Machines will sit idle for " + plan.idleMachineDays + " day(s) in total because there's no more work lined up for them." });
+    if (plan.idleMachineDays > 0 && idleMachines === 0) warnings.push({ code: "idleDays", level: "info", text: "As per plan " + plan.idleMachineDays + " machine-day(s) idle in total (a machine idle for a day counts as one)." });
     if (carryOver > 0) {
-      // Split the shortfall into its two causes: held back by material shortage
-      // (materialShortfall) vs. simply left for a future plan because this window's
-      // crew/time can't reach it even with full material (timeShortfall). The two
-      // always add up to carryOver (§10b).
-      let carryText = U.fmtInt(Math.round(installable)) + " of " + U.fmtInt(totalMTO) + " piles can be installed in this plan for " + p.priorities.join(", ") + ".";
-      if (materialShortfall > EPS) carryText += " " + U.fmtInt(Math.round(materialShortfall)) + " piles held back by material shortage;";
-      if (timeShortfall > EPS) carryText += " Remaining " + (materialShortfall > EPS ? " " : " ") + U.fmtInt(Math.round(timeShortfall)) + " piles left for future plans due to limited time/machines.";
+      // "Expected scope" = capacityOnly — the crew/time-capacity ceiling for THIS
+      // window (material-unlimited simulation), i.e. what this window could
+      // realistically absorb workload-wise. installable = what actually gets
+      // installed once material is accounted for; the gap between the two
+      // (materialShortfall) is what material held back this window specifically.
+      // Combined across every selected priority (material/queue is pooled), not
+      // split per individual priority.
+      let carryText = "Expected scope this window for " + p.priorities.join(", ") + ": " + U.fmtInt(Math.round(capacityOnly)) + " piles. " +
+        U.fmtInt(Math.round(installable)) + " piles will actually be installed.";
+      if (materialShortfall > EPS) carryText += " " + U.fmtInt(Math.round(materialShortfall)) + " piles cannot be installed due to material shortage.";
       warnings.push({ code: "carryOver", level: "info", text: carryText });
     }
     // Warnings the planner declined-but-acknowledged (no structural fix available, e.g.
