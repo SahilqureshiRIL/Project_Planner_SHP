@@ -39,8 +39,14 @@
     U.$$('input[type="file"]').forEach((inp) => {
       inp.addEventListener("change", (e) => { if (e.target.files[0]) handleFile(inp.dataset.input, e.target.files[0]); });
     });
-    // Header logo → back to the module picker (keeps loaded data, unlike a reload).
-    { const hb = $("#homeLogoBtn"); if (hb) hb.addEventListener("click", () => showModule(null)); }
+    // Header logo → reset both modules to a fresh state (same visible effect
+    // as refreshing the window, without an actual reload/re-fetch) and go
+    // back to the module picker.
+    { const hb = $("#homeLogoBtn"); if (hb) hb.addEventListener("click", () => {
+      resetPlanner();
+      if (SPP.blueskyUI && SPP.blueskyUI.reset) SPP.blueskyUI.reset();
+      showModule(null);
+    }); }
     // Module picker cards → open the chosen tool.
     U.$$(".modcard").forEach((c) => c.addEventListener("click", () => showModule(c.dataset.module)));
     $("#tryBundledBtn").addEventListener("click", tryBundled);
@@ -126,6 +132,37 @@
     refresh();
     tryBundled();   // auto-load the three files from ./data/ so the app opens on the Plan Parameters screen
   }
+  // Reset the Installation Planner to a fresh state — same visible effect as
+  // a page refresh, but reusing the already-parsed data files instead of
+  // re-fetching/re-parsing them (they haven't changed). Clears the generated
+  // plan, all view/paging state, any hindrances added, and the priority
+  // selection, then repopulates the form from freshly recomputed defaults.
+  function resetPlanner() {
+    state.result = null;
+    state.view = "gantt";
+    state.ganttColor = "profile";
+    state.mapZoom = 1;
+    state.mapSelected = null;
+    state.mapFilters = new Set();
+    prodWindow = 7;
+    progressMode = "week";
+    progressOffset = 0;
+    progressAnim = null;
+    selectedPriorities.clear();
+
+    const list = $("#hindranceList"); if (list) U.clear(list);
+
+    $("#resultsCard").hidden = true;
+    $("#resultsEmpty").hidden = false;
+    $("#viewToggle").hidden = true;
+    $("#validationCard").hidden = true;
+    $("#exportPlanBtn").hidden = true;
+    $("#progressCard").hidden = true;
+
+    setSidebarCollapsed(false);
+    if (state.store) refresh();   // recompute defaults from the already-parsed store, repopulate the form
+  }
+
   // Switch between the module picker (m = null), the forward planner ("planner")
   // and the Bluesky target-date planner ("bluesky"). The header Export button is
   // shown only when the planner is active with a generated plan; the view switcher

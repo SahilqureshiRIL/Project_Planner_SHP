@@ -152,6 +152,25 @@
   BUI.onDataReady = function () { populate(); };
   BUI.onShow = function () { if (!populated) populate(); };
 
+  // Full reset — same effect a page refresh would have on this module (used
+  // by the header logo's "back to home" reset), without actually reloading:
+  // clears the last computed plan, collapses back to the input form, and
+  // forces populate() to re-run (its `populated` guard normally skips a
+  // re-populate on re-open so an in-progress selection isn't wiped — a
+  // deliberate reset needs to bypass that guard).
+  BUI.reset = function () {
+    lastResult = null;
+    activeTab = "material";
+    selected.clear();
+    scopeCache = null;
+    $("#bsResultsCard").hidden = true;
+    $("#bsSummary").hidden = true;
+    $("#bsTabs").hidden = true;
+    setPanelCollapsed(false);
+    populated = false;
+    populate();
+  };
+
   // Read-only accessors to the shared store/defaults owned by ui.js (SPP.app).
   function store() { return SPP.app && SPP.app.getStore ? SPP.app.getStore() : null; }
   function defaults() { return SPP.app && SPP.app.getDefaults ? SPP.app.getDefaults() : null; }
