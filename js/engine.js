@@ -469,6 +469,7 @@
        date that covers 100% of the priority only exists when nothing is blocked. */
     let projectedFinish = null, finishCoversAll = false, projFinishWorkingDays = null,
         unachievablePiles = 0, projTimeLimited = false;
+    const projLastDateByCode = {};   // per material: last day it installs in the full projection (its material run-dry day)
     if (deployed > 0 && remainingMTO > EPS) {
       // Full, uncapped queue = every workable chainage, all its remaining piles.
       const fullQueue = [];
@@ -484,6 +485,9 @@
         projCal.push({ date: d, dayNum: i + 1, isWorking: U.isoDow(d) <= p.workDaysPerWeek, hours: p.workhours, nonWorkReason: null });
       }
       const proj = simulate(deployed, projCal, fullQueue);
+      proj.schedule.forEach((e) => {   // record each material's last install day (when its stock runs dry)
+        if (e.install > 0 && (!projLastDateByCode[e.code] || U.cmpDate(e.date, projLastDateByCode[e.code]) > 0)) projLastDateByCode[e.code] = e.date;
+      });
       projectedFinish = proj.lastInstallDate;                                   // last achievable install
       unachievablePiles = Math.max(0, Math.round(remainingMTO - proj.totalInstalled));  // blocked + material-short
       finishCoversAll = unachievablePiles <= 0;                                 // whole remaining priority done
@@ -514,6 +518,7 @@
        The two always sum to carryOver. */
     let capacityOnly = 0, materialShortfall = 0, timeShortfall = carryOver;
     const materialAffected = [];   // chainages held back THIS WINDOW by material
+    const windowDemandByCode = {};  // per material: piles this plan would install THIS WINDOW if material were unlimited
     if (deployed > 0 && remainingMTO > EPS) {
       const capPlan = simulate(deployed, null, null, { unlimited: true });
       capacityOnly = Math.min(capPlan.totalInstalled, remainingMTO);
@@ -521,11 +526,37 @@
       timeShortfall = Math.max(0, remainingMTO - capacityOnly);
       active.forEach((f) => {
         const capDone = (capPlan.state[f.id] && capPlan.state[f.id].done) || 0;
+        if (f.code) windowDemandByCode[f.code] = (windowDemandByCode[f.code] || 0) + capDone;   // plan-period demand
         const realDone = (plan.state[f.id] && plan.state[f.id].done) || 0;
         const lost = capDone - realDone;
         if (lost > EPS) materialAffected.push({ id: f.id, lost, realDone, fully: realDone <= EPS });
       });
     }
+
+    /* ---- 10c. material-wise check for THIS PLAN PERIOD ---------------------
+       One row per material the plan works this window. Required = capacity-only
+       window demand (what the plan would install for that material this period if
+       material were unlimited); In stock = net Accepted-at-Site now; In transit =
+       ordered material arriving within the window; Gap = period demand not covered;
+       Work halts on = the day it runs dry (only when short this period). */
+    const scopeByCode = {};
+    candidates.forEach((f) => { if (f.code) (scopeByCode[f.code] || (scopeByCode[f.code] = [])).push(f); });
+    const materialCheck = Object.keys(windowDemandByCode).map((code) => {
+      const required = Math.round(windowDemandByCode[code]);
+      const inStock = Math.max(0, Math.round(netOnsite(code)));
+      const m = codeMaterial(code);   // null when the code has no material-file entry
+      const inTransit = m ? Math.round(m.inbound
+        .filter((i) => U.cmpDate(i.usable, planStart) > 0 && U.cmpDate(i.usable, planEnd) <= 0)
+        .reduce((s, i) => s + i.qty, 0)) : 0;
+      const gap = Math.max(0, required - inStock - inTransit);
+      const cands = scopeByCode[code] || [];
+      const priority = Array.from(new Set(cands.map((f) => f.priority).filter(Boolean)))
+        .sort((a, b) => U.priorityOrder(a) - U.priorityOrder(b)).join(", ");
+      return { code, profile: profileForCode(code), priority, required, inStock, inTransit, gap,
+               haltDate: gap > 0 ? (projLastDateByCode[code] || null) : null };
+    }).filter((r) => r.required > 0).sort((a, b) => b.required - a.required);
+    const materialHaltDate = materialCheck.reduce((min, r) =>
+      (r.haltDate && (!min || U.cmpDate(r.haltDate, min) < 0)) ? r.haltDate : min, null);
 
     /* ---- 11. rate-only finish (ASSUME ALL MATERIAL ARRIVES) ----------------
        Ignoring material constraints entirely, how long to install the whole
@@ -595,7 +626,7 @@
       totalScopeLengthKm, lengthCoveredKm, lengthThisWindowKm,
       projectedFinish, finishCoversAll, projFinishWorkingDays, unachievablePiles, projTimeLimited,
       fullMaterialFinish, fullMaterialWorkingDays,
-      startStock, windowArrivals, profileRows, materialPivot,
+      startStock, windowArrivals, profileRows, materialPivot, materialCheck, materialHaltDate,
       perM, schedule: plan.schedule, totalInstalled: installable, idleMachineDays: plan.idleMachineDays,
       steadyDaily, effectiveDailyCapacity,
       pctComplete, carryOver, capacityOnly, materialShortfall, timeShortfall,

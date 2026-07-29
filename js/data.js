@@ -447,14 +447,22 @@
     const window30Start = U.addDays(anchor, -29);
     const window30Days = [];
     for (let i = 0; i < 30; i++) window30Days.push(U.addDays(window30Start, i));
-    let machineHours30 = 0, pilesWindow30 = 0;
+    let machineHours30 = 0, pilesWindow30 = 0, sumMachine30 = 0, sumMan30 = 0, sumHour30 = 0;
     window30Days.forEach((d) => {
       const iso = U.fmtISO(d);
       const m = machineMap[iso] || 0;
       const h = hourMap[iso] || 0;
+      sumMachine30 += m;
+      sumMan30 += (manpowerMap[iso] || 0);
+      sumHour30 += h;
       machineHours30 += m * h;
       pilesWindow30 += (pr.installedByDate[iso] || 0);
     });
+    // 30-day machine/manpower/workhours averages (same ÷window-length basis as the
+    // 7-day figures above) so the SDP-average table can switch its whole basis.
+    const machines30 = Math.round(sumMachine30 / 30);
+    const manpower30 = Math.round(sumMan30 / 30);
+    const workhours30 = Math.round(sumHour30 / 30);
     const productivity30 = machineHours30 > 0 ? U.round(pilesWindow30 / machineHours30, 3) : 0;
     const prodDerivation30 = pilesWindow30 + " piles ÷ " + U.fmtNum(machineHours30, 0) + " machine-hours = " + U.fmtNum(productivity30, 3);
     const ramp30 = deriveAdaptiveRamp(window30Days, mpI, pr, 7);   // wider edge sample for a 30-day span
@@ -475,6 +483,7 @@
     return {
       windowStart, windowEnd, windowDays,
       machines, manpower, workhours, productivity,
+      machines30, manpower30, workhours30,
       sumMachine, sumMan, sumHour, machineHours, pilesWindow,
       productivity30, prodDerivation30,
       latestDataDate, planStartDefault, imputedDays,

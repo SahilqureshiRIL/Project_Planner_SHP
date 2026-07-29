@@ -949,6 +949,72 @@ table.data tr.row-completed td { color: var(--success); }
   .pl-cols .bs-col > .field, .pl-cols .bs-col > .field-pair { min-height: 0; }
 }
 
+/* ---- Plan Parameters v2: 1/3 scope column + 2/3 SDP-averages column -------- */
+.pl-2col { display: grid; grid-template-columns: 1fr 2fr; gap: var(--s-5); align-items: start; }
+.pl-scope { display: flex; flex-direction: column; gap: var(--s-4); min-width: 0; }
+.pl-scope .field { margin-bottom: 0; }
+/* Within the 2/3 section: compact tables on the left, ramp curve + hindrances right. */
+.pl-main { display: grid; grid-template-columns: 1.5fr 1fr; gap: var(--s-5); align-items: start; min-width: 0; }
+.pl-tables { display: flex; flex-direction: column; gap: var(--s-4); min-width: 0; }
+.pl-side { display: flex; flex-direction: column; gap: var(--s-4); min-width: 0; }
+.pl-side .field { margin-bottom: 0; }
+
+/* Read-only SDP on-site averages (Productivity / Machine / Manpower) — no card
+   wrapper, just the heading + table sitting directly on the panel. */
+.avg-card { padding: 0; background: none; border: 0; box-shadow: none; }
+.avg-card .notice { margin-top: var(--s-4); }   /* space the warning below the table */
+.avg-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); margin-bottom: var(--s-3); }
+.avg-title { font-family: var(--display); font-size: 12.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--navy); display: flex; align-items: center; gap: var(--s-2); }
+.avg-title::before { content: ""; width: 4px; height: 15px; border-radius: 2px; background: var(--grad-gold); flex: none; }
+.avg-table { width: 100%; border-collapse: separate; border-spacing: 0; }
+.avg-table th { font-size: 11px; font-weight: 700; color: #fff; text-transform: uppercase; letter-spacing: .03em; text-align: center; padding: 7px 8px; background: linear-gradient(180deg, #17307e, #0e2064); }
+.avg-table th:first-child { border-top-left-radius: var(--r-md); }
+.avg-table th:last-child { border-top-right-radius: var(--r-md); }
+.avg-table th .info { color: rgba(255,255,255,0.82); margin-left: 4px; }
+.avg-table td { text-align: center; padding: 11px 8px 10px; border: 1px solid var(--border); background: #fff; }
+.avg-table td + td { border-left: 0; }
+.avg-table tbody td:first-child { border-bottom-left-radius: var(--r-md); }
+.avg-table tbody td:last-child { border-bottom-right-radius: var(--r-md); }
+.avg-val { display: block; font-family: var(--display); font-size: 21px; font-weight: 800; color: var(--navy); font-variant-numeric: tabular-nums; line-height: 1; letter-spacing: -.01em; }
+.avg-unit { display: block; margin-top: 4px; font-size: 10px; color: var(--text-faint); }
+
+/* Planned (editable) table — no card wrapper either, just the table. */
+.avg-title--planned::before { background: linear-gradient(180deg, #17307e, #0e2064); }
+.avg-table--edit td { padding: 8px 6px; }
+/* Editable Plan-Parameter inputs: clear bordered, white, spinner-visible number fields. */
+.avg-input { width: 100%; max-width: 150px; margin: 0 auto; text-align: center; font-family: var(--display); font-size: 18px; font-weight: 800; color: var(--navy); font-variant-numeric: tabular-nums; padding: 8px 10px; background: #ffffff; border: 1.5px solid var(--border-strong); border-radius: 9px; box-shadow: inset 0 1px 2px rgba(4,15,82,0.05); }
+.avg-input::placeholder { color: var(--text-faint); font-weight: 700; opacity: 1; letter-spacing: .1em; }
+.avg-input:hover { border-color: var(--gold-300); }
+.avg-input:focus { outline: none; border-color: var(--gold); box-shadow: 0 0 0 4px rgba(221,184,113,0.28); }
+.avg-input[readonly] { background: #e9edf4; color: #55618a; border-color: var(--border); cursor: not-allowed; box-shadow: none; }
+.avg-input[readonly]:hover { border-color: var(--border); }
+
+/* Read-only SDP reference cells: grey fill + muted value so they read as uneditable */
+.avg-card:not(.avg-card--planned) .avg-table td { background: #e9edf4; }
+.avg-card:not(.avg-card--planned) .avg-val { color: #55618a; }
+
+/* Planned placeholder = the actual shown faintly (empty, editable field) */
+.avg-input::placeholder { color: var(--text-faint); font-weight: 700; opacity: 1; }
+
+/* Ramp curve spans the full 2/3 width */
+.pl-main .ramp-chart { width: 100%; }
+
+/* Priority & material-wise check card (shown after the plan summary) */
+.mcheck { margin: 0 0 var(--s-4); border: 1px solid var(--border); border-radius: var(--r-lg); overflow: hidden; box-shadow: var(--shadow-sm); }
+.mcheck__head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); padding: 12px var(--s-4); background: linear-gradient(180deg, #17307e, #0e2064); }
+.mcheck__title { font-family: var(--display); font-size: 12.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #fff; }
+.mcheck__body { padding: var(--s-4); }
+.cell-bad { color: var(--danger); font-weight: 700; }
+
+/* Hindrances + ramp curve below the averages table */
+.pl-adjust { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-5); align-items: start; }
+.pl-adjust .field { margin-bottom: 0; }
+@media (max-width: 980px) {
+  .pl-2col { grid-template-columns: 1fr; gap: var(--s-4); }
+  .pl-main { grid-template-columns: 1fr; }
+  .pl-adjust { grid-template-columns: 1fr; }
+}
+
 /* ---- Collapsible input panel (centered on top) ---- */
 .bs-panel {
   width: 100%; margin: 0;
@@ -1004,7 +1070,7 @@ table.data tr.row-completed td { color: var(--success); }
 }
 
 /* ---- Process Plan button, centered ---- */
-.bs-actions { display: flex; justify-content: center; margin-top: var(--s-5); padding-top: var(--s-4); border-top: 1px dashed var(--border); }
+.bs-actions { display: flex; justify-content: center; gap: var(--s-3); margin-top: var(--s-5); padding-top: var(--s-4); border-top: 1px dashed var(--border); }
 .bs-process { min-width: 240px; justify-content: center; font-size: 14px; padding: 12px 28px; }
 
 /* ---- Priority multiselect dropdown ---- */

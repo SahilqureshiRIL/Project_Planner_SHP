@@ -12,7 +12,7 @@
   const state = {
     parsed: { chainage: null, manpower: null, material: null, progress: null },
     store: null, defaults: null, result: null,
-    view: "gantt", ganttColor: "profile", mapZoom: 1, mapSelected: null, mapFilters: new Set()
+    view: "table", ganttColor: "profile", mapZoom: 1, mapSelected: null, mapFilters: new Set()
   };
   const selectedPriorities = new Set();   // planner priorities (multiselect pill dropdown)
   let prodWindow = 7;            // productivity basis the planner has selected: 7 | 30 (days)
@@ -51,11 +51,16 @@
     $("#tryBundledBtn").addEventListener("click", tryBundled);
     $("#exportPlanBtn").addEventListener("click", onExportXer);
     $("#generateBtn2").addEventListener("click", onGenerate);
+    { const rb = $("#resetPlanBtn"); if (rb) rb.addEventListener("click", resetPlanParams); }
     $("#addHindranceBtn").addEventListener("click", () => addHindranceRow());
     $("#pStart").addEventListener("change", enforceMonday);
     $("#pStart").addEventListener("change", refreshHindranceCalendars);
-    $("#pMachines").addEventListener("input", refreshCapNotice);
-    $("#pManpower").addEventListener("input", refreshCapNotice);
+    // Machines: integers only. Sanitize typed/pasted input, block e/E/+/-/. keys.
+    $("#pMachines").addEventListener("keydown", (e) => { if (["e", "E", "+", "-", "."].includes(e.key)) e.preventDefault(); });
+    $("#pMachines").addEventListener("input", (e) => { e.target.value = e.target.value.replace(/[^0-9]/g, ""); refreshPlannedManpower(); refreshCapNotice(); });
+    // Productivity: digits + a single decimal point only; block e/E/+/-.
+    $("#pProductivity").addEventListener("keydown", (e) => { if (["e", "E", "+", "-"].includes(e.key)) e.preventDefault(); });
+    $("#pProductivity").addEventListener("input", (e) => { e.target.value = e.target.value.replace(/[^0-9.]/g, "").replace(/(\..*)\./g, "$1"); });
     U.$$('input[name="period"]').forEach((r) => r.addEventListener("change", refreshHindranceCalendars));
 
     // Ramp-up curve live preview (Change 5)
@@ -136,7 +141,7 @@
   // selection, then repopulates the form from freshly recomputed defaults.
   function resetPlanner() {
     state.result = null;
-    state.view = "gantt";
+    state.view = "table";
     state.ganttColor = "profile";
     state.mapZoom = 1;
     state.mapSelected = null;
@@ -152,6 +157,7 @@
     $("#resultsCard").hidden = true;
     $("#resultsEmpty").hidden = false;
     $("#viewToggle").hidden = true;
+    { const mc = $("#materialCheckCard"); if (mc) mc.hidden = true; }
     $("#validationCard").hidden = true;
     $("#exportPlanBtn").hidden = true;
     $("#progressCard").hidden = true;
@@ -177,6 +183,20 @@
 
   // Zoom the map by a relative factor (delegates to the active GL or SVG renderer).
   function mapZoomBy(f) { if (mapGL) mapGL.zoomBy(f); else setMapZoom(state.mapZoom * f); }
+  // Reset ONLY the Plan Parameters form back to defaults (priorities, period, start,
+  // work days, workhours, the editable Plan Parameters + hindrances). Leaves any
+  // generated plan / results and the loaded data untouched.
+  function resetPlanParams() {
+    if (!state.store) return;
+    selectedPriorities.clear();
+    const list = $("#hindranceList"); if (list) U.clear(list);
+    const p2 = document.querySelector('input[name="period"][value="2"]'); if (p2) p2.checked = true;
+    setVal("#pWorkDays", "6"); syncWorkDays();
+    prodWindow = 7;
+    populateDefaults();   // repopulate priority dropdown (empty), start, workhours, Plan Parameters (empty), ramp, 7/30 toggle
+    U.toast("Plan Parameters reset.", "ok");
+  }
+
   // Reset the map zoom to fit the whole boundary.
   function mapZoomFit() { if (mapGL) mapGL.fit(); else setMapZoom(1); }
   // Apply an absolute zoom level to the SVG map fallback.
@@ -323,12 +343,20 @@
     // Never allow backdating: the earliest selectable date is always the next
     // Monday on/after today, regardless of what's already typed/computed.
     $("#pStart").min = U.fmtISO(d.planStartDefault);
-    markComputed("#pMachines", "#pMachinesHint", d.machines, "7-day onsite Avg");
-    markComputed("#pManpower", "#pManpowerHint", d.manpower, "7-day onsite Avg");
+    // Machines/Manpower/Productivity: read-only SDP averages table (applyAverages) as
+    // reference, plus an editable Planned table. The Planned inputs stay empty with the
+    // 7-day actuals shown as a FIXED placeholder (they don't move with the 7/30 toggle;
+    // a blank field falls back to that actual). Workhours stays a scope-column input.
     markComputed("#pWorkhours", "#pWorkhoursHint", d.workhours, "7-day onsite Avg");
+    // Plan Parameters are user inputs — start empty (no placeholder). A blank field
+    // still falls back to the on-site actual when the plan runs, so Process Plan works.
+    clearPlanned();
+    // Ramp always follows the 7-day (primary) basis the plan defaults to.
+    setVal("#pRampN", d.rampN != null ? d.rampN : 7);
+    setVal("#pRampProfile", (d.rampProfile || [1]).join(", "));
     prodWindow = 7;
     U.$$("#pProdWindowSeg .seg__btn").forEach((b) => b.classList.toggle("is-active", b.dataset.window === "7"));
-    applyProductivity();
+    applyAverages();
 
     // Machines from previous plan: always defaults to the current machines count
     // (i.e. treat the current crew as already-deployed, no ramp), so the SAME
@@ -348,32 +376,57 @@
   }
   // Set an input's value by selector (no-op if the element is missing).
   function setVal(sel, v) { const n = $(sel); if (n) n.value = v; }
+  // Show a value as a placeholder (empty actual value) — used by the Planned table.
+  function setPlaceholder(sel, v) { const n = $(sel); if (n) { n.value = ""; n.placeholder = String(v); } }
+
+  // Planned resource values used by the engine: the planner's typed value, else the
+  // 7-day on-site actual (also shown as the field's placeholder). The 7/30-day toggle
+  // only changes the read-only SDP reference table — never these planned defaults.
+  function actualDefault(key) { return state.defaults ? (state.defaults[key] || 0) : 0; }
+  function plannedMachines() { const v = parseInt($("#pMachines").value, 10); return isFinite(v) ? v : actualDefault("machines"); }
+  // Manpower is DERIVED: 6 people per planned machine (read-only field).
+  function plannedManpower() { return plannedMachines() * 6; }
+  function plannedProductivity() { const v = U.toNum($("#pProductivity").value); return (isFinite(v) && v > 0) ? v : actualDefault("productivity"); }
+  // Repaint the read-only Planned Manpower field = machines × 6, but blank while the
+  // Machine field is empty (no auto value until the planner enters machines).
+  function refreshPlannedManpower() {
+    const raw = ($("#pMachines").value || "").trim(), n = parseInt(raw, 10);
+    setVal("#pManpower", (raw !== "" && isFinite(n)) ? n * 6 : "");
+  }
+  // Clear the editable Plan Parameters back to empty (no placeholders).
+  function clearPlanned() {
+    ["#pMachines", "#pProductivity"].forEach((sel) => { const n = $(sel); if (n) { n.value = ""; n.placeholder = "--"; } });
+    refreshPlannedManpower();
+  }
 
   // Switch the Productivity field's basis (7-day / 30-day) and re-populate it.
   function setProdWindow(days) {
     if (days !== 7 && days !== 30) return;
     prodWindow = days;
     U.$$("#pProdWindowSeg .seg__btn").forEach((b) => b.classList.toggle("is-active", parseInt(b.dataset.window, 10) === days));
-    applyProductivity();
+    applyAverages();
     renderRampChart();
   }
-  // Fill #pProductivity + its hint/tooltip AND the ramp-up fields from state.defaults,
-  // both switched together to the selected window so the curve shown always matches
-  // the productivity basis currently displayed (never mixes a 7-day number with a
-  // 30-day-derived ramp or vice versa).
-  function applyProductivity() {
+  // Fill the read-only SDP averages table (Productivity / Machine / Manpower) AND the
+  // hidden inputs the engine reads, plus the ramp fields — all switched together to
+  // the selected 7/30-day window so the plan basis stays internally consistent.
+  // Fill ONLY the read-only SDP reference table (Productivity / Machine / Manpower)
+  // for the selected 7/30-day window. It is display-only — it never seeds the editable
+  // Planned inputs, whose placeholders stay fixed on the 7-day actuals.
+  function applyAverages() {
     const d = state.defaults; if (!d) return;
     const is30 = prodWindow === 30;
-    const value = is30 ? d.productivity30 : d.productivity;
+    const prod = is30 ? d.productivity30 : d.productivity;
+    const mach = is30 ? d.machines30 : d.machines;
+    const man  = is30 ? d.manpower30 : d.manpower;
+    const set = (sel, txt) => { const n = $(sel); if (n) n.textContent = txt; };
+    set("#avgProd", U.fmtNum(prod, 3));
+    set("#avgMachine", U.fmtInt(mach));
+    set("#avgManpower", U.fmtInt(man));
+    set("#avgTableHeading", prodWindow + " Day On-site Average as Per SDP");
     const derivation = is30 ? d.prodDerivation30 : d.prodDerivation;
-    const rampN = is30 ? d.rampN30 : d.rampN;
-    const rampProfile = is30 ? d.rampProfile30 : d.rampProfile;
     const rampExplanation = is30 ? d.rampExplanation30 : d.rampExplanation;
-    markComputed("#pProductivity", "#pProductivityHint", U.fmtNum(value, 3),
-      "Auto (adaptive, last " + prodWindow + "-day actual window)");
-    $("#prodInfoPop").textContent = derivation + " · " + (rampExplanation || "");
-    setVal("#pRampN", rampN != null ? rampN : 7);
-    setVal("#pRampProfile", (rampProfile || [1]).join(", "));
+    set("#prodInfoPop", derivation + " · " + (rampExplanation || ""));
   }
 
   /* ---- Priority pill dropdown (multi-select) -------------------------------- */
@@ -528,8 +581,8 @@
 
   // Show/hide the 'machines capped by manpower (6/machine)' notice as inputs change.
   function refreshCapNotice() {
-    const machines = parseInt($("#pMachines").value, 10);
-    const manpower = parseInt($("#pManpower").value, 10);
+    const machines = plannedMachines();
+    const manpower = plannedManpower();
     const notice = $("#capNotice");
     if (!isFinite(machines) || !isFinite(manpower)) { notice.hidden = true; return; }
     const cap = Math.floor(manpower / 6);
@@ -615,7 +668,7 @@
   function renderRampChart() {
     const host = $("#rampChart");
     if (!host) return;
-    const prod = U.toNum($("#pProductivity").value);
+    const prod = plannedProductivity();
     const ramp = $("#pRampProfile").value.split(",").map((s) => U.toNum(s)).filter((n) => isFinite(n) && n >= 0);
     const nDays = parseInt($("#pRampN").value, 10);
     if (!(prod > 0) || !ramp.length) { host.innerHTML = '<div class="field__hint">Enter productivity and a ramp profile to preview the curve.</div>'; return; }
@@ -694,13 +747,8 @@
     try { result = SPP.engine.generate(state.store, p); }
     catch (err) { U.toast("Plan failed: " + err.message, "bad"); console.error(err); return; }
 
-    // If there are warnings, let the planner review them and Proceed or Abort.
-    const warns = result.warnings.filter((w) => w.level !== "ok");
-    if (warns.length) {
-      const proceed = await confirmWarnings(warns);
-      if (!proceed) { U.toast("Generation aborted — adjust the parameters and try again.", ""); return; }
-    }
-
+    // (Warnings review modal removed — generate directly; any warnings still surface
+    // in the plan's validation panel.)
     state.result = result;
 
     const finish = () => {
@@ -731,12 +779,19 @@
     if (!U.isMonday(planStart)) { U.toast("Plan start must be a Monday.", "bad"); return null; }
     if (U.cmpDate(planStart, U.nextMondayFromToday()) < 0) { U.toast("Plan start can't be backdated.", "bad"); return null; }
 
+    // Productivity & Machines are required Plan Parameters (no silent default).
+    const machRaw = ($("#pMachines").value || "").trim();
+    if (machRaw === "" || !(parseInt(machRaw, 10) > 0)) { U.toast("Enter the number of machines in Plan Parameters.", "bad"); $("#pMachines").focus(); return null; }
+    const prodRaw = ($("#pProductivity").value || "").trim();
+    if (prodRaw === "" || !(U.toNum(prodRaw) > 0)) { U.toast("Enter productivity (piles / machine / hour) in Plan Parameters.", "bad"); $("#pProductivity").focus(); return null; }
+
     const periodWeeks = parseInt((document.querySelector('input[name="period"]:checked') || {}).value || "2", 10);
-    const machinesInput = parseInt($("#pMachines").value, 10);
-    const manpower = parseInt($("#pManpower").value, 10);
+    // Planned values: typed override, else the 7-day actual shown as placeholder.
+    const machinesInput = plannedMachines();
+    const manpower = plannedManpower();
     const workDaysPerWeek = parseInt($("#pWorkDays").value, 10);
     const workhours = parseInt($("#pWorkhours").value, 10);
-    const productivity = U.toNum($("#pProductivity").value);
+    const productivity = plannedProductivity();
     const rampN = parseInt($("#pRampN").value, 10) || 0;
     const prevMachines = Math.max(0, parseInt($("#pPrevMachines").value, 10) || 0);
     const rampProfile = $("#pRampProfile").value.split(",").map((s) => U.toNum(s)).filter((n) => isFinite(n) && n >= 0);
@@ -757,7 +812,7 @@
     $("#resultsCard").hidden = false;
     $("#resultsEmpty").hidden = true;
     $("#viewToggle").hidden = false;
-    $("#validationCard").hidden = false;
+    $("#validationCard").hidden = true;   // "Manpower resources and productivity" section removed from the view
     $("#exportPlanBtn").hidden = false;
 
     const periodLbl = r.params.periodWeeks + " weeks";
@@ -768,10 +823,12 @@
       "<span>" + r.workingDayCount + " working days</span>";
 
     renderSummary();
+    $("#materialCheckCard").hidden = false;
+    renderMaterialCheck();
     renderGantt();
     renderMaterial();
     renderTable();
-    renderValidation();
+    // renderValidation();  // section removed from the UI (kept in code for reference)
     $("#progressCard").hidden = false;
     renderProgressChart();
     setView(state.view);   // the Map is rendered lazily when its view is shown
@@ -833,6 +890,7 @@
     const covered = r.worked.length;
     const totalCh = r.candidates.length;
     const people = r.deployed * 6;                                   // 6 people per deployed machine
+    const idle = Math.max(0, r.params.machinesInput - r.deployed);   // chosen machines the plan doesn't need
     const avgPerDay = r.workingDayCount > 0 ? r.totalInstalled / r.workingDayCount : 0;
     const inboundWindow = r.windowArrivals.reduce((s, a) => s + a.qty, 0);
 
@@ -842,25 +900,26 @@
     host.appendChild(el("p", { class: "plan-summary__lead", html:
       "This <strong>" + r.params.periodWeeks + "-week</strong> plan for <strong>" + U.esc(r.params.priorities.join(", ")) +
       "</strong> installs <strong>" + U.fmtInt(Math.round(r.totalInstalled)) + "</strong> piles" + priorTxt +
-      ", bringing it to <strong>" + U.fmtNum(r.pctComplete, 1) + "%</strong> of the <strong>" + U.fmtInt(r.totalMTO) +
-      "</strong>-pile scope — across <strong>" + U.fmtInt(covered) + "</strong> of " + U.fmtInt(totalCh) +
+      " across <strong>" + U.fmtInt(covered) + "</strong> of " + U.fmtInt(totalCh) +
       " chainages, using <strong>" + r.deployed + "</strong> machine" + (r.deployed === 1 ? "" : "s") +
       " &amp; <strong>" + U.fmtInt(people) + "</strong> people over <strong>" + r.workingDayCount + "</strong> working days." }));
 
-    // Four core KPIs (the rest is in the headline / forecast, keeping this uncluttered).
+    // Core KPIs (the rest is in the headline / forecast, keeping this uncluttered).
     host.appendChild(statGrid([
       { label: "Piles Planned", value: U.fmtInt(Math.round(r.totalInstalled)), sub: U.fmtInt(Math.round(avgPerDay)) + "/day avg", tone: "indigo" },
-      { label: "% Work Planned", value: U.fmtNum(r.pctComplete, 1) + "%", sub: U.fmtInt(r.totalComplete) + " of " + U.fmtInt(r.totalMTO) + " piles", tone: "violet" },
-      { label: "Length covered", value: U.fmtNum(r.lengthCoveredKm || 0, 2) + " km", sub: "of " + U.fmtNum(r.totalScopeLengthKm || 0, 1) + " km scope (+" + U.fmtNum(r.lengthThisWindowKm || 0, 2) + " km this window)", tone: "teal" },
-      { label: "Chainages covered", value: U.fmtInt(covered) + " / " + U.fmtInt(totalCh), sub: r.blocked.length ? r.blocked.length + " blocked (no material)" : "all reachable", tone: r.blocked.length ? "amber" : "emerald" },
-      { label: "Carry-over", value: U.fmtInt(r.carryOver), sub: r.carryOver > 0 ? "piles beyond window" : "scope fits window", tone: r.carryOver > 0 ? "rose" : "sky" }
+      { label: "Work Planned", value: U.fmtInt(r.totalComplete) + " of " + U.fmtInt(r.totalMTO), sub: "piles of scope", tone: "violet" },
+      { label: "Productivity", value: U.fmtNum(r.params.productivity, 3), sub: "piles / mc / hr", tone: "sky" },
+      { label: "Machines deployed", value: r.deployed, sub: U.fmtInt(people) + " people · " + r.params.workhours + " h/day", tone: "amber" },
+      { label: "Idle machines", value: idle, sub: idle > 0 ? "chosen but not needed this window" : "none idle", tone: idle > 0 ? "rose" : "emerald" },
+      { label: "Length covered", value: U.fmtNum(r.lengthThisWindowKm || 0, 2) + " km", sub: U.fmtNum(r.lengthCoveredKm || 0, 2) + " km cumulative · of " + U.fmtNum(r.totalScopeLengthKm || 0, 1) + " km scope", tone: "teal" },
+      { label: "Chainages covered", value: U.fmtInt(covered) + " / " + U.fmtInt(totalCh), sub: r.blocked.length ? r.blocked.length + " blocked (no material)" : "all reachable", tone: r.blocked.length ? "warn" : "emerald" }
     ]));
 
     // Forecast completion for the whole priority — two dates as distinct callouts.
     const fc = el("div", { class: "forecast" });
     fc.appendChild(el("div", { class: "forecast__title", text: "Forecast completion · Entire Selected priority" }));
     const grid = el("div", { class: "forecast__grid" });
-    [{ s: planFinishStat(r), cls: "" }, { s: fullFinishStat(r), cls: "forecast__card--all" }].forEach(({ s, cls }) => {
+    [{ s: fullFinishStat(r), cls: "forecast__card--all" }].forEach(({ s, cls }) => {
       const c = el("div", { class: "forecast__card " + cls });
       c.appendChild(el("div", { class: "forecast__lbl", text: s.label }));
       c.appendChild(el("div", { class: "forecast__val", text: s.value }));
@@ -869,6 +928,42 @@
     });
     fc.appendChild(grid);
     host.appendChild(fc);
+  }
+
+  /* Priority & material-wise check — remaining demand vs on-site + in-transit, with
+     the day each short material runs dry. Data comes from engine result.materialCheck. */
+  function renderMaterialCheck() {
+    const r = state.result, host = $("#materialCheckScroll"); if (!host) return;
+    U.clear(host);
+    const rows = r.materialCheck || [];
+    const anyGap = rows.some((x) => x.gap > 0);
+    const badge = $("#materialCheckBadge");
+    if (badge) { badge.textContent = anyGap ? "Shortage" : "Covered"; badge.className = "badge " + (anyGap ? "badge--warn" : "badge--ok"); }
+    const hint = $("#materialCheckHint");
+    if (hint) hint.textContent = r.materialHaltDate
+      ? "At this pace, work stalls for material around " + U.fmtDate(r.materialHaltDate) + "."
+      : "Every material this plan works this period is covered by on-site stock + in-transit.";
+    if (!rows.length) { host.appendChild(el("div", { class: "emptystate", html: "<p>No materials in scope for this plan.</p>" })); return; }
+
+    const cols = ["Priority", "Material", "Required", "In stock", "In transit", "Gap / shortage", "Work halts on"];
+    const NUM = { "Required": 1, "In stock": 1, "In transit": 1, "Gap / shortage": 1 };
+    const table = el("table", { class: "data" });
+    const thead = el("thead"), htr = el("tr");
+    cols.forEach((c) => htr.appendChild(el("th", { class: NUM[c] ? "num" : "", text: c })));
+    thead.appendChild(htr); table.appendChild(thead);
+    const tb = el("tbody");
+    rows.forEach((x) => {
+      const tr = el("tr");
+      tr.appendChild(el("td", { text: x.priority || "—" }));
+      tr.appendChild(el("td", { text: x.profile || x.code }));
+      tr.appendChild(el("td", { class: "num", text: U.fmtInt(x.required) }));
+      tr.appendChild(el("td", { class: "num", text: U.fmtInt(x.inStock) }));
+      tr.appendChild(el("td", { class: "num", text: U.fmtInt(x.inTransit) }));
+      tr.appendChild(el("td", { class: "num" + (x.gap > 0 ? " cell-bad" : ""), text: x.gap > 0 ? U.fmtInt(x.gap) : "—" }));
+      tr.appendChild(el("td", { text: x.haltDate ? U.fmtDate(x.haltDate) : "—" }));
+      tb.appendChild(tr);
+    });
+    table.appendChild(tb); host.appendChild(table);
   }
 
   /* Recent progress — a compact bar chart of sheet piles installed on each of the
@@ -1753,13 +1848,9 @@
     // so we show the raw steady rate with its ceil alongside, and the effective
     // capacity uses that whole-pile rate (ceil × machines) — matching what the plan
     // actually installs per day.
-    const prod = section("Productivity & ramp-up");
-    const ceilDaily = Math.ceil(r.steadyDaily);
-    prod.appendChild(statGrid([
-      { label: "Productivity", value: U.fmtNum(r.params.productivity, 3), sub: "piles / machine / hour", kind: "" },
-      { label: "Steady-state Piles / machine / day", value: U.fmtNum(r.steadyDaily, 2) + " ≈ " + ceilDaily, sub: U.fmtNum(r.params.productivity, 3) + " × " + r.params.workhours + " h → ceil", kind: "" },
-      { label: "Effective daily capacity", value: U.fmtInt(ceilDaily * r.deployed), sub: ceilDaily + " × " + r.deployed + " machine(s)", kind: "" }
-    ]));
+    // "Productivity & ramp-up" tiles moved up into the plan summary (Productivity +
+    // Machines deployed KPI tiles). The ramp note is kept here for reference.
+    const prod = section("Ramp-up");
     prod.appendChild(el("div", { class: "kv", html: "Steady-state achieved in <strong>" + r.params.rampN + "</strong> day(s); machines 1–" + r.params.prevMachines + " start at steady-state; machines beyond ramp up." }));
     body.appendChild(prod);
 

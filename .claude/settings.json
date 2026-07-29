@@ -4,7 +4,9 @@
       "Read(//c/Users/Sahil2.Qureshi/Documents/Project_Planner_SHP/data/**)",
       "Bash(python)",
       "Bash(cat)",
-      "Bash(node \"C:/Users/SAHIL2~1.QUR/AppData/Local/Temp/claude/c--Users-Sahil2-Qureshi-Documents-Project-Planner-SHP/7446d26f-b435-44a8-9ab8-85717e9dc375/scratchpad/coerce.js\")"
+      "Bash(node \"C:/Users/SAHIL2~1.QUR/AppData/Local/Temp/claude/c--Users-Sahil2-Qureshi-Documents-Project-Planner-SHP/7446d26f-b435-44a8-9ab8-85717e9dc375/scratchpad/coerce.js\")",
+      "Bash(\"/c/Program Files/Google/Chrome/Application/chrome.exe\" --headless=new --disable-gpu --window-size=1400,900 --virtual-time-budget=22000 --dump-dom \"http://localhost:8791/__probe.html\")",
+      "Bash(\"/c/Program Files/Google/Chrome/Application/chrome.exe\" --headless=new --disable-gpu --window-size=1500,900 --virtual-time-budget=24000 --dump-dom \"http://localhost:8791/__probe.html\")"
     ]
   }
 }
