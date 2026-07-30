@@ -973,7 +973,8 @@ table.data tr.row-completed td { color: var(--success); }
 }
 .pl-card__head {
   display: flex; align-items: center; justify-content: space-between; gap: var(--s-3);
-  padding: 14px var(--s-4) 10px;
+  padding: 13px var(--s-4);   /* uniform head padding across all cards */
+  min-height: 46px;           /* consistent header height so badges line up */
 }
 .pl-card__title {
   font-family: var(--display); font-size: 12.5px; font-weight: 700;
@@ -981,13 +982,13 @@ table.data tr.row-completed td { color: var(--success); }
   display: inline-flex; align-items: center; gap: var(--s-2);
 }
 .pl-card__title::before { content: ""; width: 4px; height: 15px; border-radius: 2px; background: var(--grad-gold); flex: none; }
-.pl-card__body { padding: 0 var(--s-4) var(--s-4); display: flex; flex-direction: column; gap: var(--s-4); }
+.pl-card__body { padding: 8px var(--s-4) var(--s-4); display: flex; flex-direction: column; gap: var(--s-4); }
 /* Spacing inside the panel is owned by the card/body gap, not the global field margin. */
 .pl-card .field { margin-bottom: 0; }
 
 /* SDP on-site averages — white card body, navy header band, navy stat tiles */
 .pl-card--avg { background: var(--surface); border-color: var(--border); }
-.pl-card__head--dark { padding: 12px var(--s-4); background: var(--grad-navy); }
+.pl-card__head--dark { padding: 13px var(--s-4); background: var(--grad-navy); }
 /* Smaller heading + keep the 7/30-day toggle inline on one row (no wrapping). */
 .pl-card__head--dark { flex-wrap: nowrap; }
 .pl-card__title--light { color: #fff; font-size: 10.5px; letter-spacing: .02em; white-space: nowrap; }
@@ -995,7 +996,7 @@ table.data tr.row-completed td { color: var(--success); }
 .pl-card--avg .info { color: rgba(255,255,255,0.82); }
 
 /* Three stat tiles */
-.pl-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s-3); padding: var(--s-4); }
+.pl-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s-3); padding: 8px var(--s-4) var(--s-4); }
 .pl-tile {
   display: flex; flex-direction: column; gap: 7px; min-width: 0;
   padding: 13px 14px 12px; border-radius: var(--r-md);

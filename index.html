@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Sheet Pile Installation Planner</title>
-  <link rel="stylesheet" href="styles.css?v=141" />
+  <link rel="stylesheet" href="styles.css?v=145" />
   <!--
     SheetJS (xlsx) is vendored locally in ./vendor so the app works fully offline.
     If you prefer the CDN, replace the src below with:
@@ -198,9 +198,7 @@
                     </div>
                     <div class="pl-tiles">
                       <div class="pl-tile">
-                        <span class="pl-tile__label">Productivity
-                          <span class="info" id="prodInfo" tabindex="0">&#9432;<span class="info__pop" id="prodInfoPop"></span></span>
-                        </span>
+                        <span class="pl-tile__label">Productivity</span>
                         <span class="pl-tile__value" id="avgProd">&mdash;</span>
                         <span class="pl-tile__unit">piles / mc / hr</span>
                       </div>
@@ -320,11 +318,8 @@
             </div>
           </section>
 
-          <!-- View switcher — Gantt hidden for now; Table (grouped by Machine) is default. -->
+          <!-- View switcher — Table (grouped by Machine) is default. -->
           <div class="view-toggle view-toggle--inpanel" id="viewToggle" hidden>
-            <button type="button" class="view-toggle__btn" data-view="gantt" hidden>
-              <svg class="vt-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="14" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="10" y2="18"/></svg><span>Gantt</span>
-            </button>
             <button type="button" class="view-toggle__btn" data-view="material">
               <svg class="vt-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 3 7v10l9 5 9-5V7z"/><path d="M3 7l9 5 9-5"/><path d="M12 12v10"/></svg><span>Material</span>
             </button>
@@ -341,18 +336,6 @@
             <p>Load data, choose a priority, then <strong>Generate Plan</strong>.</p>
           </div>
 
-          <!-- Gantt -->
-          <div class="view view--gantt" id="ganttView" hidden>
-            <div class="gantt-controls">
-              <div class="seg" id="ganttColorMode">
-                <span class="seg__label">Color by:</span>
-                <button type="button" class="seg__btn is-active" data-mode="profile">Material</button>
-                <button type="button" class="seg__btn" data-mode="machine">Machine</button>
-              </div>
-              <div class="gantt-legend" id="ganttLegend"></div>
-            </div>
-            <div class="gantt-scroll" id="ganttScroll"></div>
-          </div>
 
           <!-- Material (day-by-day availability per profile) -->
           <div class="view view--material" id="materialView" hidden>
@@ -669,7 +652,7 @@
   <script src="js/data.js?v=123"></script>
   <script src="js/engine.js?v=131"></script>
   <script src="js/xer.js?v=105"></script>
-  <script src="js/ui.js?v=144"></script>
+  <script src="js/ui.js?v=146"></script>
   <!-- Bluesky target-date back-planner (loads after ui.js so it can read the shared store). -->
   <script src="js/bluesky.js?v=105"></script>
   <script src="js/bluesky_ui.js?v=108"></script>

@@ -108,22 +108,6 @@
       });
     }
 
-    // Productivity info tooltip: the SDP card clips overflow, so render the popover
-    // with FIXED positioning (relative to the viewport) anchored to the icon, and
-    // clamp it on-screen — otherwise it gets cut off inside the card.
-    { const info = $("#prodInfo"), pop = $("#prodInfoPop");
-      if (info && pop) {
-        const place = () => {
-          const r = info.getBoundingClientRect(), w = 200;
-          pop.style.position = "fixed";
-          pop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8)) + "px";
-          pop.style.top = (r.bottom + 6) + "px";
-        };
-        info.addEventListener("mouseenter", place);
-        info.addEventListener("focusin", place);
-      }
-    }
-
     // Blocked-chainages popup: close via the button or by clicking the backdrop.
     { const bx = $("#blockedCloseX"); if (bx) bx.addEventListener("click", closeBlockedModal); }
     { const bm = $("#blockedModal"); if (bm) bm.addEventListener("click", (e) => { if (e.target === bm) closeBlockedModal(); }); }
@@ -138,8 +122,6 @@
     { const pl = $("#progressPrev"), pn = $("#progressNext");
       if (pl) pl.addEventListener("click", () => { progressOffset += 1; progressAnim = "older"; redrawProgressKeepScroll(); });   // older → slide in from left
       if (pn) pn.addEventListener("click", () => { progressOffset -= 1; progressAnim = "newer"; redrawProgressKeepScroll(); }); }  // newer → slide in from right
-    U.$$("#ganttColorMode .seg__btn").forEach((b) =>
-      b.addEventListener("click", () => { state.ganttColor = b.dataset.mode; U.$$("#ganttColorMode .seg__btn").forEach((x) => x.classList.toggle("is-active", x === b)); if (state.result) renderGantt(); }));
     $("#tableGroup").addEventListener("change", () => { if (state.result) renderTable(); });
 
     // Map zoom controls (Change 8) — delegate to the active renderer (three.js or SVG).
@@ -212,7 +194,7 @@
     if (!state.store) return;
     // Drop any generated plan and its view state, then hide the results surfaces.
     state.result = null;
-    state.view = "gantt";
+    state.view = "table";
     state.ganttColor = "profile";
     state.mapZoom = 1;
     state.mapSelected = null;
@@ -961,7 +943,6 @@
     renderSummary();
     $("#materialCheckCard").hidden = false;
     renderMaterialCheck();
-    renderGantt();
     renderMaterial();
     renderTable();
     // renderValidation();  // section removed from the UI (kept in code for reference)
@@ -982,11 +963,10 @@
       const ico = '<svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="9" y1="4" x2="9" y2="20"/></svg>';
       btn.innerHTML = ico + "<span>" + (collapsed ? "Show inputs" : "Hide inputs") + "</span>";
     }
-    // The Gantt & Map size to the content width, so re-render them once the grid
-    // has reflowed to the new width (prevents the chart being cut off).
+    // The Map sizes to the content width, so re-render it once the grid has reflowed
+    // to the new width (prevents it being cut off).
     if (state.result) requestAnimationFrame(() => {
-      if (state.view === "gantt") renderGantt();
-      else if (state.view === "map") renderMap();
+      if (state.view === "map") renderMap();
     });
   }
 
@@ -1236,16 +1216,16 @@
     host.onmouseleave = hideTip;
   }
 
-  // Switch the results view (Gantt/Material/Table/Map) and lazy-render Gantt/Map.
+  // Switch the results view (Material/Table/Map) and lazy-render the Map.
   function setView(v) {
+    if (v === "gantt") v = "table";   // Gantt removed — never select it
     state.view = v;
-    $("#ganttView").hidden = v !== "gantt";
     $("#materialView").hidden = v !== "material";
     $("#tableView").hidden = v !== "table";
     $("#mapView").hidden = v !== "map";
     U.$$("#viewToggle .view-toggle__btn").forEach((b) => b.classList.toggle("is-active", b.dataset.view === v));
-    // Render Gantt & Map only once visible, so they size to real container dimensions.
-    if (state.result && (v === "gantt" || v === "map")) requestAnimationFrame(() => { if (v === "gantt") renderGantt(); else renderMap(); });
+    // Render the Map only once visible, so it sizes to real container dimensions.
+    if (state.result && v === "map") requestAnimationFrame(() => renderMap());
   }
 
   /* ============================ TABLE VIEW (§6.1) ============================ */
@@ -1368,8 +1348,13 @@
     const r = state.result;
     const host = $("#materialScroll"); U.clear(host);
     const mp = r.materialPivot;
-    if (!mp || !mp.rows.length) {
-      host.appendChild(el("div", { class: "emptystate", html: "<p>No materials in scope for this priority.</p>" }));
+    // Show only materials the plan actually needs within the selected window — the same
+    // set as the material-wise check (materials with demand this period). Materials whose
+    // work falls entirely outside the plan timeline are hidden. Values are unchanged.
+    const allowed = new Set((r.materialCheck || []).map((x) => x.code));
+    const rows = (mp && mp.rows) ? (allowed.size ? mp.rows.filter((row) => allowed.has(row.code)) : mp.rows) : [];
+    if (!mp || !rows.length) {
+      host.appendChild(el("div", { class: "emptystate", html: "<p>No materials required within this plan window.</p>" }));
       $("#materialSummary").textContent = "";
       return;
     }
@@ -1400,9 +1385,9 @@
     thead.appendChild(hSub);
     table.appendChild(thead);
 
-    // Body: one row per material.
+    // Body: one row per material required this window.
     const tb = el("tbody");
-    mp.rows.forEach((row) => {
+    rows.forEach((row) => {
       const tr = el("tr");
       tr.appendChild(el("td", { class: "mp-profile", title: "Item code " + row.code }, [
         el("div", { text: row.profile }),
@@ -1419,9 +1404,9 @@
     table.appendChild(tb);
     host.appendChild(table);
 
-    const totalInbound = mp.rows.reduce((s, row) => s + row.cells.reduce((a, c) => a + c.inbound, 0), 0);
+    const totalInbound = rows.reduce((s, row) => s + row.cells.reduce((a, c) => a + c.inbound, 0), 0);
     $("#materialSummary").textContent =
-      mp.rows.length + " material(s) · " + days.length + " days · " +
+      rows.length + " material(s) · " + days.length + " days · " +
       (totalInbound > 0 ? U.fmtInt(Math.round(totalInbound)) + " piles inbound within window" : "no inbound within window");
   }
 
