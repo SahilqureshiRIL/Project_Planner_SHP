@@ -58,9 +58,14 @@
     // Machines: integers only. Sanitize typed/pasted input, block e/E/+/-/. keys.
     $("#pMachines").addEventListener("keydown", (e) => { if (["e", "E", "+", "-", "."].includes(e.key)) e.preventDefault(); });
     $("#pMachines").addEventListener("input", (e) => { e.target.value = e.target.value.replace(/[^0-9]/g, ""); refreshPlannedManpower(); refreshCapNotice(); });
-    // Productivity: digits + a single decimal point only; block e/E/+/-.
+    // Productivity: block only exponent/sign keys so the native number field handles
+    // decimals correctly (rewriting .value on every input broke "5.0" → ".5"). Clamp
+    // to a max of 3 decimal places on commit.
     $("#pProductivity").addEventListener("keydown", (e) => { if (["e", "E", "+", "-"].includes(e.key)) e.preventDefault(); });
-    $("#pProductivity").addEventListener("input", (e) => { e.target.value = e.target.value.replace(/[^0-9.]/g, "").replace(/(\..*)\./g, "$1"); });
+    $("#pProductivity").addEventListener("change", (e) => {
+      const v = U.toNum(e.target.value);
+      if (isFinite(v) && v > 0) e.target.value = String(Math.round(v * 1000) / 1000);
+    });
     U.$$('input[name="period"]').forEach((r) => r.addEventListener("change", refreshHindranceCalendars));
 
     // Ramp-up curve live preview (Change 5)
@@ -101,6 +106,22 @@
         const btn = e.target.closest(".seg__btn"); if (!btn) return;
         setProdWindow(parseInt(btn.dataset.window, 10));
       });
+    }
+
+    // Productivity info tooltip: the SDP card clips overflow, so render the popover
+    // with FIXED positioning (relative to the viewport) anchored to the icon, and
+    // clamp it on-screen — otherwise it gets cut off inside the card.
+    { const info = $("#prodInfo"), pop = $("#prodInfoPop");
+      if (info && pop) {
+        const place = () => {
+          const r = info.getBoundingClientRect(), w = 200;
+          pop.style.position = "fixed";
+          pop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8)) + "px";
+          pop.style.top = (r.bottom + 6) + "px";
+        };
+        info.addEventListener("mouseenter", place);
+        info.addEventListener("focusin", place);
+      }
     }
 
     // Blocked-chainages popup: close via the button or by clicking the backdrop.
@@ -360,7 +381,7 @@
     // Auto-computed fields show greyed (as defaults); once edited they turn solid and
     // the hint reveals the original auto value.
     markComputed("#pStart", "#pStartHint", U.fmtISO(d.planStartDefault),
-      "Auto: " + U.fmtFriendly(d.planStartDefault) + " (next Monday from today)");
+      " (Planning Starts Following Monday)");
     // Never allow backdating: the earliest selectable date is always the next
     // Monday on/after today, regardless of what's already typed/computed.
     $("#pStart").min = U.fmtISO(d.planStartDefault);
@@ -368,7 +389,7 @@
     // reference, plus an editable Planned table. The Planned inputs stay empty with the
     // 7-day actuals shown as a FIXED placeholder (they don't move with the 7/30 toggle;
     // a blank field falls back to that actual). Workhours stays a scope-column input.
-    markComputed("#pWorkhours", "#pWorkhoursHint", d.workhours, "7-day onsite Avg");
+    markComputed("#pWorkhours", "#pWorkhoursHint", d.workhours, "7-day onsite Avg", "7 Day On-site Average = ");
     // Plan Parameters are user inputs — start empty (no placeholder). A blank field
     // still falls back to the on-site actual when the plan runs, so Process Plan works.
     clearPlanned();
@@ -448,6 +469,12 @@
     const derivation = is30 ? d.prodDerivation30 : d.prodDerivation;
     const rampExplanation = is30 ? d.rampExplanation30 : d.rampExplanation;
     set("#prodInfoPop", derivation + " · " + (rampExplanation || ""));
+    // The ramp profile is derived per window, so switch it with the 7/30-day basis —
+    // the live ramp-up curve (and the engine) then follow the selected tab.
+    const rampN = is30 ? d.rampN30 : d.rampN;
+    const rampProfile = is30 ? d.rampProfile30 : d.rampProfile;
+    setVal("#pRampN", rampN != null ? rampN : 7);
+    setVal("#pRampProfile", (rampProfile || [1]).join(", "));
   }
 
   /* ---- Priority pill dropdown (multi-select) -------------------------------- */
@@ -487,7 +514,7 @@
     U.clear(pills);
     const ordered = ch ? orderedSelectedPriorities(ch) : Array.from(selectedPriorities);
     if (!ordered.length) {
-      pills.appendChild(el("span", { class: "ms__placeholder", text: "Select priorities…" }));
+      pills.appendChild(el("span", { class: "ms__placeholder", text: "Select One or More Priorities" }));
     } else {
       ordered.forEach((p) => {
         const pill = el("span", { class: "ms__pill" });
@@ -558,11 +585,13 @@
 
   // Show an auto-computed field greyed; when the planner edits it, turn it solid and
   // surface the original computed value in the hint below.
-  function markComputed(inputSel, hintSel, autoVal, baseHint) {
+  function markComputed(inputSel, hintSel, autoVal, baseHint, editedLabel) {
     const input = $(inputSel), hint = $(hintSel);
     if (!input) return;
     input.value = autoVal;
     input.dataset.computed = String(autoVal);
+    // Prefix shown once the field is edited, followed by the original auto value.
+    input.dataset.editedLabel = editedLabel || "Edited · auto was ";
     input.classList.add("is-computed"); input.classList.remove("is-edited");
     if (hint) { hint.dataset.base = baseHint; hint.textContent = baseHint; }
     if (!input.dataset.compBound) {
@@ -572,7 +601,7 @@
         input.classList.toggle("is-computed", !edited);
         input.classList.toggle("is-edited", edited);
         if (hint) {
-          if (edited) hint.innerHTML = "<span class='hint-auto'>Edited · auto was " + U.esc(input.dataset.computed) + "</span>";
+          if (edited) hint.innerHTML = "<span class='hint-auto'>" + U.esc(input.dataset.editedLabel) + U.esc(input.dataset.computed) + "</span>";
           else hint.textContent = hint.dataset.base || "";
         }
       };
@@ -613,6 +642,26 @@
     } else { notice.hidden = true; }
   }
 
+  // Hindrance types: "Political"/"Weather" are single-use across rows; "Other" repeats.
+  const HIND_TYPES = ["Political", "Weather", "Other"];
+  // Rebuild every hindrance row's type dropdown so a non-repeatable type picked in one
+  // row is not offered in the others (each row keeps its own current value).
+  function refreshHindranceTypeOptions() {
+    const rows = U.$$("#hindranceList .hindrance");
+    rows.forEach((row) => {
+      const sel = row.querySelector(".hindrance__type"); if (!sel) return;
+      const current = sel.value;
+      const usedElsewhere = new Set();
+      rows.forEach((r2) => { if (r2 !== row) { const v = r2.querySelector(".hindrance__type").value; if (v && v !== "Other") usedElsewhere.add(v); } });
+      U.clear(sel);
+      HIND_TYPES.forEach((tp) => {
+        if (tp !== "Other" && usedElsewhere.has(tp) && tp !== current) return;   // taken by another row
+        sel.appendChild(el("option", { value: tp, text: tp, selected: tp === current ? "" : null }));
+      });
+      sel.value = current;
+    });
+  }
+
   // Append an editable hindrance row (type/amount/unit + a Mon-aligned day calendar).
   function addHindranceRow(data) {
     data = data || {};
@@ -620,26 +669,85 @@
     const row = el("div", { class: "hindrance" });
 
     const top = el("div", { class: "hindrance__top" });
+    // Default a new row to the first still-available (non-repeated) type.
+    const usedByOthers = new Set(U.$$("#hindranceList .hindrance .hindrance__type").map((s) => s.value).filter((v) => v && v !== "Other"));
+    const defType = data.type || HIND_TYPES.find((t) => !usedByOthers.has(t)) || "Other";
     const type = el("select", { class: "input input--sm hindrance__type" });
-    ["Political", "Weather", "Other"].forEach((t) => type.appendChild(el("option", { value: t, text: t, selected: data.type === t ? "" : null })));
-    const amt = el("input", { class: "input input--sm hindrance__amt", type: "number", min: "0", step: "0.5", value: data.amount != null ? data.amount : "1", title: "days unit: # of earliest days (used only if no day is selected) · hours unit: hours lost per selected day" });
+    HIND_TYPES.forEach((t) => type.appendChild(el("option", { value: t, text: t, selected: t === defType ? "" : null })));
+    type.value = defType;
+    type.addEventListener("change", refreshHindranceTypeOptions);
+    const amt = el("input", { class: "input input--sm hindrance__amt", type: "number", min: "0", step: "1", value: data.amount != null ? data.amount : "", placeholder: "0", title: "days unit: number of days lost (auto-selects the earliest working days) · hours unit: hours lost per selected day" });
     const unit = el("select", { class: "input input--sm hindrance__unit" });
     ["days", "hours"].forEach((u) => unit.appendChild(el("option", { value: u, text: u, selected: data.unit === u ? "" : null })));
-    const del = el("button", { class: "hindrance__del", title: "Remove", html: "&times;", onclick: () => row.remove() });
+    const del = el("button", { class: "hindrance__del", title: "Remove", html: "&times;", onclick: () => { row.remove(); refreshHindranceTypeOptions(); } });
     [type, amt, unit, del].forEach((n) => top.appendChild(n));
     row.appendChild(top);
 
     const daysWrap = el("div", { class: "hindrance__days" });
-    daysWrap.appendChild(el("div", { class: "hindrance__days-label", text: "Affected day(s) — click to toggle (non-contiguous OK):" }));
+    daysWrap.appendChild(el("div", { class: "hindrance__days-label", text: "Affected day(s):" }));
     const cal = el("div", { class: "hcal" });
     daysWrap.appendChild(cal);
     row.appendChild(daysWrap);
 
-    row.appendChild(el("div", { class: "hindrance__hint", html: "<strong>days</strong>: each selected day is fully lost · <strong>hours</strong>: the amount is trimmed from each selected day. With no day selected, impact falls on the earliest day(s)." }));
+    row.appendChild(el("div", { class: "hindrance__hint", html: "<strong>days</strong>: enter the number of affected days, then click exactly that many dates (a warning shows if you try to exceed it — deselect a day to free a slot). <strong>hours</strong>: enter the hours lost per day, then click any number of dates." }));
 
-    cal.addEventListener("click", (e) => { const c = e.target.closest(".hcal__day"); if (c) c.classList.toggle("is-sel"); });
+    // The affected days/hours value gates the calendar. Nothing is selectable while it
+    // is 0. For the DAYS unit the selection is hard-capped at that number (over-select
+    // warns and is blocked); for HOURS any number of dates can be picked. No auto-select.
+    function dayCap() {
+      const n = parseInt(amt.value, 10);
+      return (isFinite(n) && n > 0) ? n : 0;
+    }
+    function trimSelection() {
+      const cells = U.$$(".hcal__day", cal);
+      if (!(U.toNum(amt.value) > 0)) { cells.forEach((c) => c.classList.remove("is-sel")); return; }   // value 0 → nothing selectable
+      if (unit.value !== "days") return;                                                               // hours: any number of dates
+      const cap = dayCap();
+      let sel = U.$$(".hcal__day.is-sel", cal);
+      while (sel.length > cap) { sel[sel.length - 1].classList.remove("is-sel"); sel = U.$$(".hcal__day.is-sel", cal); }   // trim extras if the number is lowered
+    }
+    cal.addEventListener("click", (e) => {
+      const c = e.target.closest(".hcal__day"); if (!c) return;
+      if (c.classList.contains("is-sel")) { c.classList.remove("is-sel"); return; }                    // deselect is always allowed
+      if (c.classList.contains("is-weekoff")) { U.toast("That day is a non-working day (outside the plan) — it can't be selected.", "bad"); return; }   // off-days aren't in the plan
+      if (!(U.toNum(amt.value) > 0)) { U.toast("Enter the affected " + unit.value + " first.", ""); return; }   // 0 → can't select any date
+      if (unit.value !== "days") { c.classList.add("is-sel"); return; }                                // hours: free multi-select (working days only)
+      const cap = dayCap();
+      if (U.$$(".hcal__day.is-sel", cal).length >= cap) {                                              // days: hard cap + warning
+        U.toast("Cannot select more than " + cap + " day" + (cap === 1 ? "" : "s") + ".", "bad"); return;
+      }
+      c.classList.add("is-sel");
+    });
+    // Cap the affected value to what the plan window can lose:
+    //   days  → working days in the window (plan period × work-days/week)
+    //   hours → those working days × 24  (e.g. 2 weeks × 6 days × 24 = 288 h)
+    function windowWorkingDays() { return U.$$(".hcal__day:not(.is-weekoff)", cal).length; }
+    function clampAmt() {
+      const maxD = windowWorkingDays();
+      const n = U.toNum(amt.value);
+      if (unit.value === "days") {
+        amt.max = String(maxD);
+        if (isFinite(n) && maxD > 0 && n > maxD) {
+          amt.value = String(maxD);
+          U.toast("Affected days can't exceed " + maxD + " — the plan window only has " + maxD + " working day" + (maxD === 1 ? "" : "s") + ". Capped to " + maxD + ".", "bad");
+        }
+      } else {
+        const maxH = maxD * 24;
+        amt.max = String(maxH);
+        if (isFinite(n) && maxH > 0 && n > maxH) {
+          amt.value = String(maxH);
+          U.toast("Affected hours can't exceed " + maxH + " — the plan window has " + maxD + " working day" + (maxD === 1 ? "" : "s") + " × 24 h. Capped to " + maxH + ".", "bad");
+        }
+      }
+    }
+    function onAmtOrUnit() { clampAmt(); trimSelection(); }
+    amt.addEventListener("input", onAmtOrUnit);
+    amt.addEventListener("change", onAmtOrUnit);
+    unit.addEventListener("change", onAmtOrUnit);
     list.appendChild(row);
+    refreshHindranceTypeOptions();   // keep single-use types unique across all rows
     buildHindranceCalendar(cal, data.days || []);
+    onAmtOrUnit();   // restored rows: clamp to the window + keep selection within the saved value
   }
 
   // TODO: confirm persistence — selected hindrance day(s) are kept in-session (in the
@@ -667,7 +775,9 @@
       const iso = U.fmtISO(d);
       const weekoff = U.isoDow(d) > workDays;
       cal.appendChild(el("div", {
-        class: "hcal__day" + (weekoff ? " is-weekoff" : "") + (sel.has(iso) ? " is-sel" : ""),
+        // A day that has become a weekly-off (e.g. after reducing Work Days/week) is
+        // never kept selected — only working days can carry a selection.
+        class: "hcal__day" + (weekoff ? " is-weekoff" : "") + ((!weekoff && sel.has(iso)) ? " is-sel" : ""),
         title: U.fmtFriendly(d) + (weekoff ? " (weekly off)" : ""),
         dataset: { iso: iso }, text: String(d.getDate())
       }));
@@ -680,6 +790,8 @@
       const cal = row.querySelector(".hcal");
       const keep = U.$$(".hcal__day.is-sel", cal).map((c) => c.dataset.iso);
       buildHindranceCalendar(cal, keep);
+      const amt = row.querySelector(".hindrance__amt");
+      if (amt) amt.dispatchEvent(new Event("input", { bubbles: true }));   // re-apply the day-count cap to the rebuilt calendar
     });
   }
 
@@ -689,7 +801,10 @@
   function renderRampChart() {
     const host = $("#rampChart");
     if (!host) return;
-    const prod = plannedProductivity();
+    // Preview uses the SELECTED-WINDOW SDP productivity so the curve tracks the 7/30-day
+    // tab (falls back to the planned value if defaults aren't loaded yet).
+    const d = state.defaults;
+    const prod = d ? (prodWindow === 30 ? d.productivity30 : d.productivity) : plannedProductivity();
     const ramp = $("#pRampProfile").value.split(",").map((s) => U.toNum(s)).filter((n) => isFinite(n) && n >= 0);
     const nDays = parseInt($("#pRampN").value, 10);
     if (!(prod > 0) || !ramp.length) { host.innerHTML = '<div class="field__hint">Enter productivity and a ramp profile to preview the curve.</div>'; return; }
@@ -793,18 +908,18 @@
   // Read + validate the planner form into an engine params object (returns null on error).
   function gatherParams() {
     const ch = state.parsed.chainage;
+    // Required inputs, validated in order: Chainage Priority → Productivity → Machine.
     const priorities = ch ? orderedSelectedPriorities(ch) : Array.from(selectedPriorities);
     if (!priorities.length) { U.toast("Choose at least one chainage priority.", "bad"); openPriorityMenu(); return null; }
+    const prodRaw = ($("#pProductivity").value || "").trim();
+    if (prodRaw === "" || !(U.toNum(prodRaw) > 0)) { U.toast("Enter productivity (piles / machine / hour) in Plan Parameters.", "bad"); $("#pProductivity").focus(); return null; }
+    const machRaw = ($("#pMachines").value || "").trim();
+    if (machRaw === "" || !(parseInt(machRaw, 10) > 0)) { U.toast("Enter the number of machines in Plan Parameters.", "bad"); $("#pMachines").focus(); return null; }
+
     const planStart = U.parseISODate($("#pStart").value);
     if (!planStart) { U.toast("Pick a plan start date.", "bad"); return null; }
     if (!U.isMonday(planStart)) { U.toast("Plan start must be a Monday.", "bad"); return null; }
     if (U.cmpDate(planStart, U.nextMondayFromToday()) < 0) { U.toast("Plan start can't be backdated.", "bad"); return null; }
-
-    // Productivity & Machines are required Plan Parameters (no silent default).
-    const machRaw = ($("#pMachines").value || "").trim();
-    if (machRaw === "" || !(parseInt(machRaw, 10) > 0)) { U.toast("Enter the number of machines in Plan Parameters.", "bad"); $("#pMachines").focus(); return null; }
-    const prodRaw = ($("#pProductivity").value || "").trim();
-    if (prodRaw === "" || !(U.toNum(prodRaw) > 0)) { U.toast("Enter productivity (piles / machine / hour) in Plan Parameters.", "bad"); $("#pProductivity").focus(); return null; }
 
     const periodWeeks = parseInt((document.querySelector('input[name="period"]:checked') || {}).value || "2", 10);
     // Planned values: typed override, else the 7-day actual shown as placeholder.
@@ -928,7 +1043,7 @@
     // Core KPIs (the rest is in the headline / forecast, keeping this uncluttered).
     host.appendChild(statGrid([
       { label: "Piles Planned", value: U.fmtInt(Math.round(r.totalInstalled)), sub: U.fmtInt(Math.round(avgPerDay)) + "/day avg", tone: "indigo" },
-      { label: "Work Planned", value: U.fmtInt(r.totalComplete) + " of " + U.fmtInt(r.totalMTO), sub: "piles of scope", tone: "violet" },
+      { label: "Total Work Planned", value: U.fmtInt(r.totalComplete) + " of " + U.fmtInt(r.totalMTO), sub: "piles of scope", tone: "violet" },
       { label: "Productivity", value: U.fmtNum(r.params.productivity, 3), sub: "piles / mc / hr", tone: "sky" },
       { label: "Machines deployed", value: r.deployed, sub: U.fmtInt(people) + " people · " + r.params.workhours + " h/day", tone: "amber" },
       { label: "Idle machines", value: idle, sub: idle > 0 ? "chosen but not needed this window" : "none idle", tone: idle > 0 ? "rose" : "emerald" },

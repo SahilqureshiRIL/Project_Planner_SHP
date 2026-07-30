@@ -439,8 +439,8 @@ select.input--sm { background-position: right 8px center, center; padding-right:
 .radiorow .radio input { position: absolute; opacity: 0; pointer-events: none; }
 .radiorow .radio:hover { color: var(--navy); }
 .radiorow .radio:has(input:checked) {
-  background: #fff; color: var(--navy);
-  box-shadow: 0 2px 6px rgba(4,15,82,0.14); font-weight: 700;
+  background: var(--grad-navy); color: #fff;
+  box-shadow: 0 2px 8px rgba(4,15,82,0.30); font-weight: 700;
 }
 
 /* Auto-computed values render greyed (a "default"); once the planner edits a field
@@ -458,10 +458,11 @@ select.input--sm { background-position: right 8px center, center; padding-right:
 /* Info tooltip */
 .info { position: relative; cursor: help; color: var(--info); margin-left: 4px; font-size: 13px; }
 .info__pop {
-  display: none; position: absolute; left: 0; top: 130%; z-index: 30;
-  width: 250px; padding: var(--s-3); border-radius: var(--r-md);
-  background: var(--navy); color: #eef2f7; font-size: 11.5px; font-weight: 400;
-  line-height: 1.5; box-shadow: var(--shadow-pop); border: 1px solid rgba(221,184,113,0.35);
+  display: none; position: absolute; left: 0; top: 150%; z-index: 500;
+  width: 180px; padding: 8px 10px; border-radius: var(--r-sm);
+  background: var(--navy); color: #eef2f7; font-size: 10px; font-weight: 400;
+  line-height: 1.45; box-shadow: var(--shadow-pop); border: 1px solid rgba(221,184,113,0.35);
+  white-space: normal; text-transform: none; letter-spacing: 0;
 }
 .info:hover .info__pop, .info:focus .info__pop { display: block; }
 
@@ -628,8 +629,8 @@ table.data tr.row-completed td { color: var(--success); }
 .seg__btn:last-of-type { border-radius: 0 var(--r-sm) var(--r-sm) 0; border-left: none; }
 .seg__btn.is-active { background: var(--accent); color: #fff; border-color: var(--accent); }
 /* Compact variant for inline use next to a field label (e.g. productivity window toggle). */
-.seg--tight { margin-left: auto; }
-.seg--tight .seg__btn { padding: 2px 8px; font-size: 10px; font-weight: 600; text-transform: none; letter-spacing: 0; }
+.seg--tight { margin-left: auto; flex: none; white-space: nowrap; }
+.seg--tight .seg__btn { padding: 2px 8px; font-size: 10px; font-weight: 600; text-transform: none; letter-spacing: 0; white-space: nowrap; }
 .gantt-scroll { overflow: auto; max-height: 62vh; border: 1px solid var(--border); border-radius: var(--r-md); }
 .gantt-scroll svg { display: block; }
 .gantt-tip {
@@ -967,7 +968,7 @@ table.data tr.row-completed td { color: var(--success); }
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 10px 26px rgba(4,15,82,0.12), 0 2px 6px rgba(4,15,82,0.07);
   overflow: hidden;
 }
 .pl-card__head {
@@ -986,8 +987,10 @@ table.data tr.row-completed td { color: var(--success); }
 
 /* SDP on-site averages — white card body, navy header band, navy stat tiles */
 .pl-card--avg { background: var(--surface); border-color: var(--border); }
-.pl-card__head--dark { padding: 16px var(--s-4); background: var(--grad-navy); }
-.pl-card__title--light { color: #fff; }
+.pl-card__head--dark { padding: 12px var(--s-4); background: var(--grad-navy); }
+/* Smaller heading + keep the 7/30-day toggle inline on one row (no wrapping). */
+.pl-card__head--dark { flex-wrap: nowrap; }
+.pl-card__title--light { color: #fff; font-size: 10.5px; letter-spacing: .02em; white-space: nowrap; }
 .pl-card__title--light::before { background: var(--grad-gold); }
 .pl-card--avg .info { color: rgba(255,255,255,0.82); }
 
@@ -1031,7 +1034,7 @@ table.data tr.row-completed td { color: var(--success); }
 
 /* Ramp curve fills its card body */
 .pl-card--ramp .ramp-chart { width: 100%; }
-.pl-card--hind .hindrance-list { margin-bottom: var(--s-2); }
+.pl-card--hind .hindrance-list { margin-bottom: var(--s-2); max-height: 360px; overflow-y: auto; overflow-x: hidden; padding-right: 4px; }
 
 /* SDP averages toggle on the dark card */
 .seg--onDark .seg__btn { border-color: rgba(255,255,255,0.24); background: rgba(255,255,255,0.10); color: rgba(255,255,255,0.78); }

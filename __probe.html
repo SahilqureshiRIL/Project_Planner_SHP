@@ -673,7 +673,21 @@
   <!-- Bluesky target-date back-planner (loads after ui.js so it can read the shared store). -->
   <script src="js/bluesky.js?v=105"></script>
   <script src="js/bluesky_ui.js?v=108"></script>
-</body>
+<script>
+(function(){
+ var t=0,phase=0,iv=setInterval(function(){t++;
+   var planner=document.getElementById('plannerLayout');
+   if(phase===0){var mod=document.querySelector('[data-module=planner]');if(planner&&!planner.hidden)phase=1;else if(mod)mod.click();}
+   else if(phase===1){var opt=document.querySelector('#pPriorityMenu .ms__opt'); var info=document.getElementById('prodInfo');
+     if(opt&&info){opt.click();phase=2;
+       setTimeout(function(){
+         info.dispatchEvent(new MouseEvent('mouseenter',{bubbles:true}));
+         var pop=document.getElementById('prodInfoPop'); pop.style.display='block';   // force visible for the screenshot
+         clearInterval(iv);
+       },400);
+     }}
+ },150);})();
+</script></body>
 </html>
 
 
