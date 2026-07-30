@@ -534,15 +534,25 @@
     }
 
     /* ---- 10c. material-wise check for THIS PLAN PERIOD ---------------------
-       One row per material the plan works this window. Required = capacity-only
-       window demand (what the plan would install for that material this period if
-       material were unlimited); In stock = net Accepted-at-Site now; In transit =
-       ordered material arriving within the window; Gap = period demand not covered;
-       Work halts on = the day it runs dry (only when short this period). */
+       One row per material the plan actually works this window. Required =
+       max(capacity-only window demand, what the real plan installs of that code).
+       Both terms matter because the work queue is grouped by item code: the
+       capacity-only run (unlimited material) plows through the top-stock code and,
+       when that code's scope exceeds the window, never reaches the other codes —
+       so it alone would hide every material the real plan reaches only after the
+       first code STARVES and work is deflected onto it. Unioning in the real
+       plan's per-code consumption surfaces those deflected materials while the
+       capacity-only term keeps the shortage signal on the bottleneck code.
+       In stock = net Accepted-at-Site now; In transit = ordered material arriving
+       within the window; Gap = period demand not covered; Work halts on = the day
+       it runs dry (only when short this period). */
     const scopeByCode = {};
     candidates.forEach((f) => { if (f.code) (scopeByCode[f.code] || (scopeByCode[f.code] = [])).push(f); });
-    const materialCheck = Object.keys(windowDemandByCode).map((code) => {
-      const required = Math.round(windowDemandByCode[code]);
+    const demandCodes = Array.from(new Set(
+      Object.keys(windowDemandByCode).concat(Object.keys(plan.consumedByCode || {}))));
+    const materialCheck = demandCodes.map((code) => {
+      const required = Math.max(Math.round(windowDemandByCode[code] || 0),
+                                Math.round((plan.consumedByCode || {})[code] || 0));
       const inStock = Math.max(0, Math.round(netOnsite(code)));
       const m = codeMaterial(code);   // null when the code has no material-file entry
       const inTransit = m ? Math.round(m.inbound
