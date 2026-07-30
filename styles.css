@@ -458,6 +458,8 @@ select.input--sm { background-position: right 8px center, center; padding-right:
 .input.is-computed:focus { color: var(--navy); font-style: normal; }
 .input.is-edited { color: var(--navy); font-weight: 700; border-color: var(--gold); box-shadow: inset 3px 0 0 var(--gold); }
 .field__hint .hint-auto { color: var(--gold-600); font-weight: 700; }
+/* Plan Start Date + Workhours/Day: solid white fill, upright text (no grey wash / computed italic). */
+#pStart, #pWorkhours { background: #fff; font-style: normal; }
 
 /* Blocked-chainages shortcut (Validation → Material) */
 .blocked-note { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; margin-top: var(--s-3); padding: 11px 13px; background: var(--danger-bg); border: 1px solid #eeb3a8; border-radius: 9px; }
@@ -977,10 +979,14 @@ table.data tr.row-completed td { color: var(--success); }
 .pl-grid {
   display: grid;
   grid-template-columns: minmax(240px, 0.95fr) minmax(0, 1.32fr) minmax(0, 1.12fr);
+  grid-template-rows: auto auto;
   gap: var(--s-3);
   align-items: start;
 }
 .pl-col { display: flex; flex-direction: column; gap: var(--s-3); min-width: 0; }
+/* Left inputs card fills its column (spanning the actions row below the middle/right cards). */
+.pl-card--inputs { grid-column: 1; grid-row: 1 / 3; align-self: stretch; }
+.pl-col { grid-row: 1; }
 
 /* Card shell */
 .pl-card {
@@ -1011,7 +1017,9 @@ table.data tr.row-completed td { color: var(--success); }
 .pl-card .field__label { margin-bottom: 5px; }
 .pl-card .field__hint { margin-top: 3px; }
 .pl-card .input { padding: 9px 12px; }
-.pl-card .ms__control { min-height: 38px; }
+.pl-card .ms__control { min-height: 38px; border-radius: 9px; }
+/* Golden hover border to match the .input fields (e.g. Workhours/day). */
+.pl-card .ms__control:hover { border-color: var(--gold-300); }
 
 /* SDP on-site averages — white card body, navy header band, navy stat tiles */
 .pl-card--avg { background: var(--surface); border-color: var(--border); }
@@ -1091,18 +1099,19 @@ table.data tr.row-completed td { color: var(--success); }
 .seg--onDark .seg__btn.is-active { background: #fff; color: var(--navy); border-color: #fff; }
 
 @media (max-width: 1080px) {
-  .pl-grid { grid-template-columns: 1fr; }
+  .pl-grid { grid-template-columns: 1fr; grid-template-rows: none; }
+  .pl-card--inputs, .pl-col, #paramsFoot { grid-column: auto; grid-row: auto; }
 }
 @media (max-width: 560px) {
   .pl-tiles { grid-template-columns: 1fr; }
 }
 
-/* Process / Reset actions live in the middle column, directly below the Plan
-   Parameters card: Process Plan fills the column width with Reset beside it.
-   Spacing above is owned by the column gap, so no divider/margin here. */
-#paramsFoot { justify-content: stretch; gap: var(--s-2); margin-top: 0; padding-top: 0; border-top: 0; }
-#paramsFoot .bs-process { flex: 1 1 auto; min-width: 0; }
-#paramsFoot .bs-reset { flex: 0 0 auto; }
+/* Process / Reset actions sit below the SDP-averages + Plan-Parameters section,
+   spanning the middle AND right columns: Process Plan fills the width with Reset
+   beside it. Spacing above is owned by the grid gap, so no divider/margin here. */
+#paramsFoot { grid-column: 2 / 4; grid-row: 2; justify-content: flex-start; gap: var(--s-2); margin-top: 0; padding-top: 0; border-top: 0; }
+#paramsFoot .bs-process { flex: 0 0 auto; min-width: 220px; }
+#paramsFoot .bs-reset { flex: 0 0 auto; min-width: 220px; justify-content: center; font-size: 14px; padding: 12px 28px; }
 
 /* Priority & material-wise check card (shown after the plan summary) */
 .mcheck { margin: 0 0 var(--s-4); border: 1px solid var(--border); border-radius: var(--r-lg); overflow: hidden; box-shadow: var(--shadow-sm); }
@@ -1223,8 +1232,13 @@ table.data tr.row-completed td { color: var(--success); }
 /* Plain variant: no pill chip in the control, no check/radio indicator in the menu —
    just the current value as text and a highlighted row for the selected option. */
 .ms--plain .ms__pills { font-size: 14px; font-weight: 600; color: var(--navy); }
+/* Work Days / week value: match the Workhours/day field (not bold, muted colour). */
+.pl-card .ms--plain .ms__pills { font-weight: 500; color: var(--text-muted); }
 .ms--plain .ms__check { display: none; }
 .ms--plain .ms__opt.is-sel .ms__opt-name { color: var(--accent); font-weight: 700; }
+/* Work Days / week menu options: same muted colour as the field value. */
+.pl-card .ms--plain .ms__opt-name,
+.pl-card .ms--plain .ms__opt.is-sel .ms__opt-name { color: var(--text-muted); font-weight: 500; }
 
 /* ---- Entrance animations ---- */
 @keyframes bs-rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }

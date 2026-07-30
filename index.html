@@ -240,16 +240,6 @@
                     </div>
                     <div class="notice notice--warn" id="capNotice" hidden></div>
                   </div>
-
-                  <!-- Process / Reset actions — placed directly below Plan Parameters -->
-                  <div class="bs-actions" id="paramsFoot" hidden>
-                    <button type="button" id="generateBtn2" class="btn btn--primary bs-process">
-                      <svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg><span>Process Plan</span>
-                    </button>
-                    <button type="button" id="resetPlanBtn" class="btn btn--ghost bs-reset" title="Clear the generated plan and reset the Plan Parameters back to defaults">
-                      <svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg><span>Reset</span>
-                    </button>
-                  </div>
                 </div>
 
                 <!-- RIGHT — ramp-up curve over hindrances / constraints -->
@@ -274,6 +264,15 @@
                       <button type="button" id="openHindranceModalBtn" class="btn btn--ghost btn--sm">+ Add hindrance</button>
                     </div>
                   </div>
+                </div>
+
+                <div class="bs-actions" id="paramsFoot" hidden>
+                  <button type="button" id="generateBtn2" class="btn btn--primary bs-process">
+                    <svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg><span>Process Plan</span>
+                  </button>
+                  <button type="button" id="resetPlanBtn" class="btn btn--ghost bs-reset" title="Clear the generated plan and reset the Plan Parameters back to defaults">
+                    <svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg><span>Reset</span>
+                  </button>
                 </div>
 
                 <!-- Ramp-up inputs kept in the DOM (hidden) so the engine + live curve still use them. -->

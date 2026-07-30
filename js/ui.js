@@ -677,7 +677,7 @@
     daysWrap.appendChild(cal);
     row.appendChild(daysWrap);
 
-    row.appendChild(el("div", { class: "hindrance__hint", html: "<strong>days</strong>: enter the number of affected days, then click exactly that many dates (a warning shows if you try to exceed it — deselect a day to free a slot). <strong>hours</strong>: enter the hours lost per day, then click any number of dates." }));
+    row.appendChild(el("div", { class: "hindrance__hint", html: "<strong>days</strong>: enter the number of affected days, then click exactly that many dates (a warning shows if you try to exceed it — deselect a day to free a slot). <strong>hours</strong>: enter the hours lost per day (max 24 — applied to each selected day), then click any number of dates." }));
 
     // The affected days/hours value gates the calendar. Nothing is selectable while it
     // is 0. For the DAYS unit the selection is hard-capped at that number (over-select
@@ -706,9 +706,10 @@
       }
       c.classList.add("is-sel");
     });
-    // Cap the affected value to what the plan window can lose:
+    // Cap the affected value:
     //   days  → working days in the window (plan period × work-days/week)
-    //   hours → those working days × 24  (e.g. 2 weeks × 6 days × 24 = 288 h)
+    //   hours → 24  (hours are lost PER selected day; a single day can't lose >24 h)
+    const MAX_HIND_HOURS = 24;
     function windowWorkingDays() { return U.$$(".hcal__day:not(.is-weekoff)", cal).length; }
     function clampAmt() {
       const maxD = windowWorkingDays();
@@ -720,11 +721,10 @@
           U.toast("Affected days can't exceed " + maxD + " — the plan window only has " + maxD + " working day" + (maxD === 1 ? "" : "s") + ". Capped to " + maxD + ".", "bad");
         }
       } else {
-        const maxH = maxD * 24;
-        amt.max = String(maxH);
-        if (isFinite(n) && maxH > 0 && n > maxH) {
-          amt.value = String(maxH);
-          U.toast("Affected hours can't exceed " + maxH + " — the plan window has " + maxD + " working day" + (maxD === 1 ? "" : "s") + " × 24 h. Capped to " + maxH + ".", "bad");
+        amt.max = String(MAX_HIND_HOURS);
+        if (isFinite(n) && n > MAX_HIND_HOURS) {
+          amt.value = String(MAX_HIND_HOURS);
+          U.toast("Hours lost per day can't exceed " + MAX_HIND_HOURS + " — the value applies to each selected day. Capped to " + MAX_HIND_HOURS + ".", "bad");
         }
       }
     }
