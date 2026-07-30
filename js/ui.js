@@ -53,6 +53,11 @@
     $("#generateBtn2").addEventListener("click", onGenerate);
     { const rb = $("#resetPlanBtn"); if (rb) rb.addEventListener("click", resetPlanParams); }
     $("#addHindranceBtn").addEventListener("click", () => addHindranceRow());
+    // Hindrances are edited in a modal (opened from the card's "+ Add hindrance").
+    { const ob = $("#openHindranceModalBtn"); if (ob) ob.addEventListener("click", openHindranceModal); }
+    { const hx = $("#hindranceCloseX"); if (hx) hx.addEventListener("click", closeHindranceModal); }
+    { const hd = $("#hindranceDoneBtn"); if (hd) hd.addEventListener("click", closeHindranceModal); }
+    { const hm = $("#hindranceModal"); if (hm) hm.addEventListener("click", (e) => { if (e.target === hm) closeHindranceModal(); }); }
     $("#pStart").addEventListener("change", enforceMonday);
     $("#pStart").addEventListener("change", refreshHindranceCalendars);
     // Machines: integers only. Sanitize typed/pasted input, block e/E/+/-/. keys.
@@ -397,6 +402,7 @@
     refreshCapNotice();
     renderRampChart();
     refreshHindranceCalendars();
+    renderHindranceSummary();
   }
   // Set an input's value by selector (no-op if the element is missing).
   function setVal(sel, v) { const n = $(sel); if (n) n.value = v; }
@@ -774,6 +780,44 @@
       buildHindranceCalendar(cal, keep);
       const amt = row.querySelector(".hindrance__amt");
       if (amt) amt.dispatchEvent(new Event("input", { bubbles: true }));   // re-apply the day-count cap to the rebuilt calendar
+    });
+  }
+
+  /* ---- Hindrance modal: the editor rows live inside a popup; the card shows a
+     read-only summary + the "+ Add hindrance" button that opens it. --------- */
+  // Open the popup (seed with one empty row if none exist) and sync the calendars.
+  function openHindranceModal() {
+    const m = $("#hindranceModal"); if (!m) return;
+    if (!U.$$("#hindranceList .hindrance").length) addHindranceRow();
+    refreshHindranceCalendars();   // match the calendars to the current plan window
+    m.hidden = false;
+  }
+  // Close the popup: drop rows left empty, then repaint the card summary.
+  function closeHindranceModal() {
+    const m = $("#hindranceModal"); if (!m) return;
+    U.$$("#hindranceList .hindrance").forEach((row) => {
+      const amt = U.toNum(row.querySelector(".hindrance__amt").value) || 0;
+      const days = U.$$(".hcal__day.is-sel", row).length;
+      if (amt <= 0 && days === 0) row.remove();   // nothing configured — discard
+    });
+    refreshHindranceTypeOptions();
+    m.hidden = true;
+    renderHindranceSummary();
+  }
+  // Repaint the card's read-only chips from the currently configured hindrances.
+  function renderHindranceSummary() {
+    const host = $("#hindranceSummary"); if (!host) return;
+    const hs = readHindrances();
+    U.clear(host);
+    if (!hs.length) { host.appendChild(el("span", { class: "field__hint", text: "No hindrances added yet." })); return; }
+    hs.forEach((h) => {
+      const amtTxt = h.unit === "days"
+        ? (h.days.length || h.amount) + " day" + ((h.days.length || h.amount) === 1 ? "" : "s")
+        : h.amount + " hr" + (h.amount === 1 ? "" : "s") + (h.days.length ? " × " + h.days.length + "d" : "");
+      const chip = el("span", { class: "hind-chip" });
+      chip.appendChild(el("span", { class: "hind-chip__type", text: h.type }));
+      chip.appendChild(el("span", { class: "hind-chip__meta", text: amtTxt }));
+      host.appendChild(chip);
     });
   }
 
