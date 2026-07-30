@@ -949,55 +949,104 @@ table.data tr.row-completed td { color: var(--success); }
   .pl-cols .bs-col > .field, .pl-cols .bs-col > .field-pair { min-height: 0; }
 }
 
-/* ---- Plan Parameters v2: 1/3 scope column + 2/3 SDP-averages column -------- */
-.pl-2col { display: grid; grid-template-columns: 1fr 2fr; gap: var(--s-5); align-items: start; }
-.pl-scope { display: flex; flex-direction: column; gap: var(--s-4); min-width: 0; }
-.pl-scope .field { margin-bottom: 0; }
-/* Within the 2/3 section: compact tables on the left, ramp curve + hindrances right. */
-.pl-main { display: grid; grid-template-columns: 1.5fr 1fr; gap: var(--s-5); align-items: start; min-width: 0; }
-.pl-tables { display: flex; flex-direction: column; gap: var(--s-4); min-width: 0; }
-.pl-side { display: flex; flex-direction: column; gap: var(--s-4); min-width: 0; }
-.pl-side .field { margin-bottom: 0; }
+/* ---- Plan Parameters v3: three-column card grid ---------------------------
+   Left  : Plan Inputs card (scope + work calendar)
+   Middle: dark SDP-averages card (read-only) over editable Plan Parameters
+   Right : Ramp-up curve card over Hindrances card                              */
+.pl-grid {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.95fr) minmax(0, 1.32fr) minmax(0, 1.12fr);
+  gap: var(--s-4);
+  align-items: start;
+}
+.pl-col { display: flex; flex-direction: column; gap: var(--s-4); min-width: 0; }
 
-/* Read-only SDP on-site averages (Productivity / Machine / Manpower) — no card
-   wrapper, just the heading + table sitting directly on the panel. */
-.avg-card { padding: 0; background: none; border: 0; box-shadow: none; }
-.avg-card .notice { margin-top: var(--s-4); }   /* space the warning below the table */
-.avg-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); margin-bottom: var(--s-3); }
-.avg-title { font-family: var(--display); font-size: 12.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--navy); display: flex; align-items: center; gap: var(--s-2); }
-.avg-title::before { content: ""; width: 4px; height: 15px; border-radius: 2px; background: var(--grad-gold); flex: none; }
-.avg-table { width: 100%; border-collapse: separate; border-spacing: 0; }
-.avg-table th { font-size: 11px; font-weight: 700; color: #fff; text-transform: uppercase; letter-spacing: .03em; text-align: center; padding: 7px 8px; background: linear-gradient(180deg, #17307e, #0e2064); }
-.avg-table th:first-child { border-top-left-radius: var(--r-md); }
-.avg-table th:last-child { border-top-right-radius: var(--r-md); }
-.avg-table th .info { color: rgba(255,255,255,0.82); margin-left: 4px; }
-.avg-table td { text-align: center; padding: 11px 8px 10px; border: 1px solid var(--border); background: #fff; }
-.avg-table td + td { border-left: 0; }
-.avg-table tbody td:first-child { border-bottom-left-radius: var(--r-md); }
-.avg-table tbody td:last-child { border-bottom-right-radius: var(--r-md); }
-.avg-val { display: block; font-family: var(--display); font-size: 21px; font-weight: 800; color: var(--navy); font-variant-numeric: tabular-nums; line-height: 1; letter-spacing: -.01em; }
-.avg-unit { display: block; margin-top: 4px; font-size: 10px; color: var(--text-faint); }
+/* Card shell */
+.pl-card {
+  display: flex; flex-direction: column; min-width: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+.pl-card__head {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--s-3);
+  padding: 14px var(--s-4) 10px;
+}
+.pl-card__title {
+  font-family: var(--display); font-size: 12.5px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .06em; color: var(--navy);
+  display: inline-flex; align-items: center; gap: var(--s-2);
+}
+.pl-card__title::before { content: ""; width: 4px; height: 15px; border-radius: 2px; background: var(--grad-gold); flex: none; }
+.pl-card__body { padding: 0 var(--s-4) var(--s-4); display: flex; flex-direction: column; gap: var(--s-4); }
+/* Spacing inside the panel is owned by the card/body gap, not the global field margin. */
+.pl-card .field { margin-bottom: 0; }
 
-/* Planned (editable) table — no card wrapper either, just the table. */
-.avg-title--planned::before { background: linear-gradient(180deg, #17307e, #0e2064); }
-.avg-table--edit td { padding: 8px 6px; }
-/* Editable Plan-Parameter inputs: clear bordered, white, spinner-visible number fields. */
-.avg-input { width: 100%; max-width: 150px; margin: 0 auto; text-align: center; font-family: var(--display); font-size: 18px; font-weight: 800; color: var(--navy); font-variant-numeric: tabular-nums; padding: 8px 10px; background: #ffffff; border: 1.5px solid var(--border-strong); border-radius: 9px; box-shadow: inset 0 1px 2px rgba(4,15,82,0.05); }
-.avg-input::placeholder { color: var(--text-faint); font-weight: 700; opacity: 1; letter-spacing: .1em; }
-.avg-input:hover { border-color: var(--gold-300); }
-.avg-input:focus { outline: none; border-color: var(--gold); box-shadow: 0 0 0 4px rgba(221,184,113,0.28); }
-.avg-input[readonly] { background: #e9edf4; color: #55618a; border-color: var(--border); cursor: not-allowed; box-shadow: none; }
-.avg-input[readonly]:hover { border-color: var(--border); }
+/* SDP on-site averages — white card body, navy header band, navy stat tiles */
+.pl-card--avg { background: var(--surface); border-color: var(--border); }
+.pl-card__head--dark { padding: 16px var(--s-4); background: var(--grad-navy); }
+.pl-card__title--light { color: #fff; }
+.pl-card__title--light::before { background: var(--grad-gold); }
+.pl-card--avg .info { color: rgba(255,255,255,0.82); }
 
-/* Read-only SDP reference cells: grey fill + muted value so they read as uneditable */
-.avg-card:not(.avg-card--planned) .avg-table td { background: #e9edf4; }
-.avg-card:not(.avg-card--planned) .avg-val { color: #55618a; }
+/* Three stat tiles */
+.pl-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s-3); padding: var(--s-4); }
+.pl-tile {
+  display: flex; flex-direction: column; gap: 7px; min-width: 0;
+  padding: 13px 14px 12px; border-radius: var(--r-md);
+  background: var(--surface); border: 1px solid var(--border);
+}
+.pl-card--avg .pl-tile { background: var(--grad-navy); border-color: transparent; }
+.pl-tile__label {
+  font-size: 10.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+  color: var(--text-muted); display: inline-flex; align-items: center; gap: 4px;
+}
+.pl-card--avg .pl-tile__label { color: rgba(219,226,244,0.72); }
+.pl-tile__value {
+  font-family: var(--display); font-size: 26px; font-weight: 800; line-height: 1;
+  color: var(--navy); font-variant-numeric: tabular-nums; letter-spacing: -.01em;
+}
+.pl-card--avg .pl-tile__value { color: #fff; }
+.pl-tile__unit { font-size: 10px; color: var(--text-faint); }
+.pl-card--avg .pl-tile__unit { color: rgba(219,226,244,0.5); }
 
-/* Planned placeholder = the actual shown faintly (empty, editable field) */
-.avg-input::placeholder { color: var(--text-faint); font-weight: 700; opacity: 1; }
+/* Editable tile inputs — styled to read as the big stat number, borderless in-tile */
+.pl-tile--edit:focus-within { border-color: var(--gold); box-shadow: 0 0 0 3px rgba(221,184,113,0.24); }
+.pl-tile__input {
+  width: 100%; border: none; background: transparent; padding: 0; margin: 0;
+  font-family: var(--display); font-size: 26px; font-weight: 800; line-height: 1;
+  color: var(--navy); font-variant-numeric: tabular-nums; letter-spacing: -.01em;
+}
+.pl-tile__input:focus { outline: none; }
+.pl-tile__input::placeholder { color: var(--text-faint); font-weight: 800; opacity: 1; letter-spacing: .08em; }
+.pl-tile__input::-webkit-outer-spin-button, .pl-tile__input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.pl-tile__input[type="number"] { -moz-appearance: textfield; }
+.pl-tile--ro { background: var(--surface-2); }
+.pl-tile--ro .pl-tile__input { color: #55618a; }
 
-/* Ramp curve spans the full 2/3 width */
-.pl-main .ramp-chart { width: 100%; }
+/* Cap-capacity warning sits below the planned tiles, inside the card */
+.pl-card--planned .notice { margin: 0 var(--s-4) var(--s-4); }
+
+/* Ramp curve fills its card body */
+.pl-card--ramp .ramp-chart { width: 100%; }
+.pl-card--hind .hindrance-list { margin-bottom: var(--s-2); }
+
+/* SDP averages toggle on the dark card */
+.seg--onDark .seg__btn { border-color: rgba(255,255,255,0.24); background: rgba(255,255,255,0.10); color: rgba(255,255,255,0.78); }
+.seg--onDark .seg__btn:hover { color: #fff; }
+.seg--onDark .seg__btn.is-active { background: #fff; color: var(--navy); border-color: #fff; }
+
+@media (max-width: 1080px) {
+  .pl-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 560px) {
+  .pl-tiles { grid-template-columns: 1fr; }
+}
+
+/* Footer actions: primary Process Plan then ghost Reset, aligned to the right. */
+#paramsFoot { justify-content: flex-end; }
 
 /* Priority & material-wise check card (shown after the plan summary) */
 .mcheck { margin: 0 0 var(--s-4); border: 1px solid var(--border); border-radius: var(--r-lg); overflow: hidden; box-shadow: var(--shadow-sm); }

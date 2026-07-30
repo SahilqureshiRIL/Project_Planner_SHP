@@ -183,18 +183,39 @@
 
   // Zoom the map by a relative factor (delegates to the active GL or SVG renderer).
   function mapZoomBy(f) { if (mapGL) mapGL.zoomBy(f); else setMapZoom(state.mapZoom * f); }
-  // Reset ONLY the Plan Parameters form back to defaults (priorities, period, start,
-  // work days, workhours, the editable Plan Parameters + hindrances). Leaves any
-  // generated plan / results and the loaded data untouched.
+  // Reset the whole plan: clear the generated plan / results (the Plan Window and its
+  // view/paging state) AND restore the Plan Parameters form to defaults (priorities,
+  // period, start, work days, workhours, editable Plan Parameters + hindrances).
+  // Leaves the loaded data untouched.
   function resetPlanParams() {
     if (!state.store) return;
+    // Drop any generated plan and its view state, then hide the results surfaces.
+    state.result = null;
+    state.view = "gantt";
+    state.ganttColor = "profile";
+    state.mapZoom = 1;
+    state.mapSelected = null;
+    state.mapFilters = new Set();
+    progressMode = "week";
+    progressOffset = 0;
+    progressAnim = null;
+    $("#resultsCard").hidden = true;
+    $("#resultsEmpty").hidden = false;
+    $("#viewToggle").hidden = true;
+    { const mc = $("#materialCheckCard"); if (mc) mc.hidden = true; }
+    $("#validationCard").hidden = true;
+    $("#exportPlanBtn").hidden = true;
+    $("#progressCard").hidden = true;
+
+    // Restore the Plan Parameters form to freshly-computed defaults.
     selectedPriorities.clear();
     const list = $("#hindranceList"); if (list) U.clear(list);
     const p2 = document.querySelector('input[name="period"][value="2"]'); if (p2) p2.checked = true;
     setVal("#pWorkDays", "6"); syncWorkDays();
     prodWindow = 7;
     populateDefaults();   // repopulate priority dropdown (empty), start, workhours, Plan Parameters (empty), ramp, 7/30 toggle
-    U.toast("Plan Parameters reset.", "ok");
+    setSidebarCollapsed(false);   // re-expand the input panel (a generated plan collapses it)
+    U.toast("Plan reset.", "ok");
   }
 
   // Reset the map zoom to fit the whole boundary.

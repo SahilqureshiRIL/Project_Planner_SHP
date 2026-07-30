@@ -131,137 +131,156 @@
             <p class="placeholder" id="paramsPlaceholder">Loading data from ./data/ &hellip;</p>
 
             <div id="paramsForm" hidden>
-              <div class="pl-2col">
-                <!-- Section 1 (1/3) — scope + work calendar -->
-                <div class="pl-scope">
-                  <div class="field">
-                    <span class="field__label">Chainage Priority <span class="field__tag">select one or more</span></span>
-                    <div class="ms" id="pPriorityMS">
-                      <div class="ms__control" id="pPriorityControl" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false">
-                        <span class="ms__pills" id="pPriorityPills"></span>
-                        <span class="ms__arrow" aria-hidden="true">
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
-                        </span>
+              <div class="pl-grid">
+                <!-- LEFT — Plan Inputs (scope + work calendar) -->
+                <div class="pl-card pl-card--inputs">
+                  <div class="pl-card__head">
+                    <span class="pl-card__title">Plan Inputs</span>
+                  </div>
+                  <div class="pl-card__body">
+                    <div class="field">
+                      <span class="field__label">Chainage Priority <span class="field__tag">select one or more</span></span>
+                      <div class="ms" id="pPriorityMS">
+                        <div class="ms__control" id="pPriorityControl" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false">
+                          <span class="ms__pills" id="pPriorityPills"></span>
+                          <span class="ms__arrow" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+                          </span>
+                        </div>
+                        <div class="ms__menu" id="pPriorityMenu" hidden role="listbox" aria-multiselectable="true"></div>
                       </div>
-                      <div class="ms__menu" id="pPriorityMenu" hidden role="listbox" aria-multiselectable="true"></div>
                     </div>
-                  </div>
-                  <div class="field">
-                    <span class="field__label">Plan Period</span>
-                    <div class="radiorow" id="pPeriod">
-                      <label class="radio"><input type="radio" name="period" value="2" checked /> 2 weeks</label>
-                      <label class="radio"><input type="radio" name="period" value="3" /> 3 weeks</label>
-                      <label class="radio"><input type="radio" name="period" value="4" /> 4 weeks</label>
-                    </div>
-                  </div>
-                  <div class="field">
-                    <label class="field__label" for="pStart">Plan Start Date <span class="field__tag">Mondays only</span></label>
-                    <input type="date" id="pStart" class="input" />
-                    <p class="field__hint" id="pStartHint">Default = first Monday after the latest dated record.</p>
-                  </div>
-                  <div class="field">
-                    <span class="field__label">Work Days / week</span>
-                    <div class="ms ms--plain" id="pWorkDaysMS">
-                      <div class="ms__control" id="pWorkDaysControl" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false">
-                        <span class="ms__pills" id="pWorkDaysPills"></span>
-                        <span class="ms__arrow" aria-hidden="true">
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
-                        </span>
+                    <div class="field">
+                      <span class="field__label">Plan Period</span>
+                      <div class="radiorow" id="pPeriod">
+                        <label class="radio"><input type="radio" name="period" value="2" checked /> 2 weeks</label>
+                        <label class="radio"><input type="radio" name="period" value="3" /> 3 weeks</label>
+                        <label class="radio"><input type="radio" name="period" value="4" /> 4 weeks</label>
                       </div>
-                      <div class="ms__menu" id="pWorkDaysMenu" hidden role="listbox"></div>
                     </div>
-                    <input type="hidden" id="pWorkDays" value="6" />
-                  </div>
-                  <div class="field">
-                    <label class="field__label" for="pWorkhours">Workhours / day</label>
-                    <input type="number" id="pWorkhours" class="input" min="1" step="1" />
-                    <p class="field__hint" id="pWorkhoursHint">7-day onsite Avg</p>
+                    <div class="field">
+                      <label class="field__label" for="pStart">Plan Start Date <span class="field__tag">Mondays only</span></label>
+                      <input type="date" id="pStart" class="input" />
+                      <p class="field__hint" id="pStartHint">Default = first Monday after the latest dated record.</p>
+                    </div>
+                    <div class="field">
+                      <span class="field__label">Work Days / week</span>
+                      <div class="ms ms--plain" id="pWorkDaysMS">
+                        <div class="ms__control" id="pWorkDaysControl" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false">
+                          <span class="ms__pills" id="pWorkDaysPills"></span>
+                          <span class="ms__arrow" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+                          </span>
+                        </div>
+                        <div class="ms__menu" id="pWorkDaysMenu" hidden role="listbox"></div>
+                      </div>
+                      <input type="hidden" id="pWorkDays" value="6" />
+                    </div>
+                    <div class="field">
+                      <label class="field__label" for="pWorkhours">Workhours / day</label>
+                      <input type="number" id="pWorkhours" class="input" min="1" step="1" />
+                      <p class="field__hint" id="pWorkhoursHint">7-day onsite Avg</p>
+                    </div>
                   </div>
                 </div>
 
-                <!-- Section 2 (2/3) — SDP on-site averages (read-only) + adjustments -->
-                <div class="pl-main">
-                  <!-- Left: SDP reference table (read-only) + Plan Parameters (editable) -->
-                  <div class="pl-tables">
-                    <div class="avg-card">
-                      <div class="avg-head">
-                        <span class="avg-title" id="avgTableHeading">7 Day On-site Average as Per SDP</span>
-                        <span class="seg seg--tight" id="pProdWindowSeg">
-                          <button type="button" class="seg__btn is-active" data-window="7">Last 7 days</button>
-                          <button type="button" class="seg__btn" data-window="30">Last 30 days</button>
-                        </span>
-                      </div>
-                      <table class="avg-table">
-                        <thead>
-                          <tr>
-                            <th>Productivity
-                              <span class="info" id="prodInfo" tabindex="0">&#9432;<span class="info__pop" id="prodInfoPop"></span></span>
-                            </th>
-                            <th>Machine</th>
-                            <th>Manpower</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          <tr>
-                            <td><span class="avg-val" id="avgProd">&mdash;</span><span class="avg-unit">piles / mc / hr</span></td>
-                            <td><span class="avg-val" id="avgMachine">&mdash;</span><span class="avg-unit">nos</span></td>
-                            <td><span class="avg-val" id="avgManpower">&mdash;</span><span class="avg-unit">nos</span></td>
-                          </tr>
-                        </tbody>
-                      </table>
+                <!-- MIDDLE — SDP averages (read-only) over editable Plan Parameters -->
+                <div class="pl-col">
+                  <!-- Dark card: on-site SDP averages (read-only reference) -->
+                  <div class="pl-card pl-card--avg">
+                    <div class="pl-card__head pl-card__head--dark">
+                      <span class="pl-card__title pl-card__title--light" id="avgTableHeading">7 Day On-site Average as Per SDP</span>
+                      <span class="seg seg--tight seg--onDark" id="pProdWindowSeg">
+                        <button type="button" class="seg__btn is-active" data-window="7">Last 7 days</button>
+                        <button type="button" class="seg__btn" data-window="30">Last 30 days</button>
+                      </span>
                     </div>
-
-                    <!-- Plan Parameters (EDITABLE user inputs) — the engine uses THESE values.
-                         Manpower is derived (machine × 6) and read-only. -->
-                    <div class="avg-card avg-card--planned">
-                      <div class="avg-head">
-                        <span class="avg-title avg-title--planned">Plan Parameters</span>
+                    <div class="pl-tiles">
+                      <div class="pl-tile">
+                        <span class="pl-tile__label">Productivity
+                          <span class="info" id="prodInfo" tabindex="0">&#9432;<span class="info__pop" id="prodInfoPop"></span></span>
+                        </span>
+                        <span class="pl-tile__value" id="avgProd">&mdash;</span>
+                        <span class="pl-tile__unit">piles / mc / hr</span>
                       </div>
-                      <table class="avg-table avg-table--edit">
-                        <thead>
-                          <tr><th>Productivity</th><th>Machine</th><th>Manpower</th></tr>
-                        </thead>
-                        <tbody>
-                          <tr>
-                            <td><input type="number" id="pProductivity" class="input avg-input" min="0.001" step="0.001" placeholder="--" inputmode="decimal" /><span class="avg-unit">piles / mc / hr</span></td>
-                            <td><input type="number" id="pMachines" class="input avg-input" min="0" step="1" placeholder="--" inputmode="numeric" /><span class="avg-unit">nos</span></td>
-                            <td><input type="number" id="pManpower" class="input avg-input" min="0" step="1" placeholder="--" readonly title="Auto = Machine × 6" /><span class="avg-unit">nos &middot; auto (machine &times; 6)</span></td>
-                          </tr>
-                        </tbody>
-                      </table>
-                      <div class="notice notice--warn" id="capNotice" hidden></div>
+                      <div class="pl-tile">
+                        <span class="pl-tile__label">Machine</span>
+                        <span class="pl-tile__value" id="avgMachine">&mdash;</span>
+                        <span class="pl-tile__unit">nos</span>
+                      </div>
+                      <div class="pl-tile">
+                        <span class="pl-tile__label">Manpower</span>
+                        <span class="pl-tile__value" id="avgManpower">&mdash;</span>
+                        <span class="pl-tile__unit">nos</span>
+                      </div>
                     </div>
                   </div>
 
-                  <!-- Right: ramp-up curve + hindrances / constraints -->
-                  <div class="pl-side">
-                    <div class="field">
-                      <label class="field__label">Ramp-up curve <span class="field__tag">live preview</span></label>
+                  <!-- Plan Parameters (EDITABLE user inputs) — the engine uses THESE values.
+                       Manpower is derived (machine × 6) and read-only. -->
+                  <div class="pl-card pl-card--planned">
+                    <div class="pl-card__head">
+                      <span class="pl-card__title">Plan Parameters</span>
+                    </div>
+                    <div class="pl-tiles">
+                      <div class="pl-tile pl-tile--edit">
+                        <span class="pl-tile__label">Productivity</span>
+                        <input type="number" id="pProductivity" class="pl-tile__input" min="0.001" step="0.001" placeholder="--" inputmode="decimal" />
+                        <span class="pl-tile__unit">piles / mc / hr</span>
+                      </div>
+                      <div class="pl-tile pl-tile--edit">
+                        <span class="pl-tile__label">Machine</span>
+                        <input type="number" id="pMachines" class="pl-tile__input" min="0" step="1" placeholder="--" inputmode="numeric" />
+                        <span class="pl-tile__unit">nos</span>
+                      </div>
+                      <div class="pl-tile pl-tile--edit pl-tile--ro">
+                        <span class="pl-tile__label">Manpower</span>
+                        <input type="number" id="pManpower" class="pl-tile__input" min="0" step="1" placeholder="--" readonly title="Auto = Machine × 6" />
+                        <span class="pl-tile__unit">nos &middot; auto (machine &times; 6)</span>
+                      </div>
+                    </div>
+                    <div class="notice notice--warn" id="capNotice" hidden></div>
+                  </div>
+                </div>
+
+                <!-- RIGHT — ramp-up curve over hindrances / constraints -->
+                <div class="pl-col">
+                  <div class="pl-card pl-card--ramp">
+                    <div class="pl-card__head">
+                      <span class="pl-card__title">Ramp-up Curve</span>
+                      <span class="field__tag">live preview</span>
+                    </div>
+                    <div class="pl-card__body">
                       <div class="ramp-chart" id="rampChart"></div>
                     </div>
-                    <div class="field">
-                      <span class="field__label">Hindrances <span class="field__tag">plan-wide</span></span>
+                  </div>
+                  <div class="pl-card pl-card--hind">
+                    <div class="pl-card__head">
+                      <span class="pl-card__title">Hindrances</span>
+                      <span class="field__tag">plan-wide</span>
+                    </div>
+                    <div class="pl-card__body">
                       <div id="hindranceList" class="hindrance-list"></div>
                       <button type="button" id="addHindranceBtn" class="btn btn--ghost btn--sm">+ Add hindrance</button>
                     </div>
                   </div>
+                </div>
 
-                  <!-- Ramp-up inputs kept in the DOM (hidden) so the engine + live curve still use them. -->
-                  <div hidden id="rampInputs">
-                    <input type="number" id="pRampN" min="0" step="1" value="7" />
-                    <input type="number" id="pPrevMachines" min="0" step="1" />
-                    <p id="pPrevHint"></p>
-                    <input type="text" id="pRampProfile" value="0.45, 0.58, 0.70, 0.80, 0.88, 0.94, 0.98, 1.00" />
-                  </div>
+                <!-- Ramp-up inputs kept in the DOM (hidden) so the engine + live curve still use them. -->
+                <div hidden id="rampInputs">
+                  <input type="number" id="pRampN" min="0" step="1" value="7" />
+                  <input type="number" id="pPrevMachines" min="0" step="1" />
+                  <p id="pPrevHint"></p>
+                  <input type="text" id="pRampProfile" value="0.45, 0.58, 0.70, 0.80, 0.88, 0.94, 0.98, 1.00" />
                 </div>
               </div>
 
               <div class="bs-actions" id="paramsFoot" hidden>
-                <button type="button" id="resetPlanBtn" class="btn btn--ghost bs-reset" title="Clear the Plan Parameters back to defaults">
-                  <svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg><span>Reset</span>
-                </button>
                 <button type="button" id="generateBtn2" class="btn btn--primary bs-process">
                   <svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg><span>Process Plan</span>
+                </button>
+                <button type="button" id="resetPlanBtn" class="btn btn--ghost bs-reset" title="Clear the generated plan and reset the Plan Parameters back to defaults">
+                  <svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg><span>Reset</span>
                 </button>
               </div>
             </div>
