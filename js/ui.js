@@ -1062,22 +1062,22 @@
       "</strong> installs <strong>" + U.fmtInt(Math.round(r.totalInstalled)) + "</strong> piles" + priorTxt +
       " across <strong>" + U.fmtInt(covered) + "</strong> of " + U.fmtInt(totalCh) +
       " chainages, using <strong>" + r.deployed + "</strong> machine" + (r.deployed === 1 ? "" : "s") +
-      " &amp; <strong>" + U.fmtInt(people) + "</strong> people over <strong>" + r.workingDayCount + "</strong> working days." }));
+      " &amp; <strong>" + U.fmtInt(people) + "</strong> Manpower over <strong>" + r.workingDayCount + "</strong> working days." }));
 
     // Core KPIs (the rest is in the headline / forecast, keeping this uncluttered).
     host.appendChild(statGrid([
-      { label: "Piles Planned", value: U.fmtInt(Math.round(r.totalInstalled)), sub: U.fmtInt(Math.round(avgPerDay)) + "/day avg", tone: "indigo" },
-      { label: "Total Work Planned", value: U.fmtInt(r.totalComplete) + " of " + U.fmtInt(r.totalMTO), sub: "piles of scope", tone: "violet" },
-      { label: "Productivity", value: U.fmtNum(r.params.productivity, 3), sub: "piles / mc / hr", tone: "sky" },
-      { label: "Machines deployed", value: r.deployed, sub: U.fmtInt(people) + " people · " + r.params.workhours + " h/day", tone: "amber" },
-      { label: "Idle machines", value: idle, sub: idle > 0 ? "chosen but not needed this window" : "none idle", tone: idle > 0 ? "rose" : "emerald" },
-      { label: "Length covered", value: U.fmtNum(r.lengthThisWindowKm || 0, 2) + " km", sub: U.fmtNum(r.lengthCoveredKm || 0, 2) + " km cumulative · of " + U.fmtNum(r.totalScopeLengthKm || 0, 1) + " km scope", tone: "teal" },
-      { label: "Chainages covered", value: U.fmtInt(covered) + " / " + U.fmtInt(totalCh), sub: r.blocked.length ? r.blocked.length + " blocked (no material)" : "all reachable", tone: r.blocked.length ? "warn" : "emerald" }
+      { label: "Scope", value: U.fmtInt(r.totalMTO), tone: "violet" },
+      { label: "Planned Scope", value: U.fmtInt(Math.round(r.totalInstalled)), tone: "indigo" },
+      { label: "Length covered", value: U.fmtNum(r.lengthThisWindowKm || 0, 2) + " km", tone: "teal" },
+      { label: "Chainages covered", value: U.fmtInt(covered) + " / " + U.fmtInt(totalCh), tone: r.blocked.length ? "warn" : "emerald" },
+      { label: "Productivity", value: U.fmtNum(r.params.productivity, 3), sub: "piles / mch / hr", tone: "sky" },
+      { label: "Machines deployed", value: r.deployed, sub: U.fmtInt(people) + " Manpower · " + r.params.workhours + " h/day", tone: "amber" },
+      { label: "Idle machines", value: idle, tone: idle > 0 ? "rose" : "emerald" },
     ]));
 
     // Forecast completion for the whole priority — two dates as distinct callouts.
     const fc = el("div", { class: "forecast" });
-    fc.appendChild(el("div", { class: "forecast__title", text: "Forecast completion · Entire Selected priority" }));
+    fc.appendChild(el("div", { class: "forecast__title", text: "Forecast completion · Selected priority" }));
     const grid = el("div", { class: "forecast__grid" });
     [{ s: fullFinishStat(r), cls: "forecast__card--all" }].forEach(({ s, cls }) => {
       const c = el("div", { class: "forecast__card " + cls });
@@ -1102,7 +1102,7 @@
     const hint = $("#materialCheckHint");
     if (hint) hint.textContent = r.materialHaltDate
       ? "At this pace, work stalls for material around " + U.fmtDate(r.materialHaltDate) + "."
-      : "Every material this plan works this period is covered by on-site stock + in-transit.";
+      : "Material needed for selected plan duration";
     if (!rows.length) { host.appendChild(el("div", { class: "emptystate", html: "<p>No materials in scope for this plan.</p>" })); return; }
 
     const cols = ["Priority", "Material", "Required", "In stock", "In transit", "Gap / shortage", "Work halts on"];
@@ -1300,7 +1300,7 @@
     computeDisplay(r.schedule);
     const groupBy = $("#tableGroup").value;
 
-    const cols = ["Date", "Day #", "Machine", "Chainage", "Material", "Item Code", "Piles (day)", "Cum.", "MTO", "% Comp.", "Status", "Material left"];
+    const cols = ["Date", "Day #", "Machine", "Chainage", "Material", "Item Code", "Piles/day", "Cum.", "MTO", "% Comp.", "Status", "Balance Material"];
     const NUM_COLS = { "Piles (day)": 1, "Cum.": 1, "MTO": 1, "% Comp.": 1, "Material left": 1 };
     const table = el("table", { class: "data" });
     const thead = el("thead");
@@ -1333,7 +1333,7 @@
     table.appendChild(tb);
     const scroll = $("#tableScroll"); U.clear(scroll); scroll.appendChild(table);
 
-    $("#tableSummary").textContent = r.schedule.length + " entries · " + r.worked.length + " chainages · " + U.fmtInt(Math.round(r.totalInstalled)) + " piles installed in window";
+    $("#tableSummary").textContent = r.worked.length + " chainages · " + U.fmtInt(Math.round(r.totalInstalled)) + " piles installed in window";
   }
 
   // Build a group-divider row (Date/Chainage/Machine) for the table.
