@@ -74,12 +74,62 @@
       if (!m) return 0;
       return netOnsite(code) + m.inbound.reduce((s, i) => s + (arrivesInPlan(i) ? i.qty : 0), 0);
     }
-    const workable = [], blocked = [];
+    /* ---- 2b. mandrel availability (§5.8) -----------------------------------
+       A mandrel is the driving tool fitted to a machine, specified by the pile's
+       THICKNESS × LENGTH (`f.mandrelKey`, derived in data.js §3.5). Unlike
+       material it is NOT consumed: it is held by a machine only WHILE that work
+       is in progress and is released the moment the work completes, after which
+       another machine — or the same one on a different chainage of the same
+       spec — can pick it up.
+
+       So the resource is MACHINE-TIME on a spec, not a per-machine daily seat:
+       N mandrels of a spec provide N machine-days of driving on that spec per
+       day. A machine that spends half a day on the spec consumes 0.5, leaving
+       0.5 for someone else that same day — which is exactly the mid-day handover
+       described above. `mandrelDayUsed` below tracks that fractional usage.
+
+       `p.mandrels` is a plain {sizeKey: count} map from the planner's input.
+       Once ANY mandrel figure is supplied, a size with NO number (blank cell /
+       absent from the sheet) means the site has NONE of it, so it is 0 and its
+       scope is blocked. The UI therefore REQUIRES the input (gatherParams).
+
+       If `p.mandrels` is omitted or empty, mandrel gating is OFF entirely — we
+       are not "planning with mandrels", so nothing is blocked. That keeps the
+       engine's contract for callers that don't model mandrels at all (tests,
+       and Bluesky until it is taught about them) instead of having them silently
+       return an empty plan.
+
+       NOTE (future): dated mandrel deliveries plug in here — make this a function
+       of (key, day) reading a per-size arrival list, exactly like `replen` does
+       for material. Everything downstream already asks per-day. */
+    const mandrelCfg = p.mandrels || {};
+    const mandrelGated = Object.keys(mandrelCfg).length > 0;   // no input at all = feature off
+    function mandrelLimit(key) {
+      // No key = the profile code carries no dimensions, so the rule can't be
+      // evaluated at all; leave it ungated rather than silently dropping scope.
+      if (!key || !mandrelGated) return Infinity;
+      const v = mandrelCfg[key];
+      if (v == null || v === "" || !isFinite(v)) return 0;   // no number = none on site
+      return Math.max(0, Math.floor(v));
+    }
+
+    // Blocked = active chainages that can't be worked at all this plan: no usable
+    // material, or no mandrel for their size. Reasons are kept in a side map (the
+    // feature objects belong to the frozen shared dataset — never mutate them).
+    const workable = [], blocked = [], blockedNoMandrel = [];
+    const blockedReasonById = {};
     active.forEach((f) => {
-      if (!f.code || totalMaterialQty(f.code) <= 0) blocked.push(f);
-      else workable.push(f);
+      const noMaterial = !f.code || totalMaterialQty(f.code) <= 0;
+      const noMandrel = mandrelLimit(f.mandrelKey) <= 0;
+      if (noMaterial || noMandrel) {
+        blocked.push(f);
+        blockedReasonById[f.id] = noMaterial && noMandrel ? "No material or mandrel"
+          : noMaterial ? "No material" : "No mandrel";
+        if (noMandrel) blockedNoMandrel.push(f);
+      } else workable.push(f);
     });
     const blockedMTO = blocked.reduce((s, f) => s + remainingById[f.id], 0);   // remaining piles blocked
+    const blockedNoMandrelMTO = blockedNoMandrel.reduce((s, f) => s + remainingById[f.id], 0);
     // Full priority scope (all chainages, full MTO) — for reporting completion %.
     const totalMTO = candidates.reduce((s, f) => s + f.mto, 0);
     const installedPriorTotal = candidates.reduce((s, f) => s + priorById[f.id], 0);
@@ -258,6 +308,25 @@
       let lastInstallDate = null;
       const schedule = [];
       const consumedByCode = {};
+      // Mandrel bookkeeping (§5.8). `mandrelDayUsed` is the MACHINE-DAYS of each spec
+      // consumed so far today (fractional — half a day's work on a spec is 0.5), and
+      // resets every working day because a mandrel is reusable capacity, not stock.
+      let mandrelDayUsed = {};
+      let mandrelIdleDays = 0;                 // machine-days lost purely to mandrel scarcity
+      const mandrelPeak = {};                  // size -> peak machine-days used in a single day
+      // Machine-days of this spec still free today (Infinity = ungated).
+      function mandrelAvail(key) {
+        const lim = mandrelLimit(key);
+        if (lim === Infinity) return Infinity;
+        return Math.max(0, lim - (mandrelDayUsed[key] || 0));
+      }
+      // Consume mandrel time for `install` piles done at a `dayCap` daily rate.
+      // Usage is tracked even for UNGATED specs — the peak is what tells the planner
+      // how many mandrels a spec actually needs; only enforcement is skipped.
+      function useMandrel(key, install, dayCap) {
+        if (!key || !(dayCap > 0)) return;
+        mandrelDayUsed[key] = (mandrelDayUsed[key] || 0) + install / dayCap;
+      }
 
       // Pending work pool = queue order (priority → material → frontier → Chainage_Id),
       // consumed lazily. We scan for the first chainage that (a) still has remaining scope
@@ -268,13 +337,22 @@
       // Pull the next assignable chainage id (highest queue order first) that still has scope
       // and — unless material is unlimited — usable stock right now. Returns null when nothing
       // is workable; skipped work stays in `pending` and resumes once its material arrives.
+      // `mandrelStarved` reports back that a candidate was passed over ONLY because
+      // its size had no free mandrel — used to attribute idle machine-days below.
+      let mandrelStarved = false;
       function nextWorkable(taken) {
         for (let k = 0; k < pending.length; k++) {
           const id = pending[k];
           if (id == null || taken.has(id)) continue;
           const s = st[id];
           if (s.completed || (remainingById[id] - s.done) <= EPS) { pending[k] = null; continue; }
-          if (unlimited || (stock[chById[id].code] || 0) > EPS) { pending[k] = null; return id; }
+          const ch = chById[id];
+          const hasStock = unlimited || (stock[ch.code] || 0) > EPS;
+          if (mandrelAvail(ch.mandrelKey) <= EPS) {    // spec's mandrels all in use today
+            if (hasStock) mandrelStarved = true;       // workable but for the mandrel
+            continue;                                  // stays queued — retry tomorrow
+          }
+          if (hasStock) { pending[k] = null; return id; }
         }
         return null;
       }
@@ -286,6 +364,8 @@
         }
         if (!day.isWorking) return;
         workingOrdinal++;
+        // Fresh mandrel pool for the day (reusable capacity — nothing carries over).
+        mandrelDayUsed = {};
 
         // Reserve chainages still in progress (unfinished) so two machines never work the
         // same chainage on the same day; drop any that finished on an earlier day.
@@ -309,13 +389,17 @@
           // and the budget flows across chainages in whole piles.
           const dayCap = Math.ceil(p.productivity * factor * day.hours);   // this machine's capacity for the day
           let budget = dayCap, workedToday = false, guard = 0;
+          mandrelStarved = false;
 
           while (budget > EPS && guard++ < 100000) {
             let id = assign[i];
             const done = id != null && (remainingById[id] - st[id].done) <= EPS;
             const starved = id != null && !done && !unlimited && (stock[chById[id].code] || 0) <= EPS;
-            if (id == null || done || starved) {
-              if (starved && pending.indexOf(id) < 0) pending.push(id);   // resume later when material arrives
+            // Its spec's mandrels are all in use by others today → hand the chainage
+            // back and look for work on a spec that still has mandrel time free.
+            const mStarved = id != null && !done && !starved && mandrelAvail(chById[id].mandrelKey) <= EPS;
+            if (id == null || done || starved || mStarved) {
+              if ((starved || mStarved) && pending.indexOf(id) < 0) pending.push(id);   // resume later
               if (id != null) assign[i] = null;
               const nid = nextWorkable(taken);
               if (nid == null) break;                            // nothing workable → machine stops for the day
@@ -326,8 +410,13 @@
             const avail = unlimited ? Infinity : (stock[ch.code] || 0);
             const prior = priorById[id] || 0;
             const remaining = remainingById[id] - s.done;
-            const install = Math.min(budget, remaining, avail);
+            // A mandrel is held only while the work runs, so the spec's remaining
+            // machine-days convert straight into a pile ceiling at this machine's rate.
+            const mAvail = mandrelAvail(ch.mandrelKey);
+            const mCap = mAvail === Infinity ? Infinity : mAvail * dayCap;
+            const install = Math.min(budget, remaining, avail, mCap);
             if (install <= EPS) break;                           // safety: nothing installable
+            useMandrel(ch.mandrelKey, install, dayCap);
             s.done += install; budget -= install;
             if (!unlimited) stock[ch.code] = avail - install;
             s.lastDate = day.date;
@@ -344,11 +433,16 @@
             if (s.done >= remainingById[id] - EPS) { s.completed = true; s.completedDate = day.date; assign[i] = null; }
             // budget may remain → loop continues onto the next workable chainage
           }
-          if (!workedToday) idleMachineDays++;
+          if (!workedToday) { idleMachineDays++; if (mandrelStarved) mandrelIdleDays++; }
         }
+        // Peak concurrent demand per spec = the most machine-days it absorbed in one day.
+        Object.keys(mandrelDayUsed).forEach((k) => {
+          if ((mandrelPeak[k] || 0) < mandrelDayUsed[k]) mandrelPeak[k] = mandrelDayUsed[k];
+        });
       });
       const allWorkableDone = workable.every((f) => st[f.id].completed);
-      return { totalInstalled, schedule, state: st, stockEnd: stock, consumedByCode, idleMachineDays, lastInstallDate, allWorkableDone };
+      return { totalInstalled, schedule, state: st, stockEnd: stock, consumedByCode, idleMachineDays,
+               lastInstallDate, allWorkableDone, mandrelIdleDays, mandrelPeak };
     }
 
     /* ---- 7. cost-optimization: fewest machines for max installs ------------ */
@@ -358,7 +452,7 @@
     for (let M = 1; M <= maxMachines; M++) { const r = simulate(M); plans[M] = r; perM[M] = r.totalInstalled; if (r.totalInstalled > maxInstalled) maxInstalled = r.totalInstalled; }
     let deployed = maxMachines;
     for (let M = 1; M <= maxMachines; M++) { if (perM[M] >= maxInstalled - EPS) { deployed = M; break; } }
-    const plan = maxMachines > 0 ? plans[deployed] : { totalInstalled: 0, schedule: [], state: {}, stockEnd: Object.assign({}, startStock), consumedByCode: {}, idleMachineDays: 0 };
+    const plan = maxMachines > 0 ? plans[deployed] : { totalInstalled: 0, schedule: [], state: {}, stockEnd: Object.assign({}, startStock), consumedByCode: {}, idleMachineDays: 0, mandrelIdleDays: 0, mandrelPeak: {} };
 
     /* ---- 8. chainages worked (for gantt / table) --------------------------- */
     const worked = workable
@@ -568,6 +662,35 @@
     const materialHaltDate = materialCheck.reduce((min, r) =>
       (r.haltDate && (!min || U.cmpDate(r.haltDate, min) < 0)) ? r.haltDate : min, null);
 
+    /* ---- 10d. mandrel-wise usage for THIS PLAN PERIOD (§5.8) ---------------
+       One row per mandrel size in scope: how many the planner has, the peak
+       number of machines that actually needed it on a single day, and the scope
+       riding on it. `available === null` means the size was left unconstrained. */
+    const mandrelScope = {};
+    candidates.forEach((f) => {
+      if (!f.mandrelKey) return;
+      const g = mandrelScope[f.mandrelKey] || (mandrelScope[f.mandrelKey] =
+        { key: f.mandrelKey, label: SPP.data.mandrelLabelFor(f.mandrelKey), chainages: 0, remaining: 0, profiles: [] });
+      g.chainages++; g.remaining += remainingById[f.id] || 0;
+      if (g.profiles.indexOf(f.profile) < 0) g.profiles.push(f.profile);
+    });
+    const mandrelRows = Object.keys(mandrelScope).map((key) => {
+      const g = mandrelScope[key];
+      const lim = mandrelLimit(key);
+      // Peak is fractional machine-days; the number of MANDRELS that implies is its
+      // ceiling (0.5 machine-days of demand still needs one physical mandrel).
+      const peak = (plan.mandrelPeak && plan.mandrelPeak[key]) || 0;
+      return {
+        key, label: g.label, profiles: g.profiles.sort(),
+        available: lim === Infinity ? null : lim,          // null = ungated (no dimensions)
+        peakUsed: Math.ceil(peak - EPS),                   // mandrels actually needed on the busiest day
+        peakMachineDays: U.round(peak, 2),
+        chainages: g.chainages, remaining: Math.round(g.remaining),
+        blocking: lim === 0 && g.remaining > EPS
+      };
+    }).sort((a, b) => b.remaining - a.remaining || a.label.localeCompare(b.label));
+    const mandrelIdleDays = plan.mandrelIdleDays || 0;
+
     /* ---- 11. rate-only finish (ASSUME ALL MATERIAL ARRIVES) ----------------
        Ignoring material constraints entirely, how long to install the whole
        remaining priority purely at the steady daily capacity
@@ -602,6 +725,21 @@
       blockedText += ".";
       warnings.push({ code: "blocked", level: "bad", text: blockedText });
     }
+    // No mandrel at all for a size → that scope simply can't be worked this plan (§5.8).
+    if (blockedNoMandrel.length) {
+      const sizes = Array.from(new Set(blockedNoMandrel.map((f) => SPP.data.mandrelLabelFor(f.mandrelKey))));
+      warnings.push({ code: "noMandrel", level: "bad", text: blockedNoMandrel.length +
+        " chainage(s) can't be worked — no mandrel available for " + sizes.join(", ") +
+        " (" + U.fmtInt(Math.round(blockedNoMandrelMTO)) + " piles left out of this plan)." });
+    }
+    // Mandrels present but fully booked → machines stood idle waiting for one.
+    if (mandrelIdleDays > 0) {
+      const tight = mandrelRows.filter((m) => m.available != null && m.peakUsed >= m.available && m.available > 0)
+        .map((m) => m.label);
+      warnings.push({ code: "mandrelLimited", level: "warn", text: mandrelIdleDays +
+        " machine-day(s) idle waiting for a mandrel" + (tight.length ? " — " + tight.join(", ") + " ran at full mandrel capacity" : "") +
+        ". Adding mandrels for these sizes would raise output." });
+    }
     const shortfalls = profileRows.filter((r) => r.startedCount > 0 && r.shortfall > 0);
     if (shortfalls.length) warnings.push({ code: "shortfall", level: "warn", text: shortfalls.length + " pile type(s) don't have enough material to finish the chainages already in progress — short by " + U.fmtInt(shortfalls.reduce((s, r) => s + r.shortfall, 0)) + " piles." });
     if (lostDays.length) warnings.push({ code: "hindranceDays", level: "warn", text: lostDays.length + " working day(s) are lost to hindrances (" + lostDays.map((d) => U.fmtShort(d)).join(", ") + ") — the plan skips these days." });
@@ -632,6 +770,7 @@
       params: p, planStart, planEnd, totalDays, cap, maxMachines, deployed, idleMachines, capApplied,
       manpowerCapped: maxMachines, calendar: cal, workingDayCount,
       queue, worked, blocked, completed, partial, candidates, totalMTO, blockedMTO,
+      blockedNoMandrel, blockedNoMandrelMTO, blockedReasonById, mandrelRows, mandrelIdleDays,
       installedPriorTotal, remainingMTO, totalComplete, completedCount: completed.length,
       totalScopeLengthKm, lengthCoveredKm, lengthThisWindowKm,
       projectedFinish, finishCoversAll, projFinishWorkingDays, unachievablePiles, projTimeLimited,

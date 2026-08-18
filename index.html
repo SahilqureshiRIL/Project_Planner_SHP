@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Sheet Pile Installation Planner</title>
-  <link rel="stylesheet" href="styles.css?v=152" />
+  <link rel="stylesheet" href="styles.css?v=159" />
   <!--
     SheetJS (xlsx) is vendored locally in ./vendor so the app works fully offline.
     If you prefer the CDN, replace the src below with:
@@ -240,6 +240,20 @@
                     </div>
                     <div class="notice notice--warn" id="capNotice" hidden></div>
                   </div>
+
+                  <!-- Mandrel availability: a resource constraint like machines/manpower,
+                       so it lives with the Plan Parameters rather than the scope inputs.
+                       Counts are edited in #mandrelModal; this shows a compact summary. -->
+                  <div class="pl-card pl-card--mand">
+                    <div class="pl-card__head">
+                      <span class="pl-card__title">Mandrel Availability</span>
+                      <span class="field__tag">thickness &times; length</span>
+                    </div>
+                    <div class="pl-card__body">
+                      <div id="mandrelSummary" class="hind-summary"></div>
+                      <button type="button" id="openMandrelModalBtn" class="btn btn--ghost btn--sm btn--block">Set mandrels</button>
+                    </div>
+                  </div>
                 </div>
 
                 <!-- RIGHT — ramp-up curve over hindrances / constraints -->
@@ -264,15 +278,18 @@
                       <button type="button" id="openHindranceModalBtn" class="btn btn--ghost btn--sm">+ Add hindrance</button>
                     </div>
                   </div>
-                </div>
 
-                <div class="bs-actions" id="paramsFoot" hidden>
-                  <button type="button" id="generateBtn2" class="btn btn--primary bs-process">
-                    <svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg><span>Process Plan</span>
-                  </button>
-                  <button type="button" id="resetPlanBtn" class="btn btn--ghost bs-reset" title="Clear the generated plan and reset the Plan Parameters back to defaults">
-                    <svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg><span>Reset</span>
-                  </button>
+                  <!-- Actions live at the foot of the right column (not a full-width row
+                       below the grid): it fills the slack under Hindrances, and lets the
+                       Mandrel card take up the matching slack in the middle column. -->
+                  <div class="bs-actions" id="paramsFoot" hidden>
+                    <button type="button" id="generateBtn2" class="btn btn--primary bs-process">
+                      <svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg><span>Process Plan</span>
+                    </button>
+                    <button type="button" id="resetPlanBtn" class="btn btn--ghost bs-reset" title="Clear the generated plan and reset the Plan Parameters back to defaults">
+                      <svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg><span>Reset</span>
+                    </button>
+                  </div>
                 </div>
 
                 <!-- Ramp-up inputs kept in the DOM (hidden) so the engine + live curve still use them. -->
@@ -625,6 +642,31 @@
     </div>
   </div>
 
+  <!-- Mandrel availability popup (Installation Planner): how many mandrels exist
+       per pile SIZE (width × length). A mandrel is the driving tool fitted to the
+       machine; it is reusable capacity, so it caps how many machines can work a
+       given size on the same day. Rows are scoped to the selected priorities. -->
+  <div class="modal-overlay" id="mandrelModal" hidden>
+    <div class="modal modal--mandrel" role="dialog" aria-modal="true" aria-labelledby="mandrelModalTitle">
+      <div class="modal__head">
+        <span id="mandrelModalTitle">Mandrel availability &middot; by pile size</span>
+        <span class="modal__head-right">
+          <span class="warn-badge w-warn" id="mandrelCount"></span>
+          <button type="button" class="modal__x" id="mandrelCloseX" aria-label="Close" title="Close">&times;</button>
+        </span>
+      </div>
+      <div class="modal__body" id="mandrelModalBody">
+        <p class="modal__hint">A mandrel is specified by the pile's <strong>thickness &times; length</strong>, so every profile with those dimensions draws on the same pool. A mandrel is held only while a chainage is being driven and frees the moment it completes &mdash; so <strong>1 mandrel = 1 machine-day</strong> of work on that size per day. A size left <strong>blank counts as none</strong> and its chainages are left out of the plan.</p>
+        <div class="mandrel-hd"><span>Pile size</span><span>Mandrels</span></div>
+        <div id="mandrelList" class="mandrel-list"></div>
+      </div>
+      <div class="modal__actions">
+        <span class="modal__spacer"></span>
+        <button type="button" id="mandrelDoneBtn" class="btn btn--primary">Done</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Blocked-chainages popup (Installation Planner): a table of chainages that
        have no usable material, shown against their profile / item code / scope. -->
   <div class="modal-overlay" id="blockedModal" hidden>
@@ -671,10 +713,10 @@
        browsers don't run a stale copy. -->
   <script src="js/chainage_data.js?v=105"></script>
   <script src="js/util.js?v=122"></script>
-  <script src="js/data.js?v=123"></script>
-  <script src="js/engine.js?v=131"></script>
+  <script src="js/data.js?v=125"></script>
+  <script src="js/engine.js?v=133"></script>
   <script src="js/xer.js?v=105"></script>
-  <script src="js/ui.js?v=146"></script>
+  <script src="js/ui.js?v=150"></script>
   <!-- Bluesky target-date back-planner (loads after ui.js so it can read the shared store). -->
   <script src="js/bluesky.js?v=105"></script>
   <script src="js/bluesky_ui.js?v=108"></script>

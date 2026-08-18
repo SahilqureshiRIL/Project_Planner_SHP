@@ -100,6 +100,34 @@ chainage's MTO when complete — counting both roughly double-counts). The parse
 - `installedByChainage` — total piles already installed per chainage `Name` (§5.2 netting);
 - `lastInstallByChainage` — **latest install date** per chainage (the work-front anchor, §5.2).
 
+### 3.5 Mandrel sizing — derived, not a file
+
+A **mandrel** is the driving tool fitted to a machine. It is specified by the pile's
+**thickness × length** — the two columns of the site's mandrel sheet — so every profile
+with those dimensions draws on the same pool, **regardless of width** (confirmed with
+the planner). Width is deliberately *not* part of the key; thickness *is*, because
+`735X300X10.4X5000` and `735X300X12X5000` are the same width and length yet need
+different mandrels, and the site sheet lists them as separate rows.
+
+The key is derived by `D.mandrelKeyFor` from **`Profile Name`** (the short code), which
+is uniformly `[prefix]<width>-<depth>-<thickness>-<length>` across all 19 profiles.
+`Item Description` is *not* usable — one profile is just `"PVC SHEET PILE 10.4 MM THK"`.
+
+- `feature.mandrelKey` → `"12x5500"` (thickness × length-in-mm); `null` when the code
+  carries no dimensions — such a chainage is left **ungated** rather than blocked,
+  because silently emptying the plan on a *parse failure* is the worse failure mode.
+  (No chainage hits this today.)
+- `chainage.mandrelGroups` → one entry per size (`key`, `label`, `thickness`, `length`,
+  `profiles`, `priorities`, `chainages`, `mto`), sorted by thickness then length. The
+  bundled dataset yields **17 sizes** from 19 profiles — two sizes pool two widths each:
+
+  | Size | Profiles pooled |
+  |---|---|
+  | 10.4 mm × 5 m | `735X300X10.4X5000` + `MA765X280X10.4X5000` |
+  | 10.4 mm × 5.25 m | `MA765X280X10.4X5250` + `PVC SHEET PILE 10.4 MM THK` (GW458) |
+
+Counts come from the **planner's input** (§5.8), not from a file.
+
 ---
 
 ## 4. Input screen & defaults
@@ -200,6 +228,43 @@ Two dates, both projecting the **recommended crew + productivity + work-week**:
   `ceil(remaining piles ÷ (Productivity × Workhours × deployed))` working days from the
   plan start (respecting Work-Days/week). This is *later* than the material date when
   supply is the bottleneck, because it completes **everything**.
+
+### 5.8 Mandrel constraint
+Mandrels (§3.5) are **reusable capacity, not stock**: never consumed, reset every
+working day. A mandrel is held by a machine **only while that work is in progress** and
+is released **the moment the chainage completes**, after which another machine — or the
+same one on a different chainage of the same spec — can pick it up.
+
+The resource is therefore **machine-time on a spec**, not a per-machine daily seat:
+
+> **N mandrels of a spec = N machine-days of driving on that spec per day.**
+
+A machine spending half a day on the spec consumes `0.5`, leaving `0.5` for someone else
+*that same day* — the mid-day handover above. Tracked as `mandrelDayUsed[spec] +=
+install ÷ dayCap`; the install ceiling is `(count − used) × dayCap`.
+
+- Input `p.mandrels = {sizeKey: count}` (planner-entered, §4). Once **any** figure is
+  supplied, a size with **no number** (blank cell / absent from the sheet) means the
+  site has **none**, so it is `0` and its scope is **blocked** (→ `noMandrel`). The UI
+  therefore treats the input as **required**.
+- If `p.mandrels` is **omitted or empty**, mandrel gating is **off entirely** — we are
+  not planning with mandrels, so nothing is blocked. This keeps the engine's contract
+  for callers that don't model mandrels (the test suite, and Bluesky until it is taught
+  about them) instead of having them silently return an empty plan.
+- A chainage skipped only for want of mandrel time **stays queued** and resumes on a
+  later day, exactly like a material-starved one; a machine whose spec has no mandrel
+  time left hands the chainage back and looks for work on another spec.
+- Usage is **tracked even for ungated specs** — `mandrelRows[].peakUsed` is the peak
+  mandrels a spec needed on its busiest day (`ceil` of `peakMachineDays`), i.e. *how
+  many mandrels you actually need*.
+- Emergent: the cost-optimizer (§5.4) needs no changes — machines beyond the mandrel
+  supply install nothing, so `deployed` falls to the mandrel-limited count on its own.
+- Warnings: **`noMandrel`** (spec has none → its scope leaves the plan) and
+  **`mandrelLimited`** (machine-days idled waiting for a mandrel).
+
+*Not yet implemented:* dated mandrel **deliveries**. `mandrelLimit(key)` becomes a
+function of `(key, day)` reading a per-size arrival list, exactly like `replen` does for
+material — every call site already asks per-day.
 
 ---
 

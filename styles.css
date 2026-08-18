@@ -491,6 +491,63 @@ select.input--sm { background-position: right 8px center, center; padding-right:
 .hindrance__days-label { font-size: 11px; color: var(--text-muted); margin-bottom: 5px; }
 .hindrance__hint { font-size: 10.5px; color: var(--text-faint); margin-top: 6px; line-height: 1.4; }
 
+/* ---- Mandrel availability -------------------------------------------------
+   The popup is a fixed-height WINDOW: navy head and the Done bar stay put and
+   only the size list scrolls. Without the height cap the body grows with the
+   row count (17 sizes) and pushes the actions bar off-screen. */
+.modal--mandrel {
+  max-width: 660px;
+  max-height: min(80vh, 760px);
+  display: flex; flex-direction: column;
+}
+.modal--mandrel .modal__head,
+.modal--mandrel .modal__actions { flex: none; }
+/* The body itself does NOT scroll — it lays out a fixed hint + column header
+   over a scrolling list, so the header can't drift away from its columns. */
+.modal--mandrel .modal__body {
+  flex: 1 1 auto; min-height: 0;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.modal--mandrel .modal__hint { flex: none; }
+/* Column header, aligned to the row grid below it. */
+.mandrel-hd {
+  flex: none;
+  display: grid; grid-template-columns: 1fr 104px; gap: var(--s-3);
+  padding: 0 11px 6px; margin-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+  font-size: 10px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--text-muted);
+}
+.mandrel-hd span:last-child { text-align: right; }
+.mandrel-list {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+  scrollbar-gutter: stable;                 /* keeps rows aligned with the header */
+  display: flex; flex-direction: column; gap: 6px;
+  padding-right: 2px;
+}
+.mandrel {
+  display: grid; grid-template-columns: 1fr 104px; gap: var(--s-3); align-items: center;
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 8px 10px;
+}
+.mandrel__main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.mandrel__size { font-weight: 700; font-size: 13px; color: var(--navy); font-variant-numeric: tabular-nums; }
+.mandrel__meta { font-size: 10.5px; color: var(--text-muted); line-height: 1.35; }
+.mandrel__count { width: 100%; text-align: right; font-variant-numeric: tabular-nums; }
+/* A size with no mandrel is excluded from the plan. Marked with an edge accent +
+   red placeholder rather than a filled red row — on first open EVERY size is
+   unset, and 17 solid pink rows read as an error state rather than a to-do list.
+   Inset shadow (not a border) so the row grid doesn't shift by 2px. */
+.mandrel--none { box-shadow: inset 3px 0 0 var(--danger); }
+.mandrel--none .mandrel__count { border-color: #e9b7ae; }
+.mandrel__count::placeholder { color: var(--danger); opacity: .7; font-style: italic; }
+.hind-chip--zero { background: var(--danger-bg); border-color: #f3c9c4; }
+.hind-chip--zero .hind-chip__type { color: var(--danger); }
+
+/* Mandrel card (middle column, under Plan Parameters). A compact two-chip
+   summary, so the card never grows with the size count and no chip is clipped.
+   Spacing comes from .pl-card__body's gap — no extra margins needed. */
+.pl-card--mand .hind-summary { margin: 0; }
+.pl-card--mand .hind-chip { font-size: 11.5px; padding: 3px 9px; }
+
 /* affected-day picker */
 .hcal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
 .hcal__hd { font-size: 9.5px; color: var(--text-faint); text-align: center; padding: 1px 0; font-weight: 600; }
@@ -814,6 +871,7 @@ table.data tr.row-completed td { color: var(--success); }
 .warn-badge.w-bad  { background: var(--danger-bg);  color: var(--danger); }
 .warn-badge.w-warn { background: var(--warning-bg); color: var(--warning); }
 .warn-badge.w-info { background: var(--info-bg);    color: var(--info); }
+.warn-badge.w-ok   { background: var(--success-bg); color: var(--success); }
 .modal__body { padding: var(--s-5); }
 /* Wider variant used for the blocked-chainages table popup. The table itself is
    the single scroll region (the body doesn't scroll), so there's only one bar. */
@@ -984,9 +1042,16 @@ table.data tr.row-completed td { color: var(--success); }
   align-items: start;
 }
 .pl-col { display: flex; flex-direction: column; gap: var(--s-3); min-width: 0; }
-/* Left inputs card fills its column (spanning the actions row below the middle/right cards). */
-.pl-card--inputs { grid-column: 1; grid-row: 1 / 3; align-self: stretch; }
-.pl-col { grid-row: 1; }
+/* One row, three equal-height columns. Every column stretches to the tallest, and
+   each nominates ONE card to absorb the slack (below), so all three finish flush
+   instead of leaving a ragged bottom or a stretched empty grid row. */
+.pl-card--inputs { grid-column: 1; grid-row: 1; align-self: stretch; }
+.pl-col { grid-row: 1; align-self: stretch; }
+/* The slack-absorbing element in each column: the Mandrel card (middle) and the
+   actions block (right). Hindrances must NOT absorb it — it is row-aligned with
+   Plan Parameters (both 186px below), so letting it grow pushes the two columns
+   out of line with each other. */
+.pl-card--mand { flex: 1 1 auto; }
 
 /* Card shell */
 .pl-card {
@@ -1020,6 +1085,12 @@ table.data tr.row-completed td { color: var(--success); }
 .pl-card .ms__control { min-height: 38px; border-radius: 9px; }
 /* Golden hover border to match the .input fields (e.g. Workhours/day). */
 .pl-card .ms__control:hover { border-color: var(--gold-300); }
+
+/* Plan Inputs stretches to match the tallest column, which used to leave its
+   leftover height pooled as one odd gap under the last field. Let the body fill
+   the card and distribute that height evenly BETWEEN the fields instead, so the
+   column reads as deliberately spaced and ends flush with its neighbours. */
+.pl-card--inputs .pl-card__body { flex: 1 1 auto; justify-content: space-between; }
 
 /* SDP on-site averages — white card body, navy header band, navy stat tiles */
 .pl-card--avg { background: var(--surface); border-color: var(--border); }
@@ -1106,12 +1177,23 @@ table.data tr.row-completed td { color: var(--success); }
   .pl-tiles { grid-template-columns: 1fr; }
 }
 
-/* Process / Reset actions sit below the SDP-averages + Plan-Parameters section,
-   spanning the middle AND right columns: Process Plan fills the width with Reset
-   beside it. Spacing above is owned by the grid gap, so no divider/margin here. */
-#paramsFoot { grid-column: 2 / 4; grid-row: 2; justify-content: flex-start; gap: var(--s-2); margin-top: 0; padding-top: 0; border-top: 0; }
-#paramsFoot .bs-process { flex: 0 0 auto; min-width: 220px; }
-#paramsFoot .bs-reset { flex: 0 0 auto; min-width: 220px; justify-content: center; font-size: 14px; padding: 12px 28px; }
+/* Process / Reset live at the FOOT OF THE RIGHT COLUMN (a child of .pl-col, not a
+   grid item), stacked full-width. Previously they were a row-2 band spanning the
+   middle+right columns, which the taller left card stretched into a dead gap.
+   Spacing above is owned by the column gap, so no divider/margin here. */
+#paramsFoot {
+  flex: 1 1 auto;                     /* absorbs the right column's slack (see above) */
+  flex-direction: column; align-items: stretch; justify-content: center;
+  gap: var(--s-2); margin-top: 0; padding-top: 0; border-top: 0;
+}
+/* The buttons share the band left under Hindrances, so they line up with the
+   Mandrel card opposite. They grow into it but cap out, then centre — otherwise a
+   tall band would stretch them into two absurd slabs. */
+#paramsFoot .bs-process,
+#paramsFoot .bs-reset {
+  width: 100%; min-width: 0; justify-content: center; font-size: 14px; padding: 12px 28px;
+  flex: 1 1 auto; min-height: 46px; max-height: 76px;
+}
 
 /* Priority & material-wise check card (shown after the plan summary) */
 .mcheck { margin: 0 0 var(--s-4); border: 1px solid var(--border); border-radius: var(--r-lg); overflow: hidden; box-shadow: var(--shadow-sm); }

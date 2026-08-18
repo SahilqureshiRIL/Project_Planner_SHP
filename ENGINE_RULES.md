@@ -93,6 +93,28 @@ Grouped by area. Section/`§` references match the comments in `engine.js`.
 | 9.2 | Rate-only finish | Assumes all material available; time = `remaining ÷ (productivity × workhours × machines)`, respecting work-days/week. | Assumption |
 | 9.3 | ~2-year horizon cap | Projection stops at ~730 days; beyond that is reported as time-limited. | Assumption |
 
+## 10. Mandrels (§5.8)
+
+A mandrel is the driving tool fitted to a machine, specified by the pile's
+**thickness × length** (`f.mandrelKey`, derived in `data.js` §3.5). Unlike material it is
+**reusable capacity**: never consumed, resets daily, held only while the work runs and
+released the moment the chainage completes.
+
+| # | Rule / Constraint | Detail | Type |
+|---|---|---|---|
+| 10.1 | Spec = thickness × length | Width is **not** part of the key — the same thickness/length pools across widths (10.4 × 5 m covers both the 735 and MA765 profiles). Thickness **is** — 735×10.4×5000 and 735×12×5000 need different mandrels. 19 profiles → 17 specs. | Assumption (confirmed with planner) |
+| 10.2 | N mandrels = N machine-days/day | The resource is machine-*time* on a spec, not a per-machine seat. Half a day's work consumes 0.5, so one mandrel can be **handed between machines within a day**. | Hard |
+| 10.3 | Install ceiling | `install ≤ (count − mandrelDayUsed[spec]) × dayCap`, and `mandrelDayUsed += install ÷ dayCap`. | Hard |
+| 10.4 | No number = none | Once any mandrel figure is supplied, a spec with a blank/absent number is `0` and its scope is blocked (→ `noMandrel`). The input is therefore **required** in the UI. | Assumption (confirmed with planner) |
+| 10.5 | Empty input = gating off | `p.mandrels` omitted/empty ⇒ no gating at all, so callers that don't model mandrels (tests, Bluesky) don't silently get an empty plan. | Assumption |
+| 10.6 | Starved ≠ dropped | A chainage passed over only for want of mandrel time stays queued and resumes later, like a material-starved one; the machine looks for work on another spec. | Hard |
+| 10.7 | Usage always tracked | `peakUsed` (= `ceil(peakMachineDays)`) is recorded even for ungated specs — it answers "how many mandrels do we need?". | — |
+| 10.8 | Optimizer is emergent | No change to §1.4: machines beyond the mandrel supply install nothing, so `deployed` falls to the mandrel-limited count by itself. | Hard (derived) |
+| 10.9 | Unparseable code = ungated | A profile code with no dimensions can't be evaluated, so it is left ungated rather than blocked (fails open, not shut). | Assumption |
+
+_Not yet implemented: dated mandrel **deliveries** (make `mandrelLimit` a function of
+`(key, day)`, mirroring material's `replen`)._
+
 ---
 
 ### Quick reference — the key numeric assumptions (easy to change)
@@ -100,6 +122,9 @@ Grouped by area. Section/`§` references match the comments in `engine.js`.
 | Knob | Current value | Where |
 |---|---|---|
 | People per machine | 6 | `cap = Math.floor(p.manpower / 6)` |
+| Mandrel default when blank | `0` = none on site (blocks the spec) | `mandrelLimit()` in `engine.js` §2b |
+| Mandrel spec granularity | thickness × length (width ignored) | `D.mandrelKeyFor` in `data.js` §3.5 |
+| Mandrel hold model | machine-days (handover allowed mid-day) | `mandrelAvail`/`useMandrel` in `simulate()` |
 | Daily-capacity rounding | `ceil` (whole piles) | `dayCap = Math.ceil(p.productivity * factor * day.hours)` |
 | Material usable buffer | arrival + 1 day | `data.js` (`usable`) |
 | Ramp profile (default) | `0.45, 0.58, 0.70, 0.80, 0.88, 0.94, 0.98, 1.00` | input default; adaptive from actuals |

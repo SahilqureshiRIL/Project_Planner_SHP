@@ -15,6 +15,10 @@
     view: "table", ganttColor: "profile", mapZoom: 1, mapSelected: null, mapFilters: new Set()
   };
   const selectedPriorities = new Set();   // planner priorities (multiselect pill dropdown)
+  // Mandrel availability: pile-size key ("735x5500") -> how many mandrels exist.
+  // A size with NO entry is unconstrained; an explicit 0 keeps it out of the plan.
+  // Survives modal rebuilds and priority changes; cleared only by the two resets.
+  const mandrelCounts = new Map();
   let prodWindow = 7;            // productivity basis the planner has selected: 7 | 30 (days)
   let progressMode = "week";     // recent-progress chart aggregation: "week" | "month"
   let progressOffset = 0;        // periods back from the latest that the 7-period window ends (paged by ‹ ›)
@@ -58,6 +62,11 @@
     { const hx = $("#hindranceCloseX"); if (hx) hx.addEventListener("click", closeHindranceModal); }
     { const hd = $("#hindranceDoneBtn"); if (hd) hd.addEventListener("click", closeHindranceModal); }
     { const hm = $("#hindranceModal"); if (hm) hm.addEventListener("click", (e) => { if (e.target === hm) closeHindranceModal(); }); }
+    // Mandrel availability is edited in its own modal (opened from the card's button).
+    { const mb = $("#openMandrelModalBtn"); if (mb) mb.addEventListener("click", openMandrelModal); }
+    { const mx = $("#mandrelCloseX"); if (mx) mx.addEventListener("click", closeMandrelModal); }
+    { const md = $("#mandrelDoneBtn"); if (md) md.addEventListener("click", closeMandrelModal); }
+    { const mm = $("#mandrelModal"); if (mm) mm.addEventListener("click", (e) => { if (e.target === mm) closeMandrelModal(); }); }
     $("#pStart").addEventListener("change", enforceMonday);
     $("#pStart").addEventListener("change", refreshHindranceCalendars);
     // Machines: integers only. Sanitize typed/pasted input, block e/E/+/-/. keys.
@@ -159,6 +168,7 @@
     progressOffset = 0;
     progressAnim = null;
     selectedPriorities.clear();
+    mandrelCounts.clear();
 
     const list = $("#hindranceList"); if (list) U.clear(list);
 
@@ -217,6 +227,7 @@
 
     // Restore the Plan Parameters form to freshly-computed defaults.
     selectedPriorities.clear();
+    mandrelCounts.clear();
     const list = $("#hindranceList"); if (list) U.clear(list);
     const p2 = document.querySelector('input[name="period"][value="2"]'); if (p2) p2.checked = true;
     setVal("#pWorkDays", "6"); syncWorkDays();
@@ -403,6 +414,7 @@
     renderRampChart();
     refreshHindranceCalendars();
     renderHindranceSummary();
+    renderMandrelSummary();
   }
   // Set an input's value by selector (no-op if the element is missing).
   function setVal(sel, v) { const n = $(sel); if (n) n.value = v; }
@@ -516,6 +528,9 @@
       const on = selectedPriorities.has(o.dataset.prio);
       o.classList.toggle("is-sel", on); o.setAttribute("aria-selected", String(on));
     });
+    // Mandrel scope follows the priority selection (entered counts are kept).
+    renderMandrelSummary();
+    { const mm = $("#mandrelModal"); if (mm && !mm.hidden) buildMandrelList(); }
   }
   // Open/close the priority options popover.
   function togglePriorityMenu() { $("#pPriorityMenu").hidden ? openPriorityMenu() : closePriorityMenu(); }
@@ -821,6 +836,116 @@
     });
   }
 
+  /* ============================ MANDREL AVAILABILITY (§5.8) ============================
+     A mandrel is the driving tool fitted to a machine, sized to the pile's
+     WIDTH × LENGTH — so every profile of that size shares one mandrel type
+     (`f.mandrelKey`, derived in data.js). It is reusable capacity, not stock:
+     it caps how many machines can work a size ON THE SAME DAY.
+
+     The card shows read-only chips; the counts are edited in #mandrelModal.
+     Values live in `mandrelCounts` (not the DOM) so they survive the modal being
+     rebuilt when the priority selection changes. */
+  // Pile sizes relevant to the current selection — with nothing selected yet we
+  // show them all, so the planner can pre-fill before choosing a priority.
+  function mandrelGroupsInScope() {
+    const ch = state.parsed.chainage;
+    if (!ch || !ch.mandrelGroups) return [];
+    if (!selectedPriorities.size) return ch.mandrelGroups;
+    return ch.mandrelGroups.filter((g) => g.priorities.some((p) => selectedPriorities.has(p)));
+  }
+
+  // Build one editable row per in-scope pile size, seeded from `mandrelCounts`.
+  function buildMandrelList() {
+    const host = $("#mandrelList"); if (!host) return;
+    U.clear(host);
+    const groups = mandrelGroupsInScope();
+    updateMandrelCount(groups);
+    if (!groups.length) {
+      host.appendChild(el("p", { class: "field__hint", text: "No pile sizes in scope — choose a chainage priority first." }));
+      return;
+    }
+    groups.forEach((g) => {
+      const row = el("div", { class: "mandrel" + ((mandrelCounts.get(g.key) || 0) > 0 ? "" : " mandrel--none") });
+      const main = el("div", { class: "mandrel__main" });
+      main.appendChild(el("span", { class: "mandrel__size", text: g.label }));
+      main.appendChild(el("span", { class: "mandrel__meta",
+        text: U.fmtInt(g.chainages) + " chainages · " + U.fmtInt(g.mto) + " piles" +
+              (g.profiles.length > 1 ? " · " + g.profiles.length + " profiles share this size" : "") }));
+      row.appendChild(main);
+      const saved = mandrelCounts.has(g.key) ? String(mandrelCounts.get(g.key)) : "";
+      const input = el("input", { class: "input input--sm mandrel__count", type: "number", min: "0", step: "1",
+        placeholder: "none", value: saved, inputmode: "numeric",
+        title: g.profiles.join("\n") });
+      // Integers only — same key/paste hygiene as the Machines field.
+      input.addEventListener("keydown", (e) => { if (["e", "E", "+", "-", "."].includes(e.key)) e.preventDefault(); });
+      input.addEventListener("input", () => {
+        input.value = input.value.replace(/[^0-9]/g, "");
+        const raw = input.value.trim(), n = parseInt(raw, 10);
+        // Blank = the site has NONE of this mandrel (§5.8), same as an explicit 0 —
+        // both leave the spec's scope out of the plan.
+        if (raw === "" || !isFinite(n) || n < 0) mandrelCounts.delete(g.key);
+        else mandrelCounts.set(g.key, n);
+        // Repaint this row's "none" state live, without rebuilding the list
+        // (a rebuild would steal focus from the field being typed into).
+        row.classList.toggle("mandrel--none", !((mandrelCounts.get(g.key) || 0) > 0));
+        updateMandrelCount(mandrelGroupsInScope());
+        renderMandrelSummary();
+      });
+      row.appendChild(input);
+      host.appendChild(row);
+    });
+  }
+
+  // Modal header badge: how many of the in-scope sizes actually have a mandrel.
+  function updateMandrelCount(groups) {
+    const badge = $("#mandrelCount"); if (!badge) return;
+    const have = groups.filter((g) => (mandrelCounts.get(g.key) || 0) > 0).length;
+    badge.textContent = groups.length ? have + " of " + groups.length + " set" : "no sizes in scope";
+    badge.className = "warn-badge " + (groups.length && have === groups.length ? "w-ok" : "w-warn");
+  }
+
+  // Repaint the card's summary. Deliberately COMPACT (two count chips, not one per
+  // size): the sidebar card is narrow and a run can have 17 sizes, which either
+  // clips mid-chip or stretches the card. Per-size detail lives in the modal.
+  function renderMandrelSummary() {
+    const host = $("#mandrelSummary"); if (!host) return;
+    U.clear(host);
+    const groups = mandrelGroupsInScope();
+    const have = groups.filter((g) => (mandrelCounts.get(g.key) || 0) > 0);
+    const none = groups.filter((g) => !((mandrelCounts.get(g.key) || 0) > 0));
+    { const btn = $("#openMandrelModalBtn"); if (btn) btn.textContent = have.length ? "Edit mandrels" : "Set mandrels"; }
+    if (!groups.length) {
+      host.appendChild(el("span", { class: "field__hint", text: "Select a priority to set mandrels." }));
+      return;
+    }
+    if (!have.length) {
+      host.appendChild(el("span", { class: "field__hint", text: "Not set — required before planning." }));
+      return;
+    }
+    const set = el("span", { class: "hind-chip", title: have.map((g) => g.label + ": " + mandrelCounts.get(g.key)).join("\n") });
+    set.appendChild(el("span", { class: "hind-chip__type", text: have.length + " of " + groups.length }));
+    set.appendChild(el("span", { class: "hind-chip__meta", text: "size" + (groups.length === 1 ? "" : "s") + " set" }));
+    host.appendChild(set);
+    if (none.length) {
+      const chip = el("span", { class: "hind-chip hind-chip--zero", title: none.map((g) => g.label).join("\n") });
+      chip.appendChild(el("span", { class: "hind-chip__type", text: none.length + " none" }));
+      chip.appendChild(el("span", { class: "hind-chip__meta", text: "not planned" }));
+      host.appendChild(chip);
+    }
+  }
+
+  // Engine params: {sizeKey: count}. Sizes the planner never touched are absent,
+  // which the engine reads as unconstrained (§5.8).
+  function readMandrels() {
+    const out = {};
+    mandrelCounts.forEach((v, k) => { out[k] = v; });
+    return out;
+  }
+  // Open the popup, rebuilding rows for the CURRENT priority selection.
+  function openMandrelModal() { const m = $("#mandrelModal"); if (!m) return; buildMandrelList(); m.hidden = false; }
+  // Close it; values are already committed on input, so this only repaints the card.
+  function closeMandrelModal() { const m = $("#mandrelModal"); if (!m) return; m.hidden = true; renderMandrelSummary(); }
+
   /* ============================ RAMP-UP CURVE (Change 5) ============================ */
   // TODO: confirm Y-axis meaning — assumed "productivity rate" = piles/machine/hour
   // (base productivity × ramp multiplier), not piles/day.
@@ -941,6 +1066,14 @@
     if (prodRaw === "" || !(U.toNum(prodRaw) > 0)) { U.toast("Enter productivity (piles / machine / hour) in Plan Parameters.", "bad"); $("#pProductivity").focus(); return null; }
     const machRaw = ($("#pMachines").value || "").trim();
     if (machRaw === "" || !(parseInt(machRaw, 10) > 0)) { U.toast("Enter the number of machines in Plan Parameters.", "bad"); $("#pMachines").focus(); return null; }
+    // Mandrels are a required input (§5.8): a size with no number means the site has
+    // none, so an untouched form would block every size and yield an empty plan.
+    // Blocking here is far clearer than silently returning nothing.
+    const mandrels = readMandrels();
+    if (!mandrelGroupsInScope().some((g) => (mandrels[g.key] || 0) > 0)) {
+      U.toast("Enter mandrel availability — a pile size with no mandrel can't be planned.", "bad");
+      openMandrelModal(); return null;
+    }
 
     const planStart = U.parseISODate($("#pStart").value);
     if (!planStart) { U.toast("Pick a plan start date.", "bad"); return null; }
@@ -965,7 +1098,7 @@
 
     return { priorities, periodWeeks, planStart, machinesInput, manpower, workDaysPerWeek, workhours,
              productivity, rampN, prevMachines, rampProfile: rampProfile.length ? rampProfile : [1],
-             hindrances: readHindrances() };
+             hindrances: readHindrances(), mandrels: mandrels };
   }
 
   /* ============================ RENDER (top) ============================ */

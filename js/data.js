@@ -35,6 +35,39 @@
   /* =====================================================================
      3.1  Chainage GeoJSON
      ===================================================================== */
+  /* ---- Mandrel sizing (§3.5) ------------------------------------------------
+     A mandrel is the driving tool fitted to the machine. It is specified by the
+     pile's THICKNESS and LENGTH — the two columns of the site's mandrel sheet —
+     so every profile sharing those two dimensions shares one mandrel pool,
+     REGARDLESS of width. Confirmed with the planner: e.g. thickness 10.4 / 5.00 m
+     covers both MA765X280X10.4X5000 and 735X300X10.4X5000, and thickness 10.4 /
+     5.25 m covers both MA765X280X10.4X5250 and the GW458 PVC item.
+
+     Width is deliberately NOT part of the key. Thickness IS: 735X300X10.4X5000
+     and 735X300X12X5000 are the same width and length but need different
+     mandrels, and the site sheet lists them as separate rows.
+
+     The key is derived from `Profile Name` (the short code), which is uniformly
+     formatted `[prefix]<width>-<depth>-<thickness>-<length>` across all 19
+     profiles. The full `Item Description` is NOT usable — one profile is just
+     "PVC SHEET PILE 10.4 MM THK" with no dimensions in it.
+
+     A code that doesn't carry dimensions yields `null`. A null-key chainage is
+     left UNCONSTRAINED rather than blocked: we can't evaluate a rule we can't
+     read, and silently emptying the plan on a parse failure is a far worse
+     failure mode than not gating it. (No chainage hits this today — all 19
+     profile codes parse.) */
+  D.mandrelKeyFor = function (profileCode) {
+    const m = String(profileCode == null ? "" : profileCode).trim()
+      .match(/^[A-Za-z]*\d+-\d+(?:\.\d+)?-([\d.]+)-(\d+)$/);
+    return m ? m[1] + "x" + m[2] : null;   // "<thickness>x<length_mm>", e.g. "10.4x5000"
+  };
+  // "10.4x5000" -> "10.4 mm × 5 m" (thickness × pile length), matching the site sheet.
+  D.mandrelLabelFor = function (key) {
+    const m = String(key || "").match(/^([\d.]+)x(\d+)$/);
+    return m ? m[1] + " mm × " + (+m[2] / 1000) + " m" : String(key || "");
+  };
+
   // Build the chainage model from an array of raw property objects (original field names).
   D.buildChainageModel = function (propsList) {
     const reqProps = ["Chainage_Id", "Priority", "Profile Name", "No of Profiles", "New SAP Code"];
@@ -54,6 +87,7 @@
         priority: String(p["Priority"] || "").trim(),
         profile: itemDesc || profileCode,
         profileCode: profileCode,  // short code kept for reference
+        mandrelKey: D.mandrelKeyFor(profileCode),   // "735x5500" — mandrel size (§3.5); null = unconstrained
         code: String(p["New SAP Code"] == null ? "" : p["New SAP Code"]).trim(),
         mto: isFinite(mto) ? mto : 0,
         zone: String(p["Zone_Id"] || "").trim(),     // WBS zone level in the .xer export
@@ -73,7 +107,31 @@
     features.forEach((f) => { priorityCounts[f.priority] = (priorityCounts[f.priority] || 0) + 1; });
     const profiles = Array.from(new Set(features.map((f) => f.profile).filter(Boolean)));
 
-    return { features, priorities, priorityCounts, profiles };
+    // Mandrel sizes present in the dataset (§3.5). One entry per thickness × length,
+    // carrying the profiles/scope that use it so the UI can label the input rows
+    // and scope them to the selected priorities. Sorted by thickness, then length.
+    // A group can span SEVERAL profiles (different widths) — that is intended.
+    const groupMap = {};
+    features.forEach((f) => {
+      if (!f.mandrelKey) return;
+      const parts = f.mandrelKey.split("x");
+      const g = groupMap[f.mandrelKey] || (groupMap[f.mandrelKey] = {
+        key: f.mandrelKey, label: D.mandrelLabelFor(f.mandrelKey),
+        thickness: parseFloat(parts[0]), length: parseInt(parts[1], 10),
+        profiles: [], priorities: [], chainages: 0, mto: 0
+      });
+      if (g.profiles.indexOf(f.profile) < 0) g.profiles.push(f.profile);
+      if (f.priority && g.priorities.indexOf(f.priority) < 0) g.priorities.push(f.priority);
+      g.chainages++; g.mto += f.mto;
+    });
+    const mandrelGroups = Object.keys(groupMap).map((k) => groupMap[k])
+      .sort((a, b) => a.thickness - b.thickness || a.length - b.length);
+    mandrelGroups.forEach((g) => {
+      g.profiles.sort();
+      g.priorities.sort((a, b) => U.priorityOrder(a) - U.priorityOrder(b) || a.localeCompare(b));
+    });
+
+    return { features, priorities, priorityCounts, profiles, mandrelGroups };
   };
 
   // Two most-distant vertices of a footprint ring ≈ its boundary-segment end-points.
